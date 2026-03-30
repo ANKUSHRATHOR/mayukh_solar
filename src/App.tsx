@@ -9,6 +9,9 @@ import Login from "./pages/Login.tsx";
 import SetPassword from "./pages/SetPassword.tsx";
 import StaffManagement from "./pages/StaffManagement.tsx";
 import AddStaff from "./pages/AddStaff.tsx";
+import AdminLeadsList from "./pages/AdminLeadsList.tsx";
+import CreateLead from "./pages/CreateLead.tsx";
+import LeadDetail from "./pages/LeadDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
@@ -38,6 +41,30 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AddStaff />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/leads"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminLeadsList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/leads/new"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'telecaller']}>
+                  <CreateLead />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/leads/:id"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person']}>
+                  <LeadDetail />
                 </ProtectedRoute>
               }
             />

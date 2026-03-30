@@ -1,6 +1,8 @@
 import { useAuth } from '@/contexts/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import AdminDashboard from './AdminDashboard';
+import TelecallerDashboard from './TelecallerDashboard';
+import SalesPersonDashboard from './SalesPersonDashboard';
 import { Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
@@ -30,9 +32,9 @@ const Index = () => {
       case 'admin':
         return <AdminDashboard />;
       case 'telecaller':
-        return <ComingSoonDashboard role="Telecaller" />;
+        return <TelecallerDashboard />;
       case 'sales_person':
-        return <ComingSoonDashboard role="Sales Person" />;
+        return <SalesPersonDashboard />;
       case 'operator':
         return <ComingSoonDashboard role="Operator" />;
       case 'welder':

@@ -4,11 +4,12 @@ import {
   LayoutDashboard,
   Users,
   LogOut,
-  UserPlus,
   Bell,
   Settings,
   ChevronLeft,
   ChevronRight,
+  PhoneCall,
+  Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -23,9 +24,20 @@ interface NavItem {
 
 const adminNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'All Leads', icon: PhoneCall, path: '/leads' },
   { label: 'Staff Management', icon: Users, path: '/staff' },
   { label: 'Notifications', icon: Bell, path: '/notifications' },
   { label: 'Settings', icon: Settings, path: '/settings' },
+];
+
+const telecallerNav: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
+];
+
+const salesNav: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'My Leads', icon: Briefcase, path: '/' },
 ];
 
 const AppSidebar = () => {
@@ -34,7 +46,7 @@ const AppSidebar = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems = role === 'admin' ? adminNav : [];
+  const navItems = role === 'admin' ? adminNav : role === 'telecaller' ? telecallerNav : role === 'sales_person' ? salesNav : [];
 
   const roleLabel = role ? role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
 

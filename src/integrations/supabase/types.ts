@@ -47,6 +47,122 @@ export type Database = {
         }
         Relationships: []
       }
+      leads: {
+        Row: {
+          address: string
+          alt_mobile: string | null
+          assigned_to_user_id: string | null
+          cancelled_reason:
+            | Database["public"]["Enums"]["cancellation_reason"]
+            | null
+          cancelled_reason_other: string | null
+          created_at: string
+          created_by_user_id: string
+          customer_name: string
+          district: string
+          follow_up_date: string | null
+          id: string
+          is_in_bin: boolean
+          kw_interest: number | null
+          mobile: string
+          notes: string | null
+          reference_name: string | null
+          source: Database["public"]["Enums"]["lead_source"]
+          state: string
+          status: Database["public"]["Enums"]["lead_status"]
+          updated_at: string
+          village_city: string
+        }
+        Insert: {
+          address: string
+          alt_mobile?: string | null
+          assigned_to_user_id?: string | null
+          cancelled_reason?:
+            | Database["public"]["Enums"]["cancellation_reason"]
+            | null
+          cancelled_reason_other?: string | null
+          created_at?: string
+          created_by_user_id: string
+          customer_name: string
+          district: string
+          follow_up_date?: string | null
+          id?: string
+          is_in_bin?: boolean
+          kw_interest?: number | null
+          mobile: string
+          notes?: string | null
+          reference_name?: string | null
+          source: Database["public"]["Enums"]["lead_source"]
+          state: string
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          village_city: string
+        }
+        Update: {
+          address?: string
+          alt_mobile?: string | null
+          assigned_to_user_id?: string | null
+          cancelled_reason?:
+            | Database["public"]["Enums"]["cancellation_reason"]
+            | null
+          cancelled_reason_other?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          customer_name?: string
+          district?: string
+          follow_up_date?: string | null
+          id?: string
+          is_in_bin?: boolean
+          kw_interest?: number | null
+          mobile?: string
+          notes?: string | null
+          reference_name?: string | null
+          source?: Database["public"]["Enums"]["lead_source"]
+          state?: string
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          village_city?: string
+        }
+        Relationships: []
+      }
+      site_visits: {
+        Row: {
+          created_at: string
+          id: string
+          lead_id: string
+          staff_id: string
+          status_updated_to: Database["public"]["Enums"]["lead_status"] | null
+          visit_date: string
+          visit_notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_id: string
+          staff_id: string
+          status_updated_to?: Database["public"]["Enums"]["lead_status"] | null
+          visit_date?: string
+          visit_notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_id?: string
+          staff_id?: string
+          status_updated_to?: Database["public"]["Enums"]["lead_status"] | null
+          visit_date?: string
+          visit_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_visits_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       staff: {
         Row: {
           created_at: string
@@ -115,6 +231,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_duplicate_lead: {
+        Args: { _mobile: string }
+        Returns: {
+          created_at: string
+          customer_name: string
+          id: string
+          status: Database["public"]["Enums"]["lead_status"]
+        }[]
+      }
       count_admins: { Args: never; Returns: number }
       get_user_role: {
         Args: { _user_id: string }
@@ -136,6 +261,23 @@ export type Database = {
         | "operator"
         | "welder"
         | "electrician"
+      cancellation_reason:
+        | "price_too_high"
+        | "already_installed"
+        | "not_interested_now"
+        | "renting_property"
+        | "false_wrong_number"
+        | "duplicate_lead"
+        | "other"
+      lead_source: "phone_call" | "walk_in" | "reference" | "camp" | "online"
+      lead_status:
+        | "new"
+        | "visited"
+        | "follow_up"
+        | "interested"
+        | "not_interested"
+        | "cancelled"
+        | "final"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -270,6 +412,25 @@ export const Constants = {
         "operator",
         "welder",
         "electrician",
+      ],
+      cancellation_reason: [
+        "price_too_high",
+        "already_installed",
+        "not_interested_now",
+        "renting_property",
+        "false_wrong_number",
+        "duplicate_lead",
+        "other",
+      ],
+      lead_source: ["phone_call", "walk_in", "reference", "camp", "online"],
+      lead_status: [
+        "new",
+        "visited",
+        "follow_up",
+        "interested",
+        "not_interested",
+        "cancelled",
+        "final",
       ],
     },
   },
