@@ -47,6 +47,53 @@ export type Database = {
         }
         Relationships: []
       }
+      documents: {
+        Row: {
+          document_type: Database["public"]["Enums"]["document_type"]
+          file_url: string | null
+          id: string
+          is_verified: boolean | null
+          project_id: string
+          rejection_reason: string | null
+          text_value: string | null
+          updated_at: string
+          uploaded_at: string
+          uploaded_by_user_id: string
+        }
+        Insert: {
+          document_type: Database["public"]["Enums"]["document_type"]
+          file_url?: string | null
+          id?: string
+          is_verified?: boolean | null
+          project_id: string
+          rejection_reason?: string | null
+          text_value?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by_user_id: string
+        }
+        Update: {
+          document_type?: Database["public"]["Enums"]["document_type"]
+          file_url?: string | null
+          id?: string
+          is_verified?: boolean | null
+          project_id?: string
+          rejection_reason?: string | null
+          text_value?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           address: string
@@ -124,6 +171,95 @@ export type Database = {
           village_city?: string
         }
         Relationships: []
+      }
+      projects: {
+        Row: {
+          capacity_kw: number
+          consumer_name: string | null
+          created_at: string
+          created_by_user_id: string
+          discount: number | null
+          documents_submitted_at: string | null
+          documents_submitted_by_sales: boolean
+          expected_install_date: string | null
+          final_amount: number
+          id: string
+          inverter_brand: string
+          inverter_capacity: number
+          k_number: string | null
+          lead_id: string
+          loan_bank: string | null
+          panel_brand: string
+          panel_qty: number
+          panel_watt: number
+          payment_type: Database["public"]["Enums"]["payment_type"]
+          project_code: string
+          special_notes: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          structure_type: Database["public"]["Enums"]["structure_type"]
+          updated_at: string
+        }
+        Insert: {
+          capacity_kw: number
+          consumer_name?: string | null
+          created_at?: string
+          created_by_user_id: string
+          discount?: number | null
+          documents_submitted_at?: string | null
+          documents_submitted_by_sales?: boolean
+          expected_install_date?: string | null
+          final_amount: number
+          id?: string
+          inverter_brand: string
+          inverter_capacity: number
+          k_number?: string | null
+          lead_id: string
+          loan_bank?: string | null
+          panel_brand: string
+          panel_qty: number
+          panel_watt: number
+          payment_type: Database["public"]["Enums"]["payment_type"]
+          project_code: string
+          special_notes?: string | null
+          status?: Database["public"]["Enums"]["project_status"]
+          structure_type: Database["public"]["Enums"]["structure_type"]
+          updated_at?: string
+        }
+        Update: {
+          capacity_kw?: number
+          consumer_name?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          discount?: number | null
+          documents_submitted_at?: string | null
+          documents_submitted_by_sales?: boolean
+          expected_install_date?: string | null
+          final_amount?: number
+          id?: string
+          inverter_brand?: string
+          inverter_capacity?: number
+          k_number?: string | null
+          lead_id?: string
+          loan_bank?: string | null
+          panel_brand?: string
+          panel_qty?: number
+          panel_watt?: number
+          payment_type?: Database["public"]["Enums"]["payment_type"]
+          project_code?: string
+          special_notes?: string | null
+          status?: Database["public"]["Enums"]["project_status"]
+          structure_type?: Database["public"]["Enums"]["structure_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       site_visits: {
         Row: {
@@ -241,6 +377,7 @@ export type Database = {
         }[]
       }
       count_admins: { Args: never; Returns: number }
+      generate_project_code: { Args: never; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -269,6 +406,14 @@ export type Database = {
         | "false_wrong_number"
         | "duplicate_lead"
         | "other"
+      document_type:
+        | "electricity_bill"
+        | "aadhaar_front"
+        | "aadhaar_back"
+        | "passport_photo"
+        | "bank_passbook"
+        | "customer_email"
+        | "customer_mobile"
       lead_source: "phone_call" | "walk_in" | "reference" | "camp" | "online"
       lead_status:
         | "new"
@@ -278,6 +423,29 @@ export type Database = {
         | "not_interested"
         | "cancelled"
         | "final"
+      payment_type: "cash" | "loan"
+      project_status:
+        | "pending_documents"
+        | "pending_operator_review"
+        | "registration_pending"
+        | "registration_done"
+        | "loan_process"
+        | "loan_done"
+        | "cash_file"
+        | "material_ordered"
+        | "material_dispatched"
+        | "material_delivered"
+        | "installation_pending"
+        | "installation_done"
+        | "wiring_pending"
+        | "wiring_done"
+        | "net_metering_submitted"
+        | "inspection_scheduled"
+        | "inspection_completed"
+        | "inspection_failed"
+        | "net_meter_installed"
+        | "project_completed"
+      structure_type: "rcc_roof" | "tin_shed_roof" | "ground_mount"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -422,6 +590,15 @@ export const Constants = {
         "duplicate_lead",
         "other",
       ],
+      document_type: [
+        "electricity_bill",
+        "aadhaar_front",
+        "aadhaar_back",
+        "passport_photo",
+        "bank_passbook",
+        "customer_email",
+        "customer_mobile",
+      ],
       lead_source: ["phone_call", "walk_in", "reference", "camp", "online"],
       lead_status: [
         "new",
@@ -432,6 +609,30 @@ export const Constants = {
         "cancelled",
         "final",
       ],
+      payment_type: ["cash", "loan"],
+      project_status: [
+        "pending_documents",
+        "pending_operator_review",
+        "registration_pending",
+        "registration_done",
+        "loan_process",
+        "loan_done",
+        "cash_file",
+        "material_ordered",
+        "material_dispatched",
+        "material_delivered",
+        "installation_pending",
+        "installation_done",
+        "wiring_pending",
+        "wiring_done",
+        "net_metering_submitted",
+        "inspection_scheduled",
+        "inspection_completed",
+        "inspection_failed",
+        "net_meter_installed",
+        "project_completed",
+      ],
+      structure_type: ["rcc_roof", "tin_shed_roof", "ground_mount"],
     },
   },
 } as const
