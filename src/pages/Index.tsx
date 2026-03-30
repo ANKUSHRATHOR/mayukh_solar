@@ -3,6 +3,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import AdminDashboard from './AdminDashboard';
 import TelecallerDashboard from './TelecallerDashboard';
 import SalesPersonDashboard from './SalesPersonDashboard';
+import OperatorDashboard from './OperatorDashboard';
 import { Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
@@ -21,12 +22,10 @@ const Index = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Force password change on first login
   if (staff?.must_change_password) {
     return <Navigate to="/set-password" replace />;
   }
 
-  // Route based on role
   const renderDashboard = () => {
     switch (role) {
       case 'admin':
@@ -36,7 +35,7 @@ const Index = () => {
       case 'sales_person':
         return <SalesPersonDashboard />;
       case 'operator':
-        return <ComingSoonDashboard role="Operator" />;
+        return <OperatorDashboard />;
       case 'welder':
         return <ComingSoonDashboard role="Welder" />;
       case 'electrician':

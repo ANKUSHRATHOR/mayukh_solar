@@ -10,6 +10,7 @@ import {
   ChevronRight,
   PhoneCall,
   Briefcase,
+  ClipboardCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -40,13 +41,18 @@ const salesNav: NavItem[] = [
   { label: 'My Leads', icon: Briefcase, path: '/' },
 ];
 
+const operatorNav: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Projects', icon: ClipboardCheck, path: '/' },
+];
+
 const AppSidebar = () => {
   const { staff, role, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems = role === 'admin' ? adminNav : role === 'telecaller' ? telecallerNav : role === 'sales_person' ? salesNav : [];
+  const navItems = role === 'admin' ? adminNav : role === 'telecaller' ? telecallerNav : role === 'sales_person' ? salesNav : role === 'operator' ? operatorNav : [];
 
   const roleLabel = role ? role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
 
