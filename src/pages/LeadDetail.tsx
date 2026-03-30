@@ -59,6 +59,7 @@ const LeadDetail = () => {
   const [cancelReason, setCancelReason] = useState<CancellationReason | ''>('');
   const [cancelOther, setCancelOther] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [project, setProject] = useState<any>(null);
 
   const fetchLead = async () => {
     if (!id) return;
@@ -66,12 +67,12 @@ const LeadDetail = () => {
     const { data: leadData } = await supabase.from('leads').select('*').eq('id', id).single();
     setLead(leadData);
 
-    const { data: visitData } = await supabase
-      .from('site_visits')
-      .select('*')
-      .eq('lead_id', id)
-      .order('visit_date', { ascending: false });
-    setVisits(visitData || []);
+    const [visitRes, projectRes] = await Promise.all([
+      supabase.from('site_visits').select('*').eq('lead_id', id).order('visit_date', { ascending: false }),
+      supabase.from('projects').select('*').eq('lead_id', id).maybeSingle(),
+    ]);
+    setVisits(visitRes.data || []);
+    setProject(projectRes.data);
     setLoading(false);
   };
 
@@ -113,9 +114,23 @@ const LeadDetail = () => {
         updateData.cancelled_reason_other = cancelReason === 'other' ? cancelOther : null;
       }
 
-      // Assign to self if sales person picks it up
-      if (role === 'sales_person' && !lead.assigned_to_user_id) {
-        updateData.assigned_to_user_id = user.id;
+      // If status is 'final', redirect to project finalization form instead of updating here
+      if (newStatus === 'final') {
+        // Assign to self first if needed
+        if (role === 'sales_person' && !lead.assigned_to_user_id) {
+          await supabase.from('leads').update({ assigned_to_user_id: user.id }).eq('id', lead.id);
+        }
+        // Create site visit record if notes exist
+        if (visitNotes.trim()) {
+          await supabase.from('site_visits').insert({
+            lead_id: lead.id,
+            staff_id: user.id,
+            visit_notes: visitNotes.trim(),
+            status_updated_to: 'final',
+          });
+        }
+        navigate(`/projects/new?leadId=${lead.id}`);
+        return;
       }
 
       const { error } = await supabase.from('leads').update(updateData).eq('id', lead.id);
@@ -198,6 +213,24 @@ const LeadDetail = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Project Info (if exists) */}
+      {project && (
+        <Card className="shadow-card border-primary/20 bg-accent/30">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Project</p>
+                <p className="text-lg font-bold text-foreground">{project.project_code}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{project.capacity_kw} kW • {project.panel_brand} • ₹{Number(project.final_amount).toLocaleString()}</p>
+              </div>
+              <Button onClick={() => navigate(`/projects/${project.id}/documents`)} className="gradient-primary text-primary-foreground font-semibold">
+                <FileText className="mr-2 h-4 w-4" /> View Documents
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Update Status Button */}
       {canUpdateStatus && lead.status !== 'cancelled' && lead.status !== 'final' && (
