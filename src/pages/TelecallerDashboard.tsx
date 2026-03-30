@@ -6,7 +6,7 @@ import StatCard from '@/components/dashboard/StatCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PhonePlus, Users, TrendingUp, Calendar } from 'lucide-react';
+import { PhoneCall, Users, TrendingUp, Calendar } from 'lucide-react';
 
 const statusColor: Record<string, string> = {
   new: 'bg-info text-info-foreground',
