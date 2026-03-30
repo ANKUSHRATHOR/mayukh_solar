@@ -14,6 +14,7 @@ import CreateLead from "./pages/CreateLead.tsx";
 import LeadDetail from "./pages/LeadDetail.tsx";
 import ProjectFinalizationForm from "./pages/ProjectFinalizationForm.tsx";
 import ProjectDocuments from "./pages/ProjectDocuments.tsx";
+import OperatorProjectDetail from "./pages/OperatorProjectDetail.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
@@ -83,6 +84,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}>
                   <ProjectDocuments />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/operator/projects/:projectId"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'operator']}>
+                  <OperatorProjectDetail />
                 </ProtectedRoute>
               }
             />
