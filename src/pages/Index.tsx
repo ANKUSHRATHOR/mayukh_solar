@@ -32,9 +32,9 @@ const Index = () => {
       case 'admin':
         return <AdminDashboard />;
       case 'telecaller':
-        return <ComingSoonDashboard role="Telecaller" />;
+        return <TelecallerDashboard />;
       case 'sales_person':
-        return <ComingSoonDashboard role="Sales Person" />;
+        return <SalesPersonDashboard />;
       case 'operator':
         return <ComingSoonDashboard role="Operator" />;
       case 'welder':
