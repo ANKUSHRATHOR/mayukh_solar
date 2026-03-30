@@ -59,6 +59,7 @@ const LeadDetail = () => {
   const [cancelReason, setCancelReason] = useState<CancellationReason | ''>('');
   const [cancelOther, setCancelOther] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [project, setProject] = useState<any>(null);
 
   const fetchLead = async () => {
     if (!id) return;
@@ -66,12 +67,12 @@ const LeadDetail = () => {
     const { data: leadData } = await supabase.from('leads').select('*').eq('id', id).single();
     setLead(leadData);
 
-    const { data: visitData } = await supabase
-      .from('site_visits')
-      .select('*')
-      .eq('lead_id', id)
-      .order('visit_date', { ascending: false });
-    setVisits(visitData || []);
+    const [visitRes, projectRes] = await Promise.all([
+      supabase.from('site_visits').select('*').eq('lead_id', id).order('visit_date', { ascending: false }),
+      supabase.from('projects').select('*').eq('lead_id', id).maybeSingle(),
+    ]);
+    setVisits(visitRes.data || []);
+    setProject(projectRes.data);
     setLoading(false);
   };
 
