@@ -214,6 +214,24 @@ const LeadDetail = () => {
         </CardContent>
       </Card>
 
+      {/* Project Info (if exists) */}
+      {project && (
+        <Card className="shadow-card border-primary/20 bg-accent/30">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Project</p>
+                <p className="text-lg font-bold text-foreground">{project.project_code}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{project.capacity_kw} kW • {project.panel_brand} • ₹{Number(project.final_amount).toLocaleString()}</p>
+              </div>
+              <Button onClick={() => navigate(`/projects/${project.id}/documents`)} className="gradient-primary text-primary-foreground font-semibold">
+                <FileText className="mr-2 h-4 w-4" /> View Documents
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Update Status Button */}
       {canUpdateStatus && lead.status !== 'cancelled' && lead.status !== 'final' && (
         <div>
