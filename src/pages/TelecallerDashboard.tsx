@@ -62,7 +62,7 @@ const TelecallerDashboard = () => {
           <p className="text-muted-foreground text-sm mt-1">Create and track your leads</p>
         </div>
         <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
-          <PhonePlus className="mr-2 h-4 w-4" /> Create New Lead
+          <PhoneCall className="mr-2 h-4 w-4" /> Create New Lead
         </Button>
       </div>
 

@@ -88,7 +88,7 @@ const AdminLeadsList = () => {
           <p className="text-muted-foreground text-sm mt-1">{leads.length} total leads</p>
         </div>
         <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
-          <PhonePlus className="mr-2 h-4 w-4" /> Create Lead
+          <PhoneCall className="mr-2 h-4 w-4" /> Create Lead
         </Button>
       </div>
 

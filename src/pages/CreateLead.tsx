@@ -130,7 +130,7 @@ const CreateLead = () => {
       <Card className="shadow-elevated border-0">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <PhonePlus className="h-5 w-5 text-primary" /> Create New Lead
+            <PhoneCall className="h-5 w-5 text-primary" /> Create New Lead
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
