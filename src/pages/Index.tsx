@@ -1,6 +1,8 @@
 import { useAuth } from '@/contexts/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import AdminDashboard from './AdminDashboard';
+import TelecallerDashboard from './TelecallerDashboard';
+import SalesPersonDashboard from './SalesPersonDashboard';
 import { Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
