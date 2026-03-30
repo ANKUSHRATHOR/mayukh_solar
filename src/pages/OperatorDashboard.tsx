@@ -130,7 +130,7 @@ const OperatorDashboard = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Pending Review" value={reviewCount} icon={FileSearch} trend={reviewCount > 0 ? 'Needs attention' : 'All clear'} />
+        <StatCard title="Pending Review" value={reviewCount} icon={FileSearch} change={reviewCount > 0 ? 'Needs attention' : 'All clear'} />
         <StatCard title="Registration" value={regCount} icon={ClipboardCheck} />
         <StatCard title="Finance Stage" value={financeCount} icon={AlertTriangle} />
         <StatCard title="Material Stage" value={materialCount} icon={Package} />
