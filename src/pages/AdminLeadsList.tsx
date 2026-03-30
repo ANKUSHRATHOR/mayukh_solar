@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Search, MapPin, PhonePlus, Users, Filter, UserPlus as AssignIcon
+  Search, MapPin, PhoneCall, Users, Filter, UserPlus as AssignIcon
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
