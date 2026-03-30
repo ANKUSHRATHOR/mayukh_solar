@@ -113,9 +113,23 @@ const LeadDetail = () => {
         updateData.cancelled_reason_other = cancelReason === 'other' ? cancelOther : null;
       }
 
-      // Assign to self if sales person picks it up
-      if (role === 'sales_person' && !lead.assigned_to_user_id) {
-        updateData.assigned_to_user_id = user.id;
+      // If status is 'final', redirect to project finalization form instead of updating here
+      if (newStatus === 'final') {
+        // Assign to self first if needed
+        if (role === 'sales_person' && !lead.assigned_to_user_id) {
+          await supabase.from('leads').update({ assigned_to_user_id: user.id }).eq('id', lead.id);
+        }
+        // Create site visit record if notes exist
+        if (visitNotes.trim()) {
+          await supabase.from('site_visits').insert({
+            lead_id: lead.id,
+            staff_id: user.id,
+            visit_notes: visitNotes.trim(),
+            status_updated_to: 'final',
+          });
+        }
+        navigate(`/projects/new?leadId=${lead.id}`);
+        return;
       }
 
       const { error } = await supabase.from('leads').update(updateData).eq('id', lead.id);
