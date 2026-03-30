@@ -46,7 +46,7 @@ const AppSidebar = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems = role === 'admin' ? adminNav : [];
+  const navItems = role === 'admin' ? adminNav : role === 'telecaller' ? telecallerNav : role === 'sales_person' ? salesNav : [];
 
   const roleLabel = role ? role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
 
