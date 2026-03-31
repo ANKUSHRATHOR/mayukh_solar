@@ -351,6 +351,50 @@ const OperatorProjectDetail = () => {
         </Card>
       )}
 
+      {/* Assign Welder — when moving to installation_pending */}
+      {nextStatuses.includes('installation_pending' as ProjectStatus) && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Wrench className="h-5 w-5 text-primary" /> Assign Welder
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedWelder} onValueChange={setSelectedWelder}>
+              <SelectTrigger><SelectValue placeholder="Select a welder" /></SelectTrigger>
+              <SelectContent>
+                {welders.map(w => (
+                  <SelectItem key={w.user_id} value={w.user_id}>{w.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {welders.length === 0 && <p className="text-xs text-muted-foreground mt-2">No welders found. Create welder staff first.</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Assign Electrician — when moving to wiring_pending */}
+      {nextStatuses.includes('wiring_pending' as ProjectStatus) && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Zap className="h-5 w-5 text-primary" /> Assign Electrician
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedElectrician} onValueChange={setSelectedElectrician}>
+              <SelectTrigger><SelectValue placeholder="Select an electrician" /></SelectTrigger>
+              <SelectContent>
+                {electricians.map(e => (
+                  <SelectItem key={e.user_id} value={e.user_id}>{e.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {electricians.length === 0 && <p className="text-xs text-muted-foreground mt-2">No electricians found. Create electrician staff first.</p>}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Status Pipeline Actions */}
       {nextStatuses.length > 0 && (project.status !== 'pending_operator_review' || allDocsApproved) && project.status !== 'pending_operator_review' && (
         <Card className="shadow-card">
@@ -362,19 +406,29 @@ const OperatorProjectDetail = () => {
               Current: <span className="font-semibold text-foreground">{statusLabels[project.status as ProjectStatus]}</span>
             </p>
             <div className="flex flex-wrap gap-2">
-              {nextStatuses.map(ns => (
-                <Button
-                  key={ns}
-                  onClick={() => handleStatusUpdate(ns)}
-                  disabled={updating || (ns === 'loan_process' && !loanBank.trim())}
-                  className="gradient-primary text-primary-foreground"
-                >
-                  Move to: {statusLabels[ns]}
-                </Button>
-              ))}
+              {nextStatuses.map(ns => {
+                const needsWelder = ns === 'installation_pending' && !selectedWelder;
+                const needsElectrician = ns === 'wiring_pending' && !selectedElectrician;
+                return (
+                  <Button
+                    key={ns}
+                    onClick={() => handleStatusUpdate(ns)}
+                    disabled={updating || (ns === 'loan_process' && !loanBank.trim()) || needsWelder || needsElectrician}
+                    className="gradient-primary text-primary-foreground"
+                  >
+                    Move to: {statusLabels[ns]}
+                  </Button>
+                );
+              })}
             </div>
             {project.payment_type === 'loan' && nextStatuses.includes('loan_process' as ProjectStatus) && !loanBank.trim() && (
               <p className="text-xs text-destructive">Please enter bank name above before proceeding to loan stage</p>
+            )}
+            {nextStatuses.includes('installation_pending' as ProjectStatus) && !selectedWelder && (
+              <p className="text-xs text-destructive">Please assign a welder above before moving to installation</p>
+            )}
+            {nextStatuses.includes('wiring_pending' as ProjectStatus) && !selectedElectrician && (
+              <p className="text-xs text-destructive">Please assign an electrician above before moving to wiring</p>
             )}
           </CardContent>
         </Card>
