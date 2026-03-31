@@ -4,6 +4,8 @@ import AdminDashboard from './AdminDashboard';
 import TelecallerDashboard from './TelecallerDashboard';
 import SalesPersonDashboard from './SalesPersonDashboard';
 import OperatorDashboard from './OperatorDashboard';
+import WelderDashboard from './WelderDashboard';
+import ElectricianDashboard from './ElectricianDashboard';
 import { Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
