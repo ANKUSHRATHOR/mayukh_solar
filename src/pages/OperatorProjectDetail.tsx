@@ -214,6 +214,8 @@ const OperatorProjectDetail = () => {
     if (newStatus === 'project_completed') {
       updates.completed_at = new Date().toISOString();
     }
+
+    const { error } = await supabase.from('projects').update(updates).eq('id', projectId);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
