@@ -107,15 +107,31 @@ const OperatorProjectDetail = () => {
   const fetchData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const [projRes, docsRes] = await Promise.all([
+    const [projRes, docsRes, staffRes] = await Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
       supabase.from('documents').select('*').eq('project_id', projectId),
+      supabase.from('user_roles').select('user_id, role').in('role', ['welder', 'electrician']),
     ]);
 
     const proj = projRes.data;
     setProject(proj);
     setDocs((docsRes.data as DocRecord[]) || []);
     setLoanBank(proj?.loan_bank || '');
+    setSelectedWelder(proj?.assigned_welder_id || '');
+    setSelectedElectrician(proj?.assigned_electrician_id || '');
+
+    // Fetch staff names for welders/electricians
+    const roleData = staffRes.data || [];
+    const welderIds = roleData.filter(r => r.role === 'welder').map(r => r.user_id);
+    const elecIds = roleData.filter(r => r.role === 'electrician').map(r => r.user_id);
+
+    if (welderIds.length > 0 || elecIds.length > 0) {
+      const allIds = [...welderIds, ...elecIds];
+      const { data: staffData } = await supabase.from('staff').select('user_id, full_name').in('user_id', allIds).eq('is_active', true);
+      const staffMap = new Map((staffData || []).map(s => [s.user_id, s.full_name]));
+      setWelders(welderIds.filter(id => staffMap.has(id)).map(id => ({ user_id: id, full_name: staffMap.get(id)! })));
+      setElectricians(elecIds.filter(id => staffMap.has(id)).map(id => ({ user_id: id, full_name: staffMap.get(id)! })));
+    }
 
     if (proj?.lead_id) {
       const { data: leadData } = await supabase.from('leads').select('*').eq('id', proj.lead_id).single();
