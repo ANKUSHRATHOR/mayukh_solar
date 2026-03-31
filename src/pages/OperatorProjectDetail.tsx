@@ -125,6 +125,10 @@ const OperatorProjectDetail = () => {
     setLoanBank(proj?.loan_bank || '');
     setSelectedWelder(proj?.assigned_welder_id || '');
     setSelectedElectrician(proj?.assigned_electrician_id || '');
+    setNetMeteringFileNumber(proj?.net_metering_file_number || '');
+    setInspectionDate(proj?.inspection_date || '');
+    setInspectionNotes(proj?.inspection_notes || '');
+    setNetMeterNumber(proj?.net_meter_number || '');
 
     // Fetch staff names for welders/electricians
     const roleData = staffRes.data || [];
