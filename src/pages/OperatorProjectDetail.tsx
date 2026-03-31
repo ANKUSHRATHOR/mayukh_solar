@@ -199,8 +199,21 @@ const OperatorProjectDetail = () => {
     if (newStatus === 'wiring_pending' && selectedElectrician) {
       updates.assigned_electrician_id = selectedElectrician;
     }
-
-    const { error } = await supabase.from('projects').update(updates).eq('id', projectId);
+    if (newStatus === 'net_metering_submitted' && netMeteringFileNumber) {
+      updates.net_metering_file_number = netMeteringFileNumber;
+    }
+    if (newStatus === 'inspection_scheduled' && inspectionDate) {
+      updates.inspection_date = inspectionDate;
+    }
+    if ((newStatus === 'inspection_completed' || newStatus === 'inspection_failed') && inspectionNotes) {
+      updates.inspection_notes = inspectionNotes;
+    }
+    if (newStatus === 'net_meter_installed' && netMeterNumber) {
+      updates.net_meter_number = netMeterNumber;
+    }
+    if (newStatus === 'project_completed') {
+      updates.completed_at = new Date().toISOString();
+    }
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
