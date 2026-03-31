@@ -174,6 +174,8 @@ export type Database = {
       }
       projects: {
         Row: {
+          assigned_electrician_id: string | null
+          assigned_welder_id: string | null
           capacity_kw: number
           consumer_name: string | null
           created_at: string
@@ -200,6 +202,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_electrician_id?: string | null
+          assigned_welder_id?: string | null
           capacity_kw: number
           consumer_name?: string | null
           created_at?: string
@@ -226,6 +230,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_electrician_id?: string | null
+          assigned_welder_id?: string | null
           capacity_kw?: number
           consumer_name?: string | null
           created_at?: string
@@ -257,6 +263,41 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: true
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      serial_numbers: {
+        Row: {
+          created_at: string
+          entered_by_user_id: string
+          id: string
+          inverter_serial: string
+          panel_serial: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          entered_by_user_id: string
+          id?: string
+          inverter_serial: string
+          panel_serial: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          entered_by_user_id?: string
+          id?: string
+          inverter_serial?: string
+          panel_serial?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "serial_numbers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
