@@ -73,13 +73,16 @@ const statusColors: Record<string, string> = {
   project_completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
 };
 
-type TabFilter = 'review' | 'registration' | 'finance' | 'material' | 'all';
+type TabFilter = 'review' | 'registration' | 'finance' | 'material' | 'installation' | 'netmetering' | 'completed' | 'all';
 
 const tabFilters: Record<TabFilter, ProjectStatus[]> = {
   review: ['pending_operator_review'],
   registration: ['registration_pending', 'registration_done'],
   finance: ['loan_process', 'loan_done', 'cash_file'],
   material: ['material_ordered', 'material_dispatched', 'material_delivered'],
+  installation: ['installation_pending', 'installation_done', 'wiring_pending', 'wiring_done'],
+  netmetering: ['net_metering_submitted', 'inspection_scheduled', 'inspection_completed', 'inspection_failed', 'net_meter_installed'],
+  completed: ['project_completed'],
   all: [],
 };
 
