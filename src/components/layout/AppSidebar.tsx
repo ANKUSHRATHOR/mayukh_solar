@@ -11,6 +11,8 @@ import {
   PhoneCall,
   Briefcase,
   ClipboardCheck,
+  Wrench,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -46,13 +48,23 @@ const operatorNav: NavItem[] = [
   { label: 'Projects', icon: ClipboardCheck, path: '/' },
 ];
 
+const welderNav: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Installations', icon: Wrench, path: '/' },
+];
+
+const electricianNav: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Wiring Jobs', icon: Zap, path: '/' },
+];
+
 const AppSidebar = () => {
   const { staff, role, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems = role === 'admin' ? adminNav : role === 'telecaller' ? telecallerNav : role === 'sales_person' ? salesNav : role === 'operator' ? operatorNav : [];
+  const navItems = role === 'admin' ? adminNav : role === 'telecaller' ? telecallerNav : role === 'sales_person' ? salesNav : role === 'operator' ? operatorNav : role === 'welder' ? welderNav : role === 'electrician' ? electricianNav : [];
 
   const roleLabel = role ? role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
 

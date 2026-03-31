@@ -4,6 +4,8 @@ import AdminDashboard from './AdminDashboard';
 import TelecallerDashboard from './TelecallerDashboard';
 import SalesPersonDashboard from './SalesPersonDashboard';
 import OperatorDashboard from './OperatorDashboard';
+import WelderDashboard from './WelderDashboard';
+import ElectricianDashboard from './ElectricianDashboard';
 import { Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
@@ -37,9 +39,9 @@ const Index = () => {
       case 'operator':
         return <OperatorDashboard />;
       case 'welder':
-        return <ComingSoonDashboard role="Welder" />;
+        return <WelderDashboard />;
       case 'electrician':
-        return <ComingSoonDashboard role="Electrician" />;
+        return <ElectricianDashboard />;
       default:
         return <ComingSoonDashboard role="User" />;
     }

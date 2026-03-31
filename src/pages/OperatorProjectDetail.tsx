@@ -99,19 +99,39 @@ const OperatorProjectDetail = () => {
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [loanBank, setLoanBank] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [welders, setWelders] = useState<{ user_id: string; full_name: string }[]>([]);
+  const [electricians, setElectricians] = useState<{ user_id: string; full_name: string }[]>([]);
+  const [selectedWelder, setSelectedWelder] = useState('');
+  const [selectedElectrician, setSelectedElectrician] = useState('');
 
   const fetchData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const [projRes, docsRes] = await Promise.all([
+    const [projRes, docsRes, staffRes] = await Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
       supabase.from('documents').select('*').eq('project_id', projectId),
+      supabase.from('user_roles').select('user_id, role').in('role', ['welder', 'electrician']),
     ]);
 
     const proj = projRes.data;
     setProject(proj);
     setDocs((docsRes.data as DocRecord[]) || []);
     setLoanBank(proj?.loan_bank || '');
+    setSelectedWelder(proj?.assigned_welder_id || '');
+    setSelectedElectrician(proj?.assigned_electrician_id || '');
+
+    // Fetch staff names for welders/electricians
+    const roleData = staffRes.data || [];
+    const welderIds = roleData.filter(r => r.role === 'welder').map(r => r.user_id);
+    const elecIds = roleData.filter(r => r.role === 'electrician').map(r => r.user_id);
+
+    if (welderIds.length > 0 || elecIds.length > 0) {
+      const allIds = [...welderIds, ...elecIds];
+      const { data: staffData } = await supabase.from('staff').select('user_id, full_name').in('user_id', allIds).eq('is_active', true);
+      const staffMap = new Map((staffData || []).map(s => [s.user_id, s.full_name]));
+      setWelders(welderIds.filter(id => staffMap.has(id)).map(id => ({ user_id: id, full_name: staffMap.get(id)! })));
+      setElectricians(elecIds.filter(id => staffMap.has(id)).map(id => ({ user_id: id, full_name: staffMap.get(id)! })));
+    }
 
     if (proj?.lead_id) {
       const { data: leadData } = await supabase.from('leads').select('*').eq('id', proj.lead_id).single();
@@ -160,9 +180,14 @@ const OperatorProjectDetail = () => {
     setUpdating(true);
     const updates: any = { status: newStatus };
 
-    // If moving to loan_process, save bank
     if (newStatus === 'loan_process' && loanBank) {
       updates.loan_bank = loanBank;
+    }
+    if (newStatus === 'installation_pending' && selectedWelder) {
+      updates.assigned_welder_id = selectedWelder;
+    }
+    if (newStatus === 'wiring_pending' && selectedElectrician) {
+      updates.assigned_electrician_id = selectedElectrician;
     }
 
     const { error } = await supabase.from('projects').update(updates).eq('id', projectId);
@@ -170,8 +195,6 @@ const OperatorProjectDetail = () => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Status Updated', description: `Project moved to ${statusLabels[newStatus]}` });
-
-      // Log audit
       await supabase.from('audit_logs').insert({
         action: 'project_status_update',
         entity_type: 'project',
@@ -328,6 +351,50 @@ const OperatorProjectDetail = () => {
         </Card>
       )}
 
+      {/* Assign Welder — when moving to installation_pending */}
+      {nextStatuses.includes('installation_pending' as ProjectStatus) && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Wrench className="h-5 w-5 text-primary" /> Assign Welder
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedWelder} onValueChange={setSelectedWelder}>
+              <SelectTrigger><SelectValue placeholder="Select a welder" /></SelectTrigger>
+              <SelectContent>
+                {welders.map(w => (
+                  <SelectItem key={w.user_id} value={w.user_id}>{w.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {welders.length === 0 && <p className="text-xs text-muted-foreground mt-2">No welders found. Create welder staff first.</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Assign Electrician — when moving to wiring_pending */}
+      {nextStatuses.includes('wiring_pending' as ProjectStatus) && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Zap className="h-5 w-5 text-primary" /> Assign Electrician
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedElectrician} onValueChange={setSelectedElectrician}>
+              <SelectTrigger><SelectValue placeholder="Select an electrician" /></SelectTrigger>
+              <SelectContent>
+                {electricians.map(e => (
+                  <SelectItem key={e.user_id} value={e.user_id}>{e.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {electricians.length === 0 && <p className="text-xs text-muted-foreground mt-2">No electricians found. Create electrician staff first.</p>}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Status Pipeline Actions */}
       {nextStatuses.length > 0 && (project.status !== 'pending_operator_review' || allDocsApproved) && project.status !== 'pending_operator_review' && (
         <Card className="shadow-card">
@@ -339,19 +406,29 @@ const OperatorProjectDetail = () => {
               Current: <span className="font-semibold text-foreground">{statusLabels[project.status as ProjectStatus]}</span>
             </p>
             <div className="flex flex-wrap gap-2">
-              {nextStatuses.map(ns => (
-                <Button
-                  key={ns}
-                  onClick={() => handleStatusUpdate(ns)}
-                  disabled={updating || (ns === 'loan_process' && !loanBank.trim())}
-                  className="gradient-primary text-primary-foreground"
-                >
-                  Move to: {statusLabels[ns]}
-                </Button>
-              ))}
+              {nextStatuses.map(ns => {
+                const needsWelder = ns === 'installation_pending' && !selectedWelder;
+                const needsElectrician = ns === 'wiring_pending' && !selectedElectrician;
+                return (
+                  <Button
+                    key={ns}
+                    onClick={() => handleStatusUpdate(ns)}
+                    disabled={updating || (ns === 'loan_process' && !loanBank.trim()) || needsWelder || needsElectrician}
+                    className="gradient-primary text-primary-foreground"
+                  >
+                    Move to: {statusLabels[ns]}
+                  </Button>
+                );
+              })}
             </div>
             {project.payment_type === 'loan' && nextStatuses.includes('loan_process' as ProjectStatus) && !loanBank.trim() && (
               <p className="text-xs text-destructive">Please enter bank name above before proceeding to loan stage</p>
+            )}
+            {nextStatuses.includes('installation_pending' as ProjectStatus) && !selectedWelder && (
+              <p className="text-xs text-destructive">Please assign a welder above before moving to installation</p>
+            )}
+            {nextStatuses.includes('wiring_pending' as ProjectStatus) && !selectedElectrician && (
+              <p className="text-xs text-destructive">Please assign an electrician above before moving to wiring</p>
             )}
           </CardContent>
         </Card>
