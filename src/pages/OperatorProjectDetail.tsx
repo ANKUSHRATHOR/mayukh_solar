@@ -180,9 +180,14 @@ const OperatorProjectDetail = () => {
     setUpdating(true);
     const updates: any = { status: newStatus };
 
-    // If moving to loan_process, save bank
     if (newStatus === 'loan_process' && loanBank) {
       updates.loan_bank = loanBank;
+    }
+    if (newStatus === 'installation_pending' && selectedWelder) {
+      updates.assigned_welder_id = selectedWelder;
+    }
+    if (newStatus === 'wiring_pending' && selectedElectrician) {
+      updates.assigned_electrician_id = selectedElectrician;
     }
 
     const { error } = await supabase.from('projects').update(updates).eq('id', projectId);
@@ -190,8 +195,6 @@ const OperatorProjectDetail = () => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Status Updated', description: `Project moved to ${statusLabels[newStatus]}` });
-
-      // Log audit
       await supabase.from('audit_logs').insert({
         action: 'project_status_update',
         entity_type: 'project',
