@@ -420,6 +420,123 @@ const OperatorProjectDetail = () => {
         </Card>
       )}
 
+      {/* Net Metering File Number — when submitting net metering */}
+      {project.status === 'wiring_done' && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ClipboardCheck className="h-5 w-5 text-primary" /> Net Metering Submission
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label className="text-sm">File Number</Label>
+              <Input
+                value={netMeteringFileNumber}
+                onChange={e => setNetMeteringFileNumber(e.target.value)}
+                placeholder="Enter net metering file/application number"
+                className="mt-1"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Inspection Date — when scheduling inspection */}
+      {project.status === 'net_metering_submitted' && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Calendar className="h-5 w-5 text-primary" /> Schedule Inspection
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label className="text-sm">Inspection Date</Label>
+              <Input
+                type="date"
+                value={inspectionDate}
+                onChange={e => setInspectionDate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Inspection Result — when completing or failing inspection */}
+      {project.status === 'inspection_scheduled' && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Search className="h-5 w-5 text-primary" /> Inspection Result
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {project.inspection_date && (
+              <p className="text-sm text-muted-foreground">
+                Scheduled: <span className="font-medium text-foreground">{new Date(project.inspection_date).toLocaleDateString('en-IN')}</span>
+              </p>
+            )}
+            <div>
+              <Label className="text-sm">Inspection Notes</Label>
+              <Textarea
+                value={inspectionNotes}
+                onChange={e => setInspectionNotes(e.target.value)}
+                placeholder="Enter inspection observations, meter readings, etc."
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Net Meter Number — when installing net meter */}
+      {project.status === 'inspection_completed' && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Award className="h-5 w-5 text-primary" /> Net Meter Installation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label className="text-sm">Net Meter Number</Label>
+              <Input
+                value={netMeterNumber}
+                onChange={e => setNetMeterNumber(e.target.value)}
+                placeholder="Enter net meter serial number"
+                className="mt-1"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Project Completed Banner */}
+      {project.status === 'project_completed' && (
+        <Card className="shadow-card border-emerald-200 dark:border-emerald-800">
+          <CardContent className="py-8 text-center space-y-3">
+            <div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto">
+              <PartyPopper className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <h3 className="text-xl font-bold text-foreground">Project Completed! 🎉</h3>
+            <p className="text-muted-foreground text-sm max-w-md mx-auto">
+              This project has been successfully completed. Net meter installed and all stages verified.
+            </p>
+            {project.completed_at && (
+              <p className="text-xs text-muted-foreground">
+                Completed on {new Date(project.completed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+            )}
+            {project.net_meter_number && (
+              <p className="text-sm"><span className="text-muted-foreground">Net Meter:</span> <span className="font-medium">{project.net_meter_number}</span></p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Status Pipeline Actions */}
       {nextStatuses.length > 0 && (project.status !== 'pending_operator_review' || allDocsApproved) && project.status !== 'pending_operator_review' && (
         <Card className="shadow-card">
@@ -434,14 +551,18 @@ const OperatorProjectDetail = () => {
               {nextStatuses.map(ns => {
                 const needsWelder = ns === 'installation_pending' && !selectedWelder;
                 const needsElectrician = ns === 'wiring_pending' && !selectedElectrician;
+                const needsFileNumber = ns === 'net_metering_submitted' && !netMeteringFileNumber.trim();
+                const needsInspDate = ns === 'inspection_scheduled' && !inspectionDate;
+                const needsMeterNum = ns === 'net_meter_installed' && !netMeterNumber.trim();
                 return (
                   <Button
                     key={ns}
                     onClick={() => handleStatusUpdate(ns)}
-                    disabled={updating || (ns === 'loan_process' && !loanBank.trim()) || needsWelder || needsElectrician}
-                    className="gradient-primary text-primary-foreground"
+                    disabled={updating || (ns === 'loan_process' && !loanBank.trim()) || needsWelder || needsElectrician || needsFileNumber || needsInspDate || needsMeterNum}
+                    variant={ns === 'inspection_failed' ? 'destructive' : 'default'}
+                    className={ns !== 'inspection_failed' ? 'gradient-primary text-primary-foreground' : ''}
                   >
-                    Move to: {statusLabels[ns]}
+                    {ns === 'inspection_failed' ? '✗ Inspection Failed' : `Move to: ${statusLabels[ns]}`}
                   </Button>
                 );
               })}
@@ -454,6 +575,15 @@ const OperatorProjectDetail = () => {
             )}
             {nextStatuses.includes('wiring_pending' as ProjectStatus) && !selectedElectrician && (
               <p className="text-xs text-destructive">Please assign an electrician above before moving to wiring</p>
+            )}
+            {nextStatuses.includes('net_metering_submitted' as ProjectStatus) && !netMeteringFileNumber.trim() && (
+              <p className="text-xs text-destructive">Please enter file number above before submitting net metering</p>
+            )}
+            {nextStatuses.includes('inspection_scheduled' as ProjectStatus) && !inspectionDate && (
+              <p className="text-xs text-destructive">Please select an inspection date above</p>
+            )}
+            {nextStatuses.includes('net_meter_installed' as ProjectStatus) && !netMeterNumber.trim() && (
+              <p className="text-xs text-destructive">Please enter the net meter number above</p>
             )}
           </CardContent>
         </Card>
