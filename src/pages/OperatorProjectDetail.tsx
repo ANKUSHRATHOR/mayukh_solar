@@ -14,8 +14,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, CheckCircle2, XCircle, FileText, Eye,
-  ClipboardCheck, CreditCard, Package, Truck, Wrench, Zap
+  ClipboardCheck, CreditCard, Package, Truck, Wrench, Zap,
+  Calendar, Search, Award, PartyPopper
 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import type { Database } from '@/integrations/supabase/types';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
