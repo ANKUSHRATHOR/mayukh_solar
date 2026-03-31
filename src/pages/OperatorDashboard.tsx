@@ -170,6 +170,16 @@ const OperatorDashboard = () => {
           <TabsTrigger value="material" className="gap-1.5">
             <Package className="h-4 w-4" /> Material
           </TabsTrigger>
+          <TabsTrigger value="installation" className="gap-1.5">
+            <Wrench className="h-4 w-4" /> Install/Wire
+          </TabsTrigger>
+          <TabsTrigger value="netmetering" className="gap-1.5">
+            <ClipboardCheck className="h-4 w-4" /> Net Meter
+            {netMeterCount > 0 && <Badge variant="secondary" className="ml-1 text-xs px-1.5">{netMeterCount}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="gap-1.5">
+            <CheckCircle2 className="h-4 w-4" /> Done
+          </TabsTrigger>
           <TabsTrigger value="all" className="gap-1.5">All</TabsTrigger>
         </TabsList>
 
