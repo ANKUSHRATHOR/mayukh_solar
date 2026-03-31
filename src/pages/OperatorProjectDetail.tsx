@@ -105,6 +105,10 @@ const OperatorProjectDetail = () => {
   const [electricians, setElectricians] = useState<{ user_id: string; full_name: string }[]>([]);
   const [selectedWelder, setSelectedWelder] = useState('');
   const [selectedElectrician, setSelectedElectrician] = useState('');
+  const [netMeteringFileNumber, setNetMeteringFileNumber] = useState('');
+  const [inspectionDate, setInspectionDate] = useState('');
+  const [inspectionNotes, setInspectionNotes] = useState('');
+  const [netMeterNumber, setNetMeterNumber] = useState('');
 
   const fetchData = useCallback(async () => {
     if (!projectId) return;
