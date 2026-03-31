@@ -48,6 +48,16 @@ const operatorNav: NavItem[] = [
   { label: 'Projects', icon: ClipboardCheck, path: '/' },
 ];
 
+const welderNav: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Installations', icon: Wrench, path: '/' },
+];
+
+const electricianNav: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Wiring Jobs', icon: Zap, path: '/' },
+];
+
 const AppSidebar = () => {
   const { staff, role, signOut } = useAuth();
   const navigate = useNavigate();
