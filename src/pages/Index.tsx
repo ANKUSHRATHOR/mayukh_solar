@@ -39,9 +39,9 @@ const Index = () => {
       case 'operator':
         return <OperatorDashboard />;
       case 'welder':
-        return <ComingSoonDashboard role="Welder" />;
+        return <WelderDashboard />;
       case 'electrician':
-        return <ComingSoonDashboard role="Electrician" />;
+        return <ElectricianDashboard />;
       default:
         return <ComingSoonDashboard role="User" />;
     }
