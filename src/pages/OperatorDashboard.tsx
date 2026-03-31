@@ -73,13 +73,16 @@ const statusColors: Record<string, string> = {
   project_completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
 };
 
-type TabFilter = 'review' | 'registration' | 'finance' | 'material' | 'all';
+type TabFilter = 'review' | 'registration' | 'finance' | 'material' | 'installation' | 'netmetering' | 'completed' | 'all';
 
 const tabFilters: Record<TabFilter, ProjectStatus[]> = {
   review: ['pending_operator_review'],
   registration: ['registration_pending', 'registration_done'],
   finance: ['loan_process', 'loan_done', 'cash_file'],
   material: ['material_ordered', 'material_dispatched', 'material_delivered'],
+  installation: ['installation_pending', 'installation_done', 'wiring_pending', 'wiring_done'],
+  netmetering: ['net_metering_submitted', 'inspection_scheduled', 'inspection_completed', 'inspection_failed', 'net_meter_installed'],
+  completed: ['project_completed'],
   all: [],
 };
 
@@ -120,6 +123,9 @@ const OperatorDashboard = () => {
   const regCount = projects.filter(p => ['registration_pending', 'registration_done'].includes(p.status)).length;
   const financeCount = projects.filter(p => ['loan_process', 'loan_done', 'cash_file'].includes(p.status)).length;
   const materialCount = projects.filter(p => ['material_ordered', 'material_dispatched', 'material_delivered'].includes(p.status)).length;
+  const installCount = projects.filter(p => ['installation_pending', 'installation_done', 'wiring_pending', 'wiring_done'].includes(p.status)).length;
+  const netMeterCount = projects.filter(p => ['net_metering_submitted', 'inspection_scheduled', 'inspection_completed', 'inspection_failed', 'net_meter_installed'].includes(p.status)).length;
+  const completedCount = projects.filter(p => p.status === 'project_completed').length;
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -131,9 +137,9 @@ const OperatorDashboard = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Pending Review" value={reviewCount} icon={FileSearch} change={reviewCount > 0 ? 'Needs attention' : 'All clear'} />
-        <StatCard title="Registration" value={regCount} icon={ClipboardCheck} />
-        <StatCard title="Finance Stage" value={financeCount} icon={AlertTriangle} />
-        <StatCard title="Material Stage" value={materialCount} icon={Package} />
+        <StatCard title="Installation" value={installCount} icon={Wrench} />
+        <StatCard title="Net Metering" value={netMeterCount} icon={ClipboardCheck} />
+        <StatCard title="Completed" value={completedCount} icon={CheckCircle2} />
       </div>
 
       {/* Tabs + Search */}
@@ -163,6 +169,16 @@ const OperatorDashboard = () => {
           </TabsTrigger>
           <TabsTrigger value="material" className="gap-1.5">
             <Package className="h-4 w-4" /> Material
+          </TabsTrigger>
+          <TabsTrigger value="installation" className="gap-1.5">
+            <Wrench className="h-4 w-4" /> Install/Wire
+          </TabsTrigger>
+          <TabsTrigger value="netmetering" className="gap-1.5">
+            <ClipboardCheck className="h-4 w-4" /> Net Meter
+            {netMeterCount > 0 && <Badge variant="secondary" className="ml-1 text-xs px-1.5">{netMeterCount}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="gap-1.5">
+            <CheckCircle2 className="h-4 w-4" /> Done
           </TabsTrigger>
           <TabsTrigger value="all" className="gap-1.5">All</TabsTrigger>
         </TabsList>

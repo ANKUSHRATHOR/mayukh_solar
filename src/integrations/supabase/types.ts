@@ -177,6 +177,7 @@ export type Database = {
           assigned_electrician_id: string | null
           assigned_welder_id: string | null
           capacity_kw: number
+          completed_at: string | null
           consumer_name: string | null
           created_at: string
           created_by_user_id: string
@@ -186,11 +187,15 @@ export type Database = {
           expected_install_date: string | null
           final_amount: number
           id: string
+          inspection_date: string | null
+          inspection_notes: string | null
           inverter_brand: string
           inverter_capacity: number
           k_number: string | null
           lead_id: string
           loan_bank: string | null
+          net_meter_number: string | null
+          net_metering_file_number: string | null
           panel_brand: string
           panel_qty: number
           panel_watt: number
@@ -205,6 +210,7 @@ export type Database = {
           assigned_electrician_id?: string | null
           assigned_welder_id?: string | null
           capacity_kw: number
+          completed_at?: string | null
           consumer_name?: string | null
           created_at?: string
           created_by_user_id: string
@@ -214,11 +220,15 @@ export type Database = {
           expected_install_date?: string | null
           final_amount: number
           id?: string
+          inspection_date?: string | null
+          inspection_notes?: string | null
           inverter_brand: string
           inverter_capacity: number
           k_number?: string | null
           lead_id: string
           loan_bank?: string | null
+          net_meter_number?: string | null
+          net_metering_file_number?: string | null
           panel_brand: string
           panel_qty: number
           panel_watt: number
@@ -233,6 +243,7 @@ export type Database = {
           assigned_electrician_id?: string | null
           assigned_welder_id?: string | null
           capacity_kw?: number
+          completed_at?: string | null
           consumer_name?: string | null
           created_at?: string
           created_by_user_id?: string
@@ -242,11 +253,15 @@ export type Database = {
           expected_install_date?: string | null
           final_amount?: number
           id?: string
+          inspection_date?: string | null
+          inspection_notes?: string | null
           inverter_brand?: string
           inverter_capacity?: number
           k_number?: string | null
           lead_id?: string
           loan_bank?: string | null
+          net_meter_number?: string | null
+          net_metering_file_number?: string | null
           panel_brand?: string
           panel_qty?: number
           panel_watt?: number
