@@ -123,6 +123,9 @@ const OperatorDashboard = () => {
   const regCount = projects.filter(p => ['registration_pending', 'registration_done'].includes(p.status)).length;
   const financeCount = projects.filter(p => ['loan_process', 'loan_done', 'cash_file'].includes(p.status)).length;
   const materialCount = projects.filter(p => ['material_ordered', 'material_dispatched', 'material_delivered'].includes(p.status)).length;
+  const installCount = projects.filter(p => ['installation_pending', 'installation_done', 'wiring_pending', 'wiring_done'].includes(p.status)).length;
+  const netMeterCount = projects.filter(p => ['net_metering_submitted', 'inspection_scheduled', 'inspection_completed', 'inspection_failed', 'net_meter_installed'].includes(p.status)).length;
+  const completedCount = projects.filter(p => p.status === 'project_completed').length;
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -134,9 +137,9 @@ const OperatorDashboard = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Pending Review" value={reviewCount} icon={FileSearch} change={reviewCount > 0 ? 'Needs attention' : 'All clear'} />
-        <StatCard title="Registration" value={regCount} icon={ClipboardCheck} />
-        <StatCard title="Finance Stage" value={financeCount} icon={AlertTriangle} />
-        <StatCard title="Material Stage" value={materialCount} icon={Package} />
+        <StatCard title="Installation" value={installCount} icon={Wrench} />
+        <StatCard title="Net Metering" value={netMeterCount} icon={ClipboardCheck} />
+        <StatCard title="Completed" value={completedCount} icon={CheckCircle2} />
       </div>
 
       {/* Tabs + Search */}
