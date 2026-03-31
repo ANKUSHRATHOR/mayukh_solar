@@ -99,6 +99,10 @@ const OperatorProjectDetail = () => {
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [loanBank, setLoanBank] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [welders, setWelders] = useState<{ user_id: string; full_name: string }[]>([]);
+  const [electricians, setElectricians] = useState<{ user_id: string; full_name: string }[]>([]);
+  const [selectedWelder, setSelectedWelder] = useState('');
+  const [selectedElectrician, setSelectedElectrician] = useState('');
 
   const fetchData = useCallback(async () => {
     if (!projectId) return;
