@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Phone, Lock, ArrowRight, Sun } from 'lucide-react';
+import { Phone, Lock, ArrowRight, Sun, Mail } from 'lucide-react';
 import logo from '@/assets/mayukh-solar-logo.png';
 
-type LoginMode = 'choose' | 'otp' | 'password';
+type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp';
 
 const Login = () => {
   const [mobile, setMobile] = useState('');
+  const [email, setEmail] = useState('');
   const [mode, setMode] = useState<LoginMode>('choose');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
@@ -21,8 +22,8 @@ const Login = () => {
   const navigate = useNavigate();
 
   const mobileEmail = `${mobile}@mayukhsolar.app`;
-
   const validateMobile = (num: string) => /^[6-9]\d{9}$/.test(num);
+  const validateEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
   const handleSendOtp = async () => {
     if (!validateMobile(mobile)) {
@@ -42,6 +43,24 @@ const Login = () => {
     }
   };
 
+  const handleSendEmailOtp = async () => {
+    if (!validateEmail(email)) {
+      toast({ title: 'Invalid email', description: 'Enter a valid email address', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (error) throw error;
+      setOtpSent(true);
+      toast({ title: 'OTP Sent', description: `A verification code has been sent to ${email}` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleVerifyOtp = async () => {
     if (otp.length !== 6) {
       toast({ title: 'Invalid OTP', description: 'Enter the 6-digit code', variant: 'destructive' });
@@ -49,7 +68,8 @@ const Login = () => {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({ email: mobileEmail, token: otp, type: 'email' });
+      const verifyEmail = mode === 'email_otp' ? email : mobileEmail;
+      const { error } = await supabase.auth.verifyOtp({ email: verifyEmail, token: otp, type: 'email' });
       if (error) throw error;
       navigate('/');
     } catch (err: any) {
@@ -65,7 +85,7 @@ const Login = () => {
       return;
     }
     if (!password) {
-      toast({ title: 'Password required', description: 'Enter your password', variant: 'destructive' });
+      toast({ title: 'Password required', variant: 'destructive' });
       return;
     }
     setLoading(true);
@@ -80,9 +100,10 @@ const Login = () => {
     }
   };
 
+  const resetMode = () => { setMode('choose'); setOtpSent(false); setOtp(''); setPassword(''); };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full gradient-primary opacity-10 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full gradient-primary opacity-5 blur-3xl" />
@@ -90,7 +111,6 @@ const Login = () => {
 
       <Card className="w-full max-w-md shadow-elevated border-0 relative z-10">
         <CardContent className="p-8">
-          {/* Logo & Branding */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
               <img src={logo} alt="Mayukh Solar" width={80} height={80} className="drop-shadow-md" />
@@ -99,55 +119,76 @@ const Login = () => {
             <p className="text-sm text-muted-foreground mt-1">Staff Portal — V R Enterprises</p>
           </div>
 
-          {/* Mobile Input */}
           <div className="space-y-4">
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="tel"
-                placeholder="Enter mobile number"
-                value={mobile}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                  setMobile(val);
-                }}
-                className="pl-10 h-12 text-base"
-                maxLength={10}
-                disabled={mode !== 'choose' && otpSent}
-              />
-            </div>
+            {/* Mobile Input (shown for mobile-based modes) */}
+            {(mode === 'choose' || mode === 'otp' || mode === 'password') && (
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="tel"
+                  placeholder="Enter mobile number"
+                  value={mobile}
+                  onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="pl-10 h-12 text-base"
+                  maxLength={10}
+                  disabled={mode !== 'choose' && otpSent}
+                />
+              </div>
+            )}
+
+            {/* Email Input (shown for email OTP mode) */}
+            {mode === 'email_otp' && (
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="pl-10 h-12 text-base"
+                  disabled={otpSent}
+                />
+              </div>
+            )}
 
             {/* Mode: Choose */}
             {mode === 'choose' && (
-              <div className="flex gap-3">
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => { setMode('otp'); handleSendOtp(); }}
+                    className="flex-1 h-12 gradient-primary text-primary-foreground font-semibold"
+                    disabled={loading || !validateMobile(mobile)}
+                  >
+                    <Sun className="mr-2 h-4 w-4" /> Get OTP
+                  </Button>
+                  <Button
+                    onClick={() => setMode('password')}
+                    variant="outline"
+                    className="flex-1 h-12 font-semibold"
+                    disabled={!validateMobile(mobile)}
+                  >
+                    <Lock className="mr-2 h-4 w-4" /> Password
+                  </Button>
+                </div>
                 <Button
-                  onClick={() => { setMode('otp'); handleSendOtp(); }}
-                  className="flex-1 h-12 gradient-primary text-primary-foreground font-semibold"
-                  disabled={loading || !validateMobile(mobile)}
-                >
-                  <Sun className="mr-2 h-4 w-4" />
-                  Get OTP
-                </Button>
-                <Button
-                  onClick={() => setMode('password')}
+                  onClick={() => setMode('email_otp')}
                   variant="outline"
-                  className="flex-1 h-12 font-semibold"
-                  disabled={!validateMobile(mobile)}
+                  className="w-full h-11 font-semibold"
                 >
-                  <Lock className="mr-2 h-4 w-4" />
-                  Use Password
+                  <Mail className="mr-2 h-4 w-4" /> Login with Email OTP
                 </Button>
               </div>
             )}
 
-            {/* Mode: OTP */}
+            {/* Mode: Mobile OTP */}
             {mode === 'otp' && otpSent && (
               <div className="space-y-4">
                 <Input
                   type="text"
                   placeholder="Enter 6-digit OTP"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   className="h-12 text-center text-xl tracking-[0.5em] font-mono"
                   maxLength={6}
                 />
@@ -158,10 +199,46 @@ const Login = () => {
                 >
                   Verify & Login <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-                <button
-                  onClick={() => { setMode('choose'); setOtpSent(false); setOtp(''); }}
-                  className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors"
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
+                  ← Back to login options
+                </button>
+              </div>
+            )}
+
+            {/* Mode: Email OTP */}
+            {mode === 'email_otp' && !otpSent && (
+              <div className="space-y-4">
+                <Button
+                  onClick={handleSendEmailOtp}
+                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
+                  disabled={loading || !validateEmail(email)}
                 >
+                  {loading ? 'Sending...' : 'Send Email OTP'} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
+                  ← Back to login options
+                </button>
+              </div>
+            )}
+
+            {mode === 'email_otp' && otpSent && (
+              <div className="space-y-4">
+                <Input
+                  type="text"
+                  placeholder="Enter 6-digit OTP"
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="h-12 text-center text-xl tracking-[0.5em] font-mono"
+                  maxLength={6}
+                />
+                <Button
+                  onClick={handleVerifyOtp}
+                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
+                  disabled={loading || otp.length !== 6}
+                >
+                  Verify & Login <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
                   ← Back to login options
                 </button>
               </div>
@@ -176,9 +253,9 @@ const Login = () => {
                     type="password"
                     placeholder="Enter password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={e => setPassword(e.target.value)}
                     className="pl-10 h-12"
-                    onKeyDown={(e) => e.key === 'Enter' && handlePasswordLogin()}
+                    onKeyDown={e => e.key === 'Enter' && handlePasswordLogin()}
                   />
                 </div>
                 <Button
@@ -188,17 +265,13 @@ const Login = () => {
                 >
                   {loading ? 'Signing in...' : 'Sign In'} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-                <button
-                  onClick={() => { setMode('choose'); setPassword(''); }}
-                  className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors"
-                >
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
                   ← Back to login options
                 </button>
               </div>
             )}
           </div>
 
-          {/* Footer */}
           <p className="text-xs text-muted-foreground text-center mt-8">
             Only authorized staff can access this app.<br />
             Contact your admin for access.
