@@ -59,6 +59,14 @@ const App = () => (
               }
             />
             <Route
+              path="/leads/bin"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <CancelledLeadsBin />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/leads/new"
               element={
                 <ProtectedRoute allowedRoles={['admin', 'telecaller']}>
