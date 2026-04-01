@@ -10,6 +10,7 @@ import SetPassword from "./pages/SetPassword.tsx";
 import StaffManagement from "./pages/StaffManagement.tsx";
 import AddStaff from "./pages/AddStaff.tsx";
 import AdminLeadsList from "./pages/AdminLeadsList.tsx";
+import CancelledLeadsBin from "./pages/CancelledLeadsBin.tsx";
 import CreateLead from "./pages/CreateLead.tsx";
 import LeadDetail from "./pages/LeadDetail.tsx";
 import ProjectFinalizationForm from "./pages/ProjectFinalizationForm.tsx";
