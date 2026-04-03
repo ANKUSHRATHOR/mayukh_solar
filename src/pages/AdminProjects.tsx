@@ -194,6 +194,7 @@ const AdminProjects = () => {
                     <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${p.id}/documents`)}>
                       Docs
                     </Button>
+                    <QuotationButton projectId={p.id} />
                   </div>
                 </div>
               </CardContent>
