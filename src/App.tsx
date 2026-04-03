@@ -18,6 +18,8 @@ import ProjectDocuments from "./pages/ProjectDocuments.tsx";
 import OperatorProjectDetail from "./pages/OperatorProjectDetail.tsx";
 import WelderDashboard from "./pages/WelderDashboard.tsx";
 import ElectricianDashboard from "./pages/ElectricianDashboard.tsx";
+import AdminProjects from "./pages/AdminProjects.tsx";
+import SettingsPage from "./pages/SettingsPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
