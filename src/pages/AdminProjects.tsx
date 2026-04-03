@@ -121,7 +121,7 @@ const AdminProjects = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard title="Total Projects" value={String(projects.length)} icon={Briefcase} change="" changeType="neutral" />
         <StatCard title="In Progress" value={String(inProgress)} icon={Filter} change="" changeType="neutral" />
-        <StatCard title="Completed" value={String(completed)} icon={Briefcase} change={`₹${(totalRevenue / 100000).toFixed(1)}L revenue`} changeType="positive" />
+        <StatCard title="Completed" value={String(completed)} icon={Briefcase} change={`₹${(totalRevenue / 100000).toFixed(1)}L revenue`} changeType="up" />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
