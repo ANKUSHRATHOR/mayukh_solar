@@ -69,10 +69,10 @@ const AdminDashboard = () => {
             <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/staff/new')}>
               <UserPlus className="mr-2 h-4 w-4" /> Add Staff Member
             </Button>
-            <Button variant="outline" className="w-full justify-start" disabled>
-              <FileText className="mr-2 h-4 w-4" /> View Pending Documents
+            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/leads')}>
+              <FileText className="mr-2 h-4 w-4" /> View All Leads
             </Button>
-            <Button variant="outline" className="w-full justify-start" disabled>
+            <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/admin/projects')}>
               <FolderOpen className="mr-2 h-4 w-4" /> View All Projects
             </Button>
           </CardContent>
