@@ -29,8 +29,10 @@ interface NavItem {
 const adminNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'All Leads', icon: PhoneCall, path: '/leads' },
+  { label: 'All Projects', icon: Briefcase, path: '/admin/projects' },
   { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
   { label: 'Staff Management', icon: Users, path: '/staff' },
+  { label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
 const telecallerNav: NavItem[] = [
