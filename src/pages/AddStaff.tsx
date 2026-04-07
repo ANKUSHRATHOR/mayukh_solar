@@ -45,49 +45,27 @@ const AddStaff = () => {
       return;
     }
 
-    // Check admin limit
-    if (role === 'admin') {
-      const { data: adminCount } = await supabase.rpc('count_admins');
-      if (adminCount && adminCount >= 2) {
-        toast({ title: 'Admin limit reached', description: 'Maximum 2 admin accounts allowed', variant: 'destructive' });
-        return;
-      }
-    }
-
     setLoading(true);
     try {
-      const tempPin = Math.floor(100000 + Math.random() * 900000).toString();
-      const mobileEmail = `${mobile}@mayukhsolar.app`;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
 
-      // Create auth user with temp password
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: mobileEmail,
-        password: tempPin,
+      const response = await supabase.functions.invoke('create-staff', {
+        body: { full_name: fullName.trim(), mobile, role },
       });
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create user');
 
-      const userId = authData.user.id;
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to create staff');
+      }
 
-      // Create staff record
-      const { error: staffError } = await supabase.from('staff').insert({
-        user_id: userId,
-        full_name: fullName.trim(),
-        mobile,
-        must_change_password: true,
-      });
-      if (staffError) throw staffError;
-
-      // Assign role
-      const { error: roleError } = await supabase.from('user_roles').insert({
-        user_id: userId,
-        role,
-      });
-      if (roleError) throw roleError;
+      const result = response.data;
+      if (result?.error) {
+        throw new Error(result.error);
+      }
 
       toast({
         title: 'Staff Created!',
-        description: `Temporary PIN: ${tempPin} — Share with ${fullName}. They must change it on first login.`,
+        description: `Temporary PIN: ${result.temp_pin} — Share with ${fullName}. They must change it on first login.`,
       });
 
       navigate('/staff');
