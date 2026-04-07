@@ -3,16 +3,36 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { UserPlus, MoreVertical, Search, Shield, Power } from 'lucide-react';
+import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -38,12 +58,28 @@ const roleColors: Record<AppRole, string> = {
   electrician: 'bg-secondary text-secondary-foreground',
 };
 
+const roles: { value: AppRole; label: string }[] = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'telecaller', label: 'Telecaller' },
+  { value: 'sales_person', label: 'Sales Person' },
+  { value: 'operator', label: 'Operator' },
+  { value: 'welder', label: 'Welder' },
+  { value: 'electrician', label: 'Electrician' },
+];
+
 const roleName = (r: AppRole) => r.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 const StaffManagement = () => {
   const [staffList, setStaffList] = useState<StaffWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [editStaff, setEditStaff] = useState<StaffWithRole | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editMobile, setEditMobile] = useState('');
+  const [editRole, setEditRole] = useState<AppRole | ''>('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteStaff, setDeleteStaff] = useState<StaffWithRole | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -88,6 +124,69 @@ const StaffManagement = () => {
       fetchStaff();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const openEdit = (s: StaffWithRole) => {
+    setEditStaff(s);
+    setEditName(s.full_name);
+    setEditMobile(s.mobile);
+    setEditRole(s.role || '');
+  };
+
+  const handleEdit = async () => {
+    if (!editStaff || !editName.trim() || !editMobile || !editRole) {
+      toast({ title: 'All fields required', variant: 'destructive' });
+      return;
+    }
+    if (!/^[6-9]\d{9}$/.test(editMobile)) {
+      toast({ title: 'Invalid mobile number', variant: 'destructive' });
+      return;
+    }
+    setEditLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-staff', {
+        body: {
+          action: 'update',
+          staff_id: editStaff.id,
+          user_id: editStaff.user_id,
+          full_name: editName.trim(),
+          mobile: editMobile,
+          role: editRole,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      toast({ title: 'Staff updated successfully' });
+      setEditStaff(null);
+      fetchStaff();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteStaff) return;
+    setDeleteLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-staff', {
+        body: {
+          action: 'delete',
+          staff_id: deleteStaff.id,
+          user_id: deleteStaff.user_id,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      toast({ title: 'Staff deleted successfully' });
+      setDeleteStaff(null);
+      fetchStaff();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -161,9 +260,17 @@ const StaffManagement = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => openEdit(s)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => toggleActive(s)}>
                       <Power className="mr-2 h-4 w-4" />
                       {s.is_active ? 'Deactivate' : 'Activate'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setDeleteStaff(s)} className="text-destructive focus:text-destructive">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -172,6 +279,72 @@ const StaffManagement = () => {
           ))}
         </div>
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editStaff} onOpenChange={(open) => !open && setEditStaff(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Staff Member</DialogTitle>
+            <DialogDescription>Update staff details and role.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Mobile Number</Label>
+              <Input
+                type="tel"
+                value={editMobile}
+                onChange={(e) => setEditMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                maxLength={10}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={editRole} onValueChange={(v) => setEditRole(v as AppRole)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditStaff(null)}>Cancel</Button>
+            <Button onClick={handleEdit} disabled={editLoading}>
+              {editLoading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteStaff} onOpenChange={(open) => !open && setDeleteStaff(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Staff Member</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete <strong>{deleteStaff?.full_name}</strong>? This will remove their account, role, and all access. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
