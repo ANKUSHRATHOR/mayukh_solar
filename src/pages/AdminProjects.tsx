@@ -72,7 +72,10 @@ const AdminProjects = () => {
   const handleAssign = async () => {
     if (!assignDialog || !selectedStaffId) return;
     const field = assignDialog.type === 'welder' ? 'assigned_welder_id' : 'assigned_electrician_id';
-    const { error } = await supabase.from('projects').update({ [field]: selectedStaffId }).eq('id', assignDialog.projectId);
+    const updateData = field === 'assigned_welder_id'
+      ? { assigned_welder_id: selectedStaffId }
+      : { assigned_electrician_id: selectedStaffId };
+    const { error } = await supabase.from('projects').update(updateData).eq('id', assignDialog.projectId);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
