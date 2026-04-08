@@ -193,6 +193,29 @@ const StaffManagement = () => {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetStaff) return;
+    setResetLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-staff', {
+        body: {
+          action: 'reset_password',
+          staff_id: resetStaff.id,
+          user_id: resetStaff.user_id,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      setTempPassword(data.temp_password);
+      toast({ title: 'Password reset successfully' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      setResetStaff(null);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const filtered = staffList.filter((s) =>
     s.full_name.toLowerCase().includes(search.toLowerCase()) ||
     s.mobile.includes(search) ||
