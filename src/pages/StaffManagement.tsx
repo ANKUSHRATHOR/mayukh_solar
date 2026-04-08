@@ -80,6 +80,9 @@ const StaffManagement = () => {
   const [editLoading, setEditLoading] = useState(false);
   const [deleteStaff, setDeleteStaff] = useState<StaffWithRole | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [resetStaff, setResetStaff] = useState<StaffWithRole | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [tempPassword, setTempPassword] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
 
