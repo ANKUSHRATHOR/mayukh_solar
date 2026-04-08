@@ -375,6 +375,38 @@ const StaffManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <AlertDialog open={!!resetStaff} onOpenChange={(open) => { if (!open) { setResetStaff(null); setTempPassword(''); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              {tempPassword ? (
+                <span className="space-y-2 block">
+                  <span className="block">Temporary password for <strong>{resetStaff?.full_name}</strong>:</span>
+                  <span className="block bg-muted p-3 rounded-md font-mono text-lg text-foreground text-center select-all">{tempPassword}</span>
+                  <span className="block text-xs">Share this with the staff member. They will be asked to set a new password on next login.</span>
+                </span>
+              ) : (
+                <>Reset password for <strong>{resetStaff?.full_name}</strong>? A temporary password will be generated.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {tempPassword ? (
+              <AlertDialogAction onClick={() => { setResetStaff(null); setTempPassword(''); }}>Done</AlertDialogAction>
+            ) : (
+              <>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleResetPassword} disabled={resetLoading}>
+                  {resetLoading ? 'Resetting...' : 'Reset Password'}
+                </AlertDialogAction>
+              </>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
