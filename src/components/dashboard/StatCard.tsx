@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -10,7 +11,7 @@ interface StatCardProps {
   className?: string;
 }
 
-const StatCard = ({ title, value, icon: Icon, change, changeType = 'neutral', className }: StatCardProps) => {
+const StatCard = forwardRef<HTMLDivElement, StatCardProps>(({ title, value, icon: Icon, change, changeType = 'neutral', className }, ref) => {
   return (
     <div className={cn('bg-card rounded-xl p-5 shadow-card border border-border hover:shadow-elevated transition-shadow', className)}>
       <div className="flex items-start justify-between">
