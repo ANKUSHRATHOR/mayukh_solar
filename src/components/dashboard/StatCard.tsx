@@ -35,6 +35,8 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(({ title, value, icon
       </div>
     </div>
   );
-};
+});
+
+StatCard.displayName = 'StatCard';
 
 export default StatCard;
