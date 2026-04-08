@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2 } from 'lucide-react';
+import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2, KeyRound } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -80,6 +80,9 @@ const StaffManagement = () => {
   const [editLoading, setEditLoading] = useState(false);
   const [deleteStaff, setDeleteStaff] = useState<StaffWithRole | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [resetStaff, setResetStaff] = useState<StaffWithRole | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [tempPassword, setTempPassword] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -190,6 +193,29 @@ const StaffManagement = () => {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetStaff) return;
+    setResetLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-staff', {
+        body: {
+          action: 'reset_password',
+          staff_id: resetStaff.id,
+          user_id: resetStaff.user_id,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      setTempPassword(data.temp_password);
+      toast({ title: 'Password reset successfully' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      setResetStaff(null);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const filtered = staffList.filter((s) =>
     s.full_name.toLowerCase().includes(search.toLowerCase()) ||
     s.mobile.includes(search) ||
@@ -263,6 +289,10 @@ const StaffManagement = () => {
                     <DropdownMenuItem onClick={() => openEdit(s)}>
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setResetStaff(s); setTempPassword(''); }}>
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Reset Password
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => toggleActive(s)}>
                       <Power className="mr-2 h-4 w-4" />
@@ -342,6 +372,38 @@ const StaffManagement = () => {
             >
               {deleteLoading ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <AlertDialog open={!!resetStaff} onOpenChange={(open) => { if (!open) { setResetStaff(null); setTempPassword(''); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              {tempPassword ? (
+                <span className="space-y-2 block">
+                  <span className="block">Temporary password for <strong>{resetStaff?.full_name}</strong>:</span>
+                  <span className="block bg-muted p-3 rounded-md font-mono text-lg text-foreground text-center select-all">{tempPassword}</span>
+                  <span className="block text-xs">Share this with the staff member. They will be asked to set a new password on next login.</span>
+                </span>
+              ) : (
+                <>Reset password for <strong>{resetStaff?.full_name}</strong>? A temporary password will be generated.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {tempPassword ? (
+              <AlertDialogAction onClick={() => { setResetStaff(null); setTempPassword(''); }}>Done</AlertDialogAction>
+            ) : (
+              <>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleResetPassword} disabled={resetLoading}>
+                  {resetLoading ? 'Resetting...' : 'Reset Password'}
+                </AlertDialogAction>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -70,6 +70,29 @@ Deno.serve(async (req) => {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
+    } else if (action === "reset_password") {
+      if (!user_id || !staff_id) {
+        return new Response(JSON.stringify({ error: "Missing user_id or staff_id" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Generate a temporary password
+      const tempPassword = "Reset@" + Math.random().toString(36).slice(2, 8);
+
+      // Update auth password
+      const { error: pwError } = await adminClient.auth.admin.updateUserById(user_id, {
+        password: tempPassword,
+      });
+      if (pwError) throw pwError;
+
+      // Force password change on next login
+      await adminClient.from("staff").update({ must_change_password: true }).eq("id", staff_id);
+
+      return new Response(JSON.stringify({ success: true, temp_password: tempPassword }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+
     } else if (action === "delete") {
       if (!staff_id || !user_id) {
         return new Response(JSON.stringify({ error: "Missing staff_id or user_id" }), {
