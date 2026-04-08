@@ -290,6 +290,10 @@ const StaffManagement = () => {
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setResetStaff(s); setTempPassword(''); }}>
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Reset Password
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => toggleActive(s)}>
                       <Power className="mr-2 h-4 w-4" />
                       {s.is_active ? 'Deactivate' : 'Activate'}
