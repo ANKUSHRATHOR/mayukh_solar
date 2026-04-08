@@ -13,7 +13,7 @@ interface StatCardProps {
 
 const StatCard = forwardRef<HTMLDivElement, StatCardProps>(({ title, value, icon: Icon, change, changeType = 'neutral', className }, ref) => {
   return (
-    <div className={cn('bg-card rounded-xl p-5 shadow-card border border-border hover:shadow-elevated transition-shadow', className)}>
+    <div ref={ref} className={cn('bg-card rounded-xl p-5 shadow-card border border-border hover:shadow-elevated transition-shadow', className)}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-muted-foreground font-medium">{title}</p>
