@@ -318,6 +318,56 @@ export type Database = {
           },
         ]
       }
+      quotations: {
+        Row: {
+          capacity_kw: number
+          created_at: string
+          created_by_user_id: string
+          customer_address: string | null
+          customer_mobile: string | null
+          customer_name: string
+          id: string
+          project_code: string
+          project_id: string
+          quotation_number: string
+          total_amount: number
+        }
+        Insert: {
+          capacity_kw: number
+          created_at?: string
+          created_by_user_id: string
+          customer_address?: string | null
+          customer_mobile?: string | null
+          customer_name: string
+          id?: string
+          project_code: string
+          project_id: string
+          quotation_number: string
+          total_amount: number
+        }
+        Update: {
+          capacity_kw?: number
+          created_at?: string
+          created_by_user_id?: string
+          customer_address?: string | null
+          customer_mobile?: string | null
+          customer_name?: string
+          id?: string
+          project_code?: string
+          project_id?: string
+          quotation_number?: string
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       serial_numbers: {
         Row: {
           created_at: string
@@ -470,6 +520,7 @@ export type Database = {
       }
       count_admins: { Args: never; Returns: number }
       generate_project_code: { Args: never; Returns: string }
+      generate_quotation_number: { Args: never; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
