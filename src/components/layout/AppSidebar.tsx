@@ -14,6 +14,7 @@ import {
   Wrench,
   Zap,
   Trash2,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ const adminNav: NavItem[] = [
   { label: 'All Projects', icon: Briefcase, path: '/admin/projects' },
   { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
   { label: 'Staff Management', icon: Users, path: '/staff' },
+  { label: 'Quotations', icon: FileText, path: '/quotations' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
