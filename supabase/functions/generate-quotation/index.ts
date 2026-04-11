@@ -21,6 +21,17 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Get auth user from JWT
+    const authHeader = req.headers.get("Authorization");
+    let userId: string | null = null;
+    if (authHeader) {
+      const supabaseAuth = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user } } = await supabaseAuth.auth.getUser();
+      userId = user?.id ?? null;
+    }
+
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const { data: project, error: pErr } = await supabase
@@ -57,13 +68,40 @@ Deno.serve(async (req) => {
       ground_mount: "Ground Mount",
     };
 
-    // Generate HTML quotation
+    // Generate quotation number and save record
+    const { data: qtNumData } = await supabase.rpc("generate_quotation_number");
+    const quotationNumber = qtNumData || `QT-${new Date().getFullYear()}-0001`;
+
+    const customerAddress = [lead?.address, lead?.village_city, lead?.district, lead?.state]
+      .filter(Boolean)
+      .join(", ");
+
+    const { error: insertErr } = await supabase
+      .from("quotations")
+      .insert({
+        quotation_number: quotationNumber,
+        project_id: projectId,
+        project_code: project.project_code,
+        customer_name: lead?.customer_name || "Unknown",
+        customer_mobile: lead?.mobile || null,
+        customer_address: customerAddress || null,
+        capacity_kw: project.capacity_kw,
+        total_amount: total,
+        created_by_user_id: userId || project.created_by_user_id,
+      });
+
+    if (insertErr) {
+      console.error("Failed to save quotation record:", insertErr);
+    }
+
+    // Generate HTML quotation with quotation number
     const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>
   body { font-family: Arial, sans-serif; margin: 0; padding: 40px; color: #333; }
   .header { text-align: center; border-bottom: 3px solid #f97316; padding-bottom: 20px; margin-bottom: 30px; }
   .company { font-size: 28px; font-weight: bold; color: #f97316; }
   .subtitle { font-size: 12px; color: #666; margin-top: 4px; }
+  .qt-number { font-size: 16px; font-weight: bold; color: #333; margin-top: 8px; }
   .section { margin-bottom: 20px; }
   .section-title { font-size: 14px; font-weight: bold; color: #f97316; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 10px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
@@ -79,6 +117,7 @@ Deno.serve(async (req) => {
     <div class="company">V R ENTERPRISES</div>
     <div class="subtitle">Solar Energy Solutions | GST: XXXXXXXXXX</div>
     <div class="subtitle">Brand: Mayukh Solar</div>
+    <div class="qt-number">Quotation No: ${quotationNumber}</div>
   </div>
 
   <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
@@ -90,6 +129,7 @@ Deno.serve(async (req) => {
       Mobile: ${lead?.mobile || "—"}
     </div>
     <div style="text-align: right;">
+      <strong>Quotation No:</strong> ${quotationNumber}<br>
       <strong>Project Code:</strong> ${project.project_code}<br>
       <strong>K Number:</strong> ${project.k_number || "—"}<br>
       <strong>Date:</strong> ${today}
@@ -146,7 +186,11 @@ Deno.serve(async (req) => {
   </div>
 </body></html>`;
 
-    return new Response(JSON.stringify({ html, project_code: project.project_code }), {
+    return new Response(JSON.stringify({ 
+      html, 
+      project_code: project.project_code,
+      quotation_number: quotationNumber 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
