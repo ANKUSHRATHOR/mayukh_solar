@@ -88,14 +88,6 @@ const WelderDashboard = () => {
     if (error) {
       toast.error('Failed to update: ' + error.message);
     } else {
-      await supabase.from('audit_logs').insert({
-        action: 'project_status_change',
-        entity_type: 'project',
-        entity_id: projectId,
-        user_id: user?.id,
-        old_value: { status: 'installation_pending' } as any,
-        new_value: { status: 'installation_done' } as any,
-      });
       toast.success('Installation marked as done!');
       fetchProjects();
     }

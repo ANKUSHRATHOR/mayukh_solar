@@ -220,14 +220,6 @@ const OperatorProjectDetail = () => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Status Updated', description: `Project moved to ${statusLabels[newStatus]}` });
-      await supabase.from('audit_logs').insert({
-        action: 'project_status_update',
-        entity_type: 'project',
-        entity_id: projectId,
-        user_id: user?.id,
-        old_value: { status: project.status },
-        new_value: { status: newStatus },
-      });
       fetchData();
     }
     setUpdating(false);
