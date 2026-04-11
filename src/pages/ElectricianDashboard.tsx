@@ -127,14 +127,6 @@ const ElectricianDashboard = () => {
       return;
     }
 
-    await supabase.from('audit_logs').insert({
-      action: 'project_status_change',
-      entity_type: 'project',
-      entity_id: selectedProject.id,
-      user_id: user.id,
-      old_value: { status: 'wiring_pending' } as any,
-      new_value: { status: 'wiring_done', panel_serial: panelSerial.trim(), inverter_serial: inverterSerial.trim() } as any,
-    });
 
     toast.success('Wiring marked as done with serial numbers!');
     setDialogOpen(false);
