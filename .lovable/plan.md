@@ -1,32 +1,48 @@
-## Phase 7: Remaining Features
 
-### 1. Admin Projects Overview
-- New page `/admin/projects` showing all projects across all stages
-- Filters by status, search by project code/customer name
-- Ability to reassign welder/electrician, override status
-- Stats summary at top
 
-### 2. Notification Triggers (Database)
-- Create database triggers that auto-insert notifications when:
-  - Lead is assigned to staff
-  - Project status changes
-  - Document is rejected
-  - Welder/Electrician is assigned to project
-- Triggers fire on INSERT/UPDATE of relevant tables
+## Security Hardening Plan
 
-### 3. Settings Page
-- Profile section: view name, mobile, email, role
-- Change password form
-- Route: `/settings`
+### What's already solid
+The app has comprehensive RLS on all tables, server-side audit logging, role-based access scoped by ownership, mandatory password changes, and admin limits. The database linter reports zero issues.
 
-### 4. Quotation PDF Generator
-- Edge function that generates a quotation PDF
-- V R Enterprises branding, GST (18%), payment installments (30/60/10)
-- Panel/inverter specs, customer details, project code
-- Downloadable from project detail pages
+### Remaining items to fix
 
-### Order of execution:
-1. DB migration for notification triggers
-2. Admin Projects Overview page
-3. Settings page  
-4. Quotation PDF edge function + UI button
+**1. Lock down notifications INSERT to server-side only**
+- Drop the client INSERT policy on `notifications`
+- All notification creation already happens via SECURITY DEFINER triggers (lead assigned, worker assigned, document rejected, project status change)
+- No client code needs to insert notifications directly
+
+**2. Add storage DELETE policy for sales persons**
+- Add a DELETE policy on `storage.objects` for `project-documents` bucket scoped to `(storage.foldername(name))[1] = auth.uid()::text` and role = sales_person
+
+**3. Enable Leaked Password Protection**
+- This is a manual setting: go to Cloud → Users → Auth Settings → Email settings → enable Password HIBP Check
+- Prevents staff from using passwords found in data breaches
+
+### Technical details
+
+**Migration SQL:**
+```sql
+-- 1. Remove client INSERT on notifications (triggers handle all inserts)
+DROP POLICY IF EXISTS "Users can only insert own notifications" ON public.notifications;
+
+-- 2. Sales person storage DELETE policy
+CREATE POLICY "Sales persons can delete own documents"
+ON storage.objects
+FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'project-documents'
+  AND has_role(auth.uid(), 'sales_person'::app_role)
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+```
+
+**No frontend changes needed.**
+
+### What this does NOT cover (already handled)
+- Audit log forgery — already server-side triggers
+- Staff self-escalation — already locked via WITH CHECK
+- Cross-user data access — already scoped by RLS
+- Realtime eavesdropping — mitigated by table-level RLS
+
