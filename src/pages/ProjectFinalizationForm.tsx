@@ -66,16 +66,6 @@ const ProjectFinalizationForm = () => {
 
     setLoading(true);
     try {
-      const [{ data: leadData, error: leadError }, { data: existingProject }] = await Promise.all([
-        supabase.from('leads').select('status').eq('id', leadId).single(),
-        supabase.from('projects').select('id').eq('lead_id', leadId).maybeSingle(),
-      ]);
-      if (leadError) throw leadError;
-      if (leadData?.status === 'final' || existingProject) {
-        toast({ title: 'Lead locked', description: 'This lead is already finalized and cannot be edited again.', variant: 'destructive' });
-        return;
-      }
-
       // Generate project code
       const { data: projectCode, error: codeError } = await supabase.rpc('generate_project_code');
       if (codeError) throw codeError;
