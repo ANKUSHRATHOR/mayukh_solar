@@ -7,9 +7,10 @@ import { useToast } from '@/hooks/use-toast';
 interface Props {
   projectId: string;
   size?: 'sm' | 'default';
+  className?: string;
 }
 
-const QuotationButton = ({ projectId, size = 'sm' }: Props) => {
+const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -37,7 +38,7 @@ const QuotationButton = ({ projectId, size = 'sm' }: Props) => {
   };
 
   return (
-    <Button variant="outline" size={size} onClick={handleGenerate} disabled={loading}>
+    <Button variant="outline" size={size} onClick={handleGenerate} disabled={loading} className={className}>
       {loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <FileText className="h-3 w-3 mr-1" />}
       Quotation
     </Button>
