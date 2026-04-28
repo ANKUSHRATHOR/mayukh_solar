@@ -66,6 +66,16 @@ const ProjectFinalizationForm = () => {
 
     setLoading(true);
     try {
+      const [{ data: leadData, error: leadError }, { data: existingProject }] = await Promise.all([
+        supabase.from('leads').select('status').eq('id', leadId).single(),
+        supabase.from('projects').select('id').eq('lead_id', leadId).maybeSingle(),
+      ]);
+      if (leadError) throw leadError;
+      if (leadData?.status === 'final' || existingProject) {
+        toast({ title: 'Lead locked', description: 'This lead is already finalized and cannot be edited again.', variant: 'destructive' });
+        return;
+      }
+
       // Generate project code
       const { data: projectCode, error: codeError } = await supabase.rpc('generate_project_code');
       if (codeError) throw codeError;
@@ -185,8 +195,8 @@ const ProjectFinalizationForm = () => {
           {/* Amount */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Final Amount (₹) *</Label>
-              <Input type="number" value={form.final_amount} onChange={e => updateField('final_amount', e.target.value)} placeholder="Total amount" className="h-11" min={0} />
+              <Label>Final Amount - GST Paid (₹) *</Label>
+              <Input type="number" value={form.final_amount} onChange={e => updateField('final_amount', e.target.value)} placeholder="GST paid total amount" className="h-11" min={0} />
             </div>
             <div className="space-y-1.5">
               <Label>Discount (₹)</Label>
