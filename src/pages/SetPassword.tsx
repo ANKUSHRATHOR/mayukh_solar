@@ -31,13 +31,12 @@ const SetPassword = () => {
       const { error: pwError } = await supabase.auth.updateUser({ password });
       if (pwError) throw pwError;
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('staff').update({ must_change_password: false }).eq('user_id', user.id);
-      }
+      const { error: setupError } = await supabase.rpc('complete_staff_password_setup' as any);
+      if (setupError) throw setupError;
+
       await refreshProfile();
       toast({ title: 'Password set!', description: 'Your account is now ready.' });
-      navigate('/');
+      navigate('/', { replace: true });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
