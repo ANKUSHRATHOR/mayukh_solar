@@ -4,11 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText } from 'lucide-react';
+import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText, User, MapPin, Zap, IndianRupee, Hash } from 'lucide-react';
 import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
@@ -54,6 +55,7 @@ const AdminProjects = () => {
   const [assignDialog, setAssignDialog] = useState<{ projectId: string; type: 'welder' | 'electrician' } | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [projectToDelete, setProjectToDelete] = useState<any | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -65,11 +67,16 @@ const AdminProjects = () => {
   const fetchData = async () => {
     const [projectsRes, staffRes] = await Promise.all([
       supabase.from('projects').select('*, leads(customer_name, mobile, district)').order('created_at', { ascending: false }),
-      supabase.from('staff').select('user_id, full_name').eq('is_active', true),
+      supabase.from('staff').select('user_id, full_name, is_active'),
     ]);
     setProjects(projectsRes.data || []);
     setStaff(staffRes.data || []);
     setLoading(false);
+  };
+
+  const staffName = (userId: string | null) => {
+    if (!userId) return 'Not assigned';
+    return staff.find((s) => s.user_id === userId)?.full_name || 'Unknown user';
   };
 
   const handleAssign = async () => {
@@ -103,9 +110,20 @@ const AdminProjects = () => {
 
   const handleDeleteProject = async () => {
     if (!projectToDelete) return;
+    if (!deleteReason.trim()) {
+      toast({ title: 'Reason required', description: 'Please enter why this project is being deleted.', variant: 'destructive' });
+      return;
+    }
     setDeletingId(projectToDelete.id);
 
     try {
+      await supabase
+        .from('projects')
+        .update({
+          special_notes: `${projectToDelete.special_notes || ''}\n\nDelete reason: ${deleteReason.trim()}`.trim(),
+        })
+        .eq('id', projectToDelete.id);
+
       const { data: storedFiles } = await supabase.storage
         .from('project-documents')
         .list(projectToDelete.id);
@@ -130,12 +148,13 @@ const AdminProjects = () => {
           status: 'cancelled',
           is_in_bin: true,
           cancelled_reason: 'other',
-          cancelled_reason_other: 'Installation refused after finalization',
+          cancelled_reason_other: deleteReason.trim(),
         })
         .eq('id', projectToDelete.lead_id);
 
       toast({ title: 'Project deleted', description: 'The project was removed and the lead moved to the cancelled bin.' });
       setProjectToDelete(null);
+      setDeleteReason('');
       fetchData();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -312,7 +331,7 @@ const AdminProjects = () => {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!projectToDelete} onOpenChange={(open) => { if (!open) setProjectToDelete(null); }}>
+      <AlertDialog open={!!projectToDelete} onOpenChange={(open) => { if (!open) { setProjectToDelete(null); setDeleteReason(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this project?</AlertDialogTitle>
