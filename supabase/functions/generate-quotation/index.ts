@@ -51,8 +51,7 @@ Deno.serve(async (req) => {
     const baseAmount = Number(project.final_amount);
     const discount = Number(project.discount || 0);
     const subtotal = baseAmount - discount;
-    const gst = subtotal * 0.18;
-    const total = subtotal + gst;
+    const total = subtotal;
     const inst1 = Math.round(total * 0.3);
     const inst2 = Math.round(total * 0.6);
     const inst3 = total - inst1 - inst2;
@@ -154,7 +153,7 @@ Deno.serve(async (req) => {
       <tr><td>System Cost</td><td style="text-align:right;">${baseAmount.toLocaleString("en-IN")}</td></tr>
       ${discount > 0 ? `<tr><td>Discount</td><td style="text-align:right;">-${discount.toLocaleString("en-IN")}</td></tr>` : ""}
       <tr><td>Subtotal</td><td style="text-align:right;">${subtotal.toLocaleString("en-IN")}</td></tr>
-      <tr><td>GST (18%)</td><td style="text-align:right;">${gst.toLocaleString("en-IN")}</td></tr>
+      <tr><td>GST</td><td style="text-align:right;">Included / Paid</td></tr>
       <tr class="total-row"><td>Grand Total</td><td style="text-align:right;">₹${total.toLocaleString("en-IN")}</td></tr>
     </table>
   </div>

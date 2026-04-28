@@ -33,6 +33,12 @@ const CancelledLeadsBin = () => {
   useEffect(() => { fetchLeads(); }, []);
 
   const restoreLead = async (id: string) => {
+    const lead = leads.find(l => l.id === id);
+    if (lead?.status === 'final') {
+      toast({ title: 'Lead locked', description: 'Finalized leads cannot be restored or edited.', variant: 'destructive' });
+      return;
+    }
+
     const { error } = await supabase.from('leads').update({
       is_in_bin: false, status: 'new' as any, cancelled_reason: null, cancelled_reason_other: null
     }).eq('id', id);
@@ -46,6 +52,12 @@ const CancelledLeadsBin = () => {
 
   const permanentDelete = async () => {
     if (!deleteTarget) return;
+    if (deleteTarget.status === 'final') {
+      toast({ title: 'Lead locked', description: 'Finalized leads cannot be deleted.', variant: 'destructive' });
+      setDeleteTarget(null);
+      return;
+    }
+
     const { error } = await supabase.from('leads').delete().eq('id', deleteTarget.id);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -100,10 +112,11 @@ const CancelledLeadsBin = () => {
                     </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <Button variant="outline" size="sm" onClick={() => restoreLead(lead.id)} title="Restore lead">
+                    {lead.status === 'final' ? <Badge variant="outline">Locked</Badge> : null}
+                    <Button variant="outline" size="sm" onClick={() => restoreLead(lead.id)} title="Restore lead" disabled={lead.status === 'final'}>
                       <RotateCcw className="h-4 w-4 mr-1" /> Restore
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(lead)} title="Delete permanently">
+                    <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(lead)} title="Delete permanently" disabled={lead.status === 'final'}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

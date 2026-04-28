@@ -57,6 +57,13 @@ const AdminLeadsList = () => {
   useEffect(() => { fetchData(); }, []);
 
   const assignLead = async (leadId: string, userId: string) => {
+    const selectedLead = leads.find(l => l.id === leadId);
+    if (selectedLead?.status === 'final') {
+      toast({ title: 'Lead locked', description: 'Finalized leads cannot be edited or reassigned.', variant: 'destructive' });
+      setAssigningId(null);
+      return;
+    }
+
     try {
       const { error } = await supabase.from('leads').update({ assigned_to_user_id: userId }).eq('id', leadId);
       if (error) throw error;
@@ -138,7 +145,9 @@ const AdminLeadsList = () => {
                   </Badge>
 
                   {/* Assign dropdown */}
-                  {assigningId === lead.id ? (
+                  {lead.status === 'final' ? (
+                    <Badge variant="outline" className="shrink-0">Locked</Badge>
+                  ) : assigningId === lead.id ? (
                     <Select onValueChange={v => assignLead(lead.id, v)}>
                       <SelectTrigger className="w-36 h-8 text-xs">
                         <SelectValue placeholder="Assign to..." />
