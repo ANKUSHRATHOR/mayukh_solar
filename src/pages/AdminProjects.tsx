@@ -222,7 +222,7 @@ const AdminProjects = () => {
                   <div className="min-w-0 space-y-4 p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Project</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{p.leads?.customer_name || 'Project'}</p>
                         <h2 className="break-words text-xl font-extrabold leading-tight text-foreground sm:text-2xl">
                           {p.project_code}
                         </h2>
@@ -234,33 +234,31 @@ const AdminProjects = () => {
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">Customer</p>
-                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={p.leads?.customer_name || ''}>
-                          {p.leads?.customer_name || '—'}
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><User className="h-3 w-3" /> Created By</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={staffName(p.created_by_user_id)}>
+                          {staffName(p.created_by_user_id)}
                         </p>
                       </div>
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">District</p>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><MapPin className="h-3 w-3" /> District</p>
                         <p className="mt-1 truncate text-sm font-semibold text-foreground" title={p.leads?.district || ''}>
                           {p.leads?.district || '—'}
                         </p>
                       </div>
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">System Size</p>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Zap className="h-3 w-3" /> System Size</p>
                         <p className="mt-1 text-sm font-semibold text-foreground">{p.capacity_kw} kW</p>
                       </div>
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">Final Amount</p>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><IndianRupee className="h-3 w-3" /> Final Amount</p>
                         <p className="mt-1 text-sm font-semibold text-foreground">₹{Number(p.final_amount).toLocaleString()}</p>
                       </div>
                     </div>
 
-                    {p.k_number && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">K Number:</span>
-                        <span className="break-all">{p.k_number}</span>
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer: <span className="font-medium text-foreground">{p.leads?.customer_name || '—'}</span></span>
+                      {p.k_number && <span className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5" /> K Number: <span className="break-all font-medium text-foreground">{p.k_number}</span></span>}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3 border-t border-border bg-muted/20 p-5 xl:w-80 xl:border-l xl:border-t-0">
