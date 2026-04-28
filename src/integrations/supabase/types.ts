@@ -518,6 +518,7 @@ export type Database = {
           status: Database["public"]["Enums"]["lead_status"]
         }[]
       }
+      complete_staff_password_setup: { Args: never; Returns: undefined }
       count_admins: { Args: never; Returns: number }
       generate_project_code: { Args: never; Returns: string }
       generate_quotation_number: { Args: never; Returns: string }
