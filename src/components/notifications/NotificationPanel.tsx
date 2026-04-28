@@ -34,11 +34,16 @@ const NotificationPanel = () => {
   };
 
   useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
     fetchNotifications();
 
-    if (!user) return;
+    const channelName = `user-notifications-${user.id}-${crypto.randomUUID()}`;
     const channel = supabase
-      .channel('user-notifications')
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -50,7 +55,7 @@ const NotificationPanel = () => {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user?.id]);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
