@@ -334,12 +334,18 @@ const AdminProjects = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this project?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the project. The lead will be moved to the cancelled bin so you can track refused installations.
+              This will remove the project and keep a tracking record. Enter the reason so everyone knows why it was deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <Textarea
+            value={deleteReason}
+            onChange={(e) => setDeleteReason(e.target.value)}
+            placeholder="Example: Customer refused installation / changed plan / duplicate project"
+            className="min-h-24"
+          />
           <AlertDialogFooter>
             <AlertDialogCancel>Keep Project</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteProject} disabled={deletingId === projectToDelete?.id} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeleteProject} disabled={deletingId === projectToDelete?.id || !deleteReason.trim()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {deletingId === projectToDelete?.id ? 'Deleting...' : 'Delete Project'}
             </AlertDialogAction>
           </AlertDialogFooter>
