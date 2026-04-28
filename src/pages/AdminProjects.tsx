@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Loader2, Search, Briefcase, Filter, UserCog } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2 } from 'lucide-react';
 import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
@@ -52,6 +53,8 @@ const AdminProjects = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [assignDialog, setAssignDialog] = useState<{ projectId: string; type: 'welder' | 'electrician' } | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [projectToDelete, setProjectToDelete] = useState<any | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -95,6 +98,49 @@ const AdminProjects = () => {
     } else {
       toast({ title: 'Status updated' });
       fetchData();
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return;
+    setDeletingId(projectToDelete.id);
+
+    try {
+      const { data: storedFiles } = await supabase.storage
+        .from('project-documents')
+        .list(projectToDelete.id);
+
+      if (storedFiles?.length) {
+        const filePaths = storedFiles.map((file) => `${projectToDelete.id}/${file.name}`);
+        await supabase.storage.from('project-documents').remove(filePaths);
+      }
+
+      await Promise.all([
+        supabase.from('documents').delete().eq('project_id', projectToDelete.id),
+        supabase.from('quotations').delete().eq('project_id', projectToDelete.id),
+        supabase.from('serial_numbers').delete().eq('project_id', projectToDelete.id),
+      ]);
+
+      const { error } = await supabase.from('projects').delete().eq('id', projectToDelete.id);
+      if (error) throw error;
+
+      await supabase
+        .from('leads')
+        .update({
+          status: 'cancelled',
+          is_in_bin: true,
+          cancelled_reason: 'other',
+          cancelled_reason_other: 'Installation refused after finalization',
+        })
+        .eq('id', projectToDelete.lead_id);
+
+      toast({ title: 'Project deleted', description: 'The project was removed and the lead moved to the cancelled bin.' });
+      setProjectToDelete(null);
+      fetchData();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -197,6 +243,12 @@ const AdminProjects = () => {
                     <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${p.id}/documents`)}>
                       Docs
                     </Button>
+                    <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${p.id}/edit`)}>
+                      <Pencil className="h-3 w-3 mr-1" /> Edit
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setProjectToDelete(p)}>
+                      <Trash2 className="h-3 w-3 mr-1" /> Delete
+                    </Button>
                     <QuotationButton projectId={p.id} />
                   </div>
                 </div>
@@ -227,6 +279,23 @@ const AdminProjects = () => {
           </Button>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!projectToDelete} onOpenChange={(open) => { if (!open) setProjectToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the project. The lead will be moved to the cancelled bin so you can track refused installations.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Project</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteProject} disabled={deletingId === projectToDelete?.id} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deletingId === projectToDelete?.id ? 'Deleting...' : 'Delete Project'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

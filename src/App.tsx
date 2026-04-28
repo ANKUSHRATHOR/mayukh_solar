@@ -94,6 +94,14 @@ const App = () => (
               }
             />
             <Route
+              path="/projects/:projectId/edit"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'sales_person']}>
+                  <ProjectFinalizationForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/projects/:projectId/documents"
               element={
                 <ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}>
