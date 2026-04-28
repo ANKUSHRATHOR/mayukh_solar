@@ -113,10 +113,10 @@ const CancelledLeadsBin = () => {
                   </div>
                   <div className="flex gap-2 shrink-0">
                     {lead.status === 'final' ? <Badge variant="outline">Locked</Badge> : null}
-                    <Button variant="outline" size="sm" onClick={() => restoreLead(lead.id)} title="Restore lead">
+                    <Button variant="outline" size="sm" onClick={() => restoreLead(lead.id)} title="Restore lead" disabled={lead.status === 'final'}>
                       <RotateCcw className="h-4 w-4 mr-1" /> Restore
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(lead)} title="Delete permanently">
+                    <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(lead)} title="Delete permanently" disabled={lead.status === 'final'}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
