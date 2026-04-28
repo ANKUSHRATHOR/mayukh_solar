@@ -106,12 +106,32 @@ const AdminProjects = () => {
     setDeletingId(projectToDelete.id);
 
     try {
+      const { data: storedFiles } = await supabase.storage
+        .from('project-documents')
+        .list(projectToDelete.id);
+
+      if (storedFiles?.length) {
+        const filePaths = storedFiles.map((file) => `${projectToDelete.id}/${file.name}`);
+        await supabase.storage.from('project-documents').remove(filePaths);
+      }
+
+      await Promise.all([
+        supabase.from('documents').delete().eq('project_id', projectToDelete.id),
+        supabase.from('quotations').delete().eq('project_id', projectToDelete.id),
+        supabase.from('serial_numbers').delete().eq('project_id', projectToDelete.id),
+      ]);
+
       const { error } = await supabase.from('projects').delete().eq('id', projectToDelete.id);
       if (error) throw error;
 
       await supabase
         .from('leads')
-        .update({ status: 'cancelled', is_in_bin: true })
+        .update({
+          status: 'cancelled',
+          is_in_bin: true,
+          cancelled_reason: 'other',
+          cancelled_reason_other: 'Installation refused after finalization',
+        })
         .eq('id', projectToDelete.lead_id);
 
       toast({ title: 'Project deleted', description: 'The project was removed and the lead moved to the cancelled bin.' });
