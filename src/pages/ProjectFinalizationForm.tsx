@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,9 +25,11 @@ const ProjectFinalizationForm = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { projectId } = useParams<{ projectId: string }>();
   const leadId = searchParams.get('leadId');
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(false);
 
   const [form, setForm] = useState({
     k_number: '',
@@ -50,8 +52,46 @@ const ProjectFinalizationForm = () => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
+  useEffect(() => {
+    const fetchProject = async () => {
+      if (!projectId) return;
+      setPageLoading(true);
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (error || !data) {
+        toast({ title: 'Project not found', variant: 'destructive' });
+        navigate('/admin/projects');
+        return;
+      }
+
+      setForm({
+        k_number: data.k_number ?? '',
+        capacity_kw: String(data.capacity_kw ?? ''),
+        panel_watt: String(data.panel_watt ?? ''),
+        panel_qty: String(data.panel_qty ?? ''),
+        panel_brand: data.panel_brand ?? '',
+        inverter_capacity: String(data.inverter_capacity ?? ''),
+        inverter_brand: data.inverter_brand ?? '',
+        structure_type: data.structure_type,
+        final_amount: String(data.final_amount ?? ''),
+        discount: String(data.discount ?? ''),
+        payment_type: data.payment_type,
+        loan_bank: data.loan_bank ?? '',
+        expected_install_date: data.expected_install_date ?? '',
+        special_notes: data.special_notes ?? '',
+      });
+      setPageLoading(false);
+    };
+
+    fetchProject();
+  }, [projectId, navigate, toast]);
+
   const handleSubmit = async () => {
-    if (!leadId) { toast({ title: 'Missing lead', variant: 'destructive' }); return; }
+    if (!projectId && !leadId) { toast({ title: 'Missing lead', variant: 'destructive' }); return; }
     if (!form.k_number.trim()) { toast({ title: 'K Number required', variant: 'destructive' }); return; }
     if (!form.capacity_kw) { toast({ title: 'Plant capacity required', variant: 'destructive' }); return; }
     if (!form.panel_watt) { toast({ title: 'Panel watt required', variant: 'destructive' }); return; }
@@ -66,37 +106,68 @@ const ProjectFinalizationForm = () => {
 
     setLoading(true);
     try {
-      // Generate project code
-      const { data: projectCode, error: codeError } = await supabase.rpc('generate_project_code');
-      if (codeError) throw codeError;
+      let project;
 
-      const { data: project, error } = await supabase.from('projects').insert({
-        lead_id: leadId,
-        project_code: projectCode as string,
-        k_number: form.k_number.trim(),
-        capacity_kw: parseFloat(form.capacity_kw),
-        panel_watt: parseInt(form.panel_watt),
-        panel_qty: parseInt(form.panel_qty),
-        panel_brand: form.panel_brand.trim(),
-        inverter_capacity: parseFloat(form.inverter_capacity),
-        inverter_brand: form.inverter_brand.trim(),
-        structure_type: form.structure_type as StructureType,
-        final_amount: parseFloat(form.final_amount),
-        discount: form.discount ? parseFloat(form.discount) : 0,
-        payment_type: form.payment_type as PaymentType,
-        loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
-        expected_install_date: form.expected_install_date || null,
-        special_notes: form.special_notes.trim() || null,
-        created_by_user_id: user!.id,
-        status: 'pending_documents',
-      }).select().single();
+      if (projectId) {
+        const { data, error } = await supabase
+          .from('projects')
+          .update({
+            k_number: form.k_number.trim(),
+            capacity_kw: parseFloat(form.capacity_kw),
+            panel_watt: parseInt(form.panel_watt),
+            panel_qty: parseInt(form.panel_qty),
+            panel_brand: form.panel_brand.trim(),
+            inverter_capacity: parseFloat(form.inverter_capacity),
+            inverter_brand: form.inverter_brand.trim(),
+            structure_type: form.structure_type as StructureType,
+            final_amount: parseFloat(form.final_amount),
+            discount: form.discount ? parseFloat(form.discount) : 0,
+            payment_type: form.payment_type as PaymentType,
+            loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
+            expected_install_date: form.expected_install_date || null,
+            special_notes: form.special_notes.trim() || null,
+          })
+          .eq('id', projectId)
+          .select()
+          .single();
 
-      if (error) throw error;
+        if (error) throw error;
+        project = data;
+      } else {
+        const { data: projectCode, error: codeError } = await supabase.rpc('generate_project_code');
+        if (codeError) throw codeError;
 
-      // Update lead status to final
-      await supabase.from('leads').update({ status: 'final' }).eq('id', leadId);
+        const { data, error } = await supabase.from('projects').insert({
+          lead_id: leadId,
+          project_code: projectCode as string,
+          k_number: form.k_number.trim(),
+          capacity_kw: parseFloat(form.capacity_kw),
+          panel_watt: parseInt(form.panel_watt),
+          panel_qty: parseInt(form.panel_qty),
+          panel_brand: form.panel_brand.trim(),
+          inverter_capacity: parseFloat(form.inverter_capacity),
+          inverter_brand: form.inverter_brand.trim(),
+          structure_type: form.structure_type as StructureType,
+          final_amount: parseFloat(form.final_amount),
+          discount: form.discount ? parseFloat(form.discount) : 0,
+          payment_type: form.payment_type as PaymentType,
+          loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
+          expected_install_date: form.expected_install_date || null,
+          special_notes: form.special_notes.trim() || null,
+          created_by_user_id: user!.id,
+          status: 'pending_documents',
+        }).select().single();
 
-      toast({ title: 'Project Created!', description: `Project ${projectCode} created. Now upload required documents.` });
+        if (error) throw error;
+        project = data;
+
+        await supabase.from('leads').update({ status: 'final' }).eq('id', leadId);
+      }
+
+      toast({
+        title: projectId ? 'Project Updated!' : 'Project Created!',
+        description: projectId ? 'Project details saved successfully.' : `Project ${project.project_code} created. Now upload required documents.`,
+      });
       navigate(`/projects/${project.id}/documents`);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -105,7 +176,11 @@ const ProjectFinalizationForm = () => {
     }
   };
 
-  if (!leadId) {
+  if (pageLoading) {
+    return <div className="p-8 text-center text-muted-foreground">Loading project...</div>;
+  }
+
+  if (!projectId && !leadId) {
     return (
       <div className="p-8 text-center text-muted-foreground">
         No lead selected. Go back and finalize a lead first.
@@ -122,7 +197,7 @@ const ProjectFinalizationForm = () => {
       <Card className="shadow-elevated border-0">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Zap className="h-5 w-5 text-primary" /> Finalize Project
+            <Zap className="h-5 w-5 text-primary" /> {projectId ? 'Edit Project' : 'Finalize Project'}
           </CardTitle>
           <p className="text-sm text-muted-foreground">Fill in the solar system specifications and pricing</p>
         </CardHeader>
@@ -231,7 +306,7 @@ const ProjectFinalizationForm = () => {
             className="w-full h-12 gradient-primary text-primary-foreground font-semibold mt-2"
             disabled={loading}
           >
-            {loading ? 'Creating Project...' : 'Create Project & Upload Documents'}
+              {loading ? (projectId ? 'Saving Changes...' : 'Creating Project...') : (projectId ? 'Save Changes' : 'Create Project & Upload Documents')}
           </Button>
         </CardContent>
       </Card>
