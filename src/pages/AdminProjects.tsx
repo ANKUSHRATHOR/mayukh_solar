@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -40,9 +40,9 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending_documents: 'bg-yellow-100 text-yellow-800',
-  project_completed: 'bg-green-100 text-green-800',
-  inspection_failed: 'bg-red-100 text-red-800',
+  pending_documents: 'bg-warning/15 text-warning',
+  project_completed: 'bg-success/15 text-success',
+  inspection_failed: 'bg-destructive/10 text-destructive',
 };
 
 const AdminProjects = () => {
