@@ -81,7 +81,7 @@ const ProjectFinalizationForm = () => {
         discount: String(data.discount ?? ''),
         payment_type: data.payment_type,
         loan_bank: data.loan_bank ?? '',
-        expected_install_date: data.expected_install_date ?? '',
+        expected_install_date: data.expected_install_date?.split('T')[0] ?? '',
         special_notes: data.special_notes ?? '',
       });
       setPageLoading(false);
