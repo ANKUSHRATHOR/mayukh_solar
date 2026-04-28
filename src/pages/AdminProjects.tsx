@@ -318,7 +318,7 @@ const AdminProjects = () => {
               <SelectValue placeholder="Select staff member" />
             </SelectTrigger>
             <SelectContent>
-              {staff.map((s) => (
+              {staff.filter((s) => s.is_active).map((s) => (
                 <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
               ))}
             </SelectContent>
