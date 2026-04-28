@@ -15,19 +15,29 @@ const reasonLabel = (r: string | null) => r ? r.replace(/_/g, ' ').replace(/\b\w
 const CancelledLeadsBin = () => {
   const { toast } = useToast();
   const [leads, setLeads] = useState<any[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   const fetchLeads = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('is_in_bin', true)
-      .order('updated_at', { ascending: false });
-    setLeads(data || []);
+    const [leadsRes, staffRes] = await Promise.all([
+      supabase
+        .from('leads')
+        .select('*')
+        .eq('is_in_bin', true)
+        .order('updated_at', { ascending: false }),
+      supabase.from('staff').select('user_id, full_name'),
+    ]);
+    setLeads(leadsRes.data || []);
+    setStaff(staffRes.data || []);
     setLoading(false);
+  };
+
+  const staffName = (userId: string | null) => {
+    if (!userId) return 'Unknown user';
+    return staff.find((s) => s.user_id === userId)?.full_name || 'Unknown user';
   };
 
   useEffect(() => { fetchLeads(); }, []);
@@ -97,6 +107,9 @@ const CancelledLeadsBin = () => {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Reason: <span className="font-medium text-destructive">{reasonLabel(lead.cancelled_reason)}</span>
                       {lead.cancelled_reason_other && ` — ${lead.cancelled_reason_other}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Created By: <span className="font-medium text-foreground">{staffName(lead.created_by_user_id)}</span>
                     </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
