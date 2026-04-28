@@ -31,6 +31,7 @@ const AdminLeadsList = () => {
   const { toast } = useToast();
   const [leads, setLeads] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
+  const [allStaff, setAllStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -45,6 +46,7 @@ const AdminLeadsList = () => {
     ]);
 
     setLeads(leadsRes.data || []);
+    setAllStaff(staffRes.data || []);
 
     // Build sales person list
     const salesRoles = (rolesRes.data || []).filter(r => r.role === 'sales_person');
@@ -82,7 +84,7 @@ const AdminLeadsList = () => {
 
   const staffName = (userId: string | null) => {
     if (!userId) return 'Unknown user';
-    return staffList.find(st => st.user_id === userId)?.full_name || 'Unknown user';
+    return allStaff.find(st => st.user_id === userId)?.full_name || 'Unknown user';
   };
 
   return (
