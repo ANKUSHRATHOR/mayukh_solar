@@ -26,10 +26,10 @@ const QuotationsList = () => {
   const filtered = quotations?.filter((q) => {
     const term = searchTerm.toLowerCase();
     return (
-      q.quotation_number.toLowerCase().includes(term) ||
-      q.customer_name.toLowerCase().includes(term) ||
+      (q.quotation_number ?? '').toLowerCase().includes(term) ||
+      (q.customer_name ?? '').toLowerCase().includes(term) ||
       (q.customer_mobile && q.customer_mobile.includes(term)) ||
-      q.project_code.toLowerCase().includes(term)
+      (q.project_code ?? '').toLowerCase().includes(term)
     );
   });
 
@@ -65,15 +65,15 @@ const QuotationsList = () => {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base flex items-center gap-2">
                       <FileText className="h-4 w-4 text-primary" />
-                      {q.quotation_number}
+                      {q.quotation_number ?? 'No quotation number'}
                     </CardTitle>
-                    <Badge variant="outline">{q.project_code}</Badge>
+                    <Badge variant="outline">{q.project_code ?? 'No project code'}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
                     <User className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-medium">{q.customer_name}</span>
+                    <span className="font-medium">{q.customer_name ?? 'Unknown customer'}</span>
                   </div>
                   {q.customer_mobile && (
                     <div className="flex items-center gap-2">
@@ -95,11 +95,11 @@ const QuotationsList = () => {
                       </span>
                     </div>
                     <span className="font-semibold text-primary">
-                      ₹{Number(q.total_amount).toLocaleString('en-IN')}
+                      ₹{Number(q.total_amount ?? 0).toLocaleString('en-IN')}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {q.capacity_kw} kW System
+                    {q.capacity_kw ?? '—'} kW System
                   </div>
                 </CardContent>
               </Card>
