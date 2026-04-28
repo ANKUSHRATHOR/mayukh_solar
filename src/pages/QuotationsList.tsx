@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import AppLayout from '@/components/layout/AppLayout';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +33,7 @@ const QuotationsList = () => {
   });
 
   return (
-    <AppLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Quotations</h1>
           <p className="text-muted-foreground text-sm">Search customers by quotation number, name, mobile, or project code</p>
@@ -107,7 +105,6 @@ const QuotationsList = () => {
           </div>
         )}
       </div>
-    </AppLayout>
   );
 };
 
