@@ -21,6 +21,7 @@ import ElectricianDashboard from "./pages/ElectricianDashboard.tsx";
 import AdminProjects from "./pages/AdminProjects.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import QuotationsList from "./pages/QuotationsList.tsx";
+import ActivityLogs from "./pages/ActivityLogs.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
@@ -130,6 +131,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}>
                   <QuotationsList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/activity-logs"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <ActivityLogs />
                 </ProtectedRoute>
               }
             />
