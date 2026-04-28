@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
 
     // Generate quotation number and save record
     const { data: qtNumData } = await supabase.rpc("generate_quotation_number");
-    const quotationNumber = qtNumData || `QT-${new Date().getFullYear()}-0001`;
+    const quotationNumber = qtNumData || `MS-QT-${new Date().getFullYear()}-0001`;
 
     const customerAddress = [lead?.address, lead?.village_city, lead?.district, lead?.state]
       .filter(Boolean)
