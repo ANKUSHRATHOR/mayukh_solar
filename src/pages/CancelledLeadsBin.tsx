@@ -33,12 +33,6 @@ const CancelledLeadsBin = () => {
   useEffect(() => { fetchLeads(); }, []);
 
   const restoreLead = async (id: string) => {
-    const lead = leads.find(l => l.id === id);
-    if (lead?.status === 'final') {
-      toast({ title: 'Lead locked', description: 'Finalized leads cannot be restored or edited.', variant: 'destructive' });
-      return;
-    }
-
     const { error } = await supabase.from('leads').update({
       is_in_bin: false, status: 'new' as any, cancelled_reason: null, cancelled_reason_other: null
     }).eq('id', id);
@@ -52,12 +46,6 @@ const CancelledLeadsBin = () => {
 
   const permanentDelete = async () => {
     if (!deleteTarget) return;
-    if (deleteTarget.status === 'final') {
-      toast({ title: 'Lead locked', description: 'Finalized leads cannot be deleted.', variant: 'destructive' });
-      setDeleteTarget(null);
-      return;
-    }
-
     const { error } = await supabase.from('leads').delete().eq('id', deleteTarget.id);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
