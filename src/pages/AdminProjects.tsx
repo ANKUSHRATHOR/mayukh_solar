@@ -295,9 +295,9 @@ const AdminProjects = () => {
                       <Pencil className="h-3 w-3 mr-1" /> Edit
                     </Button>
                       <Button size="sm" variant="outline" className="justify-start border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => setProjectToDelete(p)}>
-                      <Trash2 className="h-3 w-3 mr-1" /> Delete
-                    </Button>
-                      <QuotationButton projectId={p.id} className="justify-start" />
+                        <Trash2 className="h-3 w-3 mr-1" /> Delete
+                      </Button>
+                      <QuotationButton projectId={p.id} className="col-span-2 w-full justify-start" />
                     </div>
                   </div>
                 </div>
