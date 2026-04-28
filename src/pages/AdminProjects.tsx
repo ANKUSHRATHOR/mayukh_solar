@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText } from 'lucide-react';
 import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
@@ -40,9 +40,9 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending_documents: 'bg-yellow-100 text-yellow-800',
-  project_completed: 'bg-green-100 text-green-800',
-  inspection_failed: 'bg-red-100 text-red-800',
+  pending_documents: 'bg-warning/15 text-warning',
+  project_completed: 'bg-success/15 text-success',
+  inspection_failed: 'bg-destructive/10 text-destructive',
 };
 
 const AdminProjects = () => {
@@ -197,40 +197,56 @@ const AdminProjects = () => {
           <Card><CardContent className="p-8 text-center text-muted-foreground">No projects found.</CardContent></Card>
         ) : (
           filtered.map((p) => (
-            <Card key={p.id} className="shadow-card border-border">
-              <CardContent className="p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-foreground">{p.project_code}</span>
-                      <Badge className={STATUS_COLORS[p.status] || 'bg-accent text-accent-foreground'}>
+            <Card key={p.id} className="overflow-hidden border-border bg-card shadow-card transition-shadow hover:shadow-elevated">
+              <CardContent className="p-0">
+                <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="min-w-0 space-y-4 p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Project</p>
+                        <h2 className="break-words text-xl font-extrabold leading-tight text-foreground sm:text-2xl">
+                          {p.project_code}
+                        </h2>
+                      </div>
+                      <Badge className={`${STATUS_COLORS[p.status] || 'bg-accent text-accent-foreground'} w-fit rounded-full px-3 py-1 text-xs font-semibold`}>
                         {STATUS_LABELS[p.status as ProjectStatus] || p.status}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {p.leads?.customer_name} — {p.leads?.district} | {p.capacity_kw} kW | ₹{Number(p.final_amount).toLocaleString()}
-                    </p>
-                    {p.k_number && <p className="text-xs text-muted-foreground">K#: {p.k_number}</p>}
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="rounded-md border border-border bg-muted/30 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">Customer</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={p.leads?.customer_name || ''}>
+                          {p.leads?.customer_name || '—'}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-border bg-muted/30 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">District</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={p.leads?.district || ''}>
+                          {p.leads?.district || '—'}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-border bg-muted/30 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">System Size</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">{p.capacity_kw} kW</p>
+                      </div>
+                      <div className="rounded-md border border-border bg-muted/30 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">Final Amount</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">₹{Number(p.final_amount).toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {p.k_number && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">K Number:</span>
+                        <span className="break-all">{p.k_number}</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={() => { setAssignDialog({ projectId: p.id, type: 'welder' }); setSelectedStaffId(p.assigned_welder_id || ''); }}>
-                          <UserCog className="h-3 w-3 mr-1" /> Welder
-                        </Button>
-                      </DialogTrigger>
-                    </Dialog>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={() => { setAssignDialog({ projectId: p.id, type: 'electrician' }); setSelectedStaffId(p.assigned_electrician_id || ''); }}>
-                          <UserCog className="h-3 w-3 mr-1" /> Electrician
-                        </Button>
-                      </DialogTrigger>
-                    </Dialog>
-
+                  <div className="flex flex-col gap-3 border-t border-border bg-muted/20 p-5 xl:w-80 xl:border-l xl:border-t-0">
                     <Select value={p.status} onValueChange={(val) => handleStatusOverride(p.id, val as ProjectStatus)}>
-                      <SelectTrigger className="w-40 h-8 text-xs">
+                      <SelectTrigger className="h-10 w-full bg-card text-sm font-medium">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -240,16 +256,32 @@ const AdminProjects = () => {
                       </SelectContent>
                     </Select>
 
-                    <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${p.id}/documents`)}>
-                      Docs
+                    <div className="grid grid-cols-2 gap-2">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="justify-start" onClick={() => { setAssignDialog({ projectId: p.id, type: 'welder' }); setSelectedStaffId(p.assigned_welder_id || ''); }}>
+                          <UserCog className="h-3 w-3 mr-1" /> Welder
+                        </Button>
+                      </DialogTrigger>
+                    </Dialog>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="justify-start" onClick={() => { setAssignDialog({ projectId: p.id, type: 'electrician' }); setSelectedStaffId(p.assigned_electrician_id || ''); }}>
+                          <UserCog className="h-3 w-3 mr-1" /> Electrician
+                        </Button>
+                      </DialogTrigger>
+                    </Dialog>
+                      <Button size="sm" variant="outline" className="justify-start" onClick={() => navigate(`/projects/${p.id}/documents`)}>
+                        <FileText className="h-3 w-3 mr-1" /> Docs
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${p.id}/edit`)}>
+                      <Button size="sm" variant="outline" className="justify-start" onClick={() => navigate(`/projects/${p.id}/edit`)}>
                       <Pencil className="h-3 w-3 mr-1" /> Edit
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setProjectToDelete(p)}>
+                      <Button size="sm" variant="outline" className="justify-start border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => setProjectToDelete(p)}>
                       <Trash2 className="h-3 w-3 mr-1" /> Delete
                     </Button>
-                    <QuotationButton projectId={p.id} />
+                      <QuotationButton projectId={p.id} className="justify-start" />
+                    </div>
                   </div>
                 </div>
               </CardContent>
