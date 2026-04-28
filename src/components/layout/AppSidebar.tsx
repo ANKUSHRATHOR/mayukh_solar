@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Users,
   LogOut,
-  Bell,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -15,6 +14,7 @@ import {
   Zap,
   Trash2,
   FileText,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,7 @@ const adminNav: NavItem[] = [
   { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
   { label: 'Staff Management', icon: Users, path: '/staff' },
   { label: 'Quotations', icon: FileText, path: '/quotations' },
+  { label: 'Activity Logs', icon: ShieldCheck, path: '/activity-logs' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];
 

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Search, MapPin, PhoneCall, Users, Filter, UserPlus as AssignIcon
+  Search, MapPin, PhoneCall, UserPlus as AssignIcon, User, Zap
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -31,6 +31,7 @@ const AdminLeadsList = () => {
   const { toast } = useToast();
   const [leads, setLeads] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
+  const [allStaff, setAllStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -45,6 +46,7 @@ const AdminLeadsList = () => {
     ]);
 
     setLeads(leadsRes.data || []);
+    setAllStaff(staffRes.data || []);
 
     // Build sales person list
     const salesRoles = (rolesRes.data || []).filter(r => r.role === 'sales_person');
@@ -80,6 +82,11 @@ const AdminLeadsList = () => {
     return s ? s.full_name : null;
   };
 
+  const staffName = (userId: string | null) => {
+    if (!userId) return 'Unknown user';
+    return allStaff.find(st => st.user_id === userId)?.full_name || 'Unknown user';
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -109,38 +116,38 @@ const AdminLeadsList = () => {
       </div>
 
       {/* Leads */}
-      <Card className="shadow-card border-border">
+      <Card className="border-0 bg-transparent shadow-none">
         <CardContent className="p-0">
           {loading ? (
             <p className="text-muted-foreground text-sm py-12 text-center">Loading...</p>
           ) : filtered.length === 0 ? (
             <p className="text-muted-foreground text-sm py-12 text-center">No leads found.</p>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="grid gap-4 lg:grid-cols-2">
               {filtered.map(lead => (
-                <div key={lead.id} className="flex items-center gap-4 p-4 hover:bg-accent/30 transition-colors">
-                  <div className="h-10 w-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0 cursor-pointer" onClick={() => navigate(`/leads/${lead.id}`)}>
-                    {lead.customer_name.charAt(0)}
+                <div key={lead.id} className="rounded-lg border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-elevated">
+                  <div className="flex items-start justify-between gap-3 cursor-pointer" onClick={() => navigate(`/leads/${lead.id}`)}>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-extrabold text-foreground">{lead.customer_name}</h2>
+                      <p className="text-sm text-muted-foreground">{lead.source ? statusLabel(lead.source) : 'Lead'}</p>
+                    </div>
+                    <Badge className={`shrink-0 rounded-full px-3 py-1 text-xs ${statusColor[lead.status] || ''}`}>
+                      {statusLabel(lead.status)}
+                    </Badge>
                   </div>
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/leads/${lead.id}`)}>
-                    <p className="font-semibold text-sm text-foreground">{lead.customer_name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {lead.mobile} • <MapPin className="h-3 w-3 inline" /> {lead.village_city}, {lead.district}
-                    </p>
-                    {assignedStaffName(lead.assigned_to_user_id) && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Assigned: <span className="font-medium text-foreground">{assignedStaffName(lead.assigned_to_user_id)}</span>
-                      </p>
-                    )}
+
+                  <div className="mt-4 grid gap-2 text-sm text-muted-foreground">
+                    <p className="flex items-center gap-2"><PhoneCall className="h-4 w-4" /> {lead.mobile}</p>
+                    <p className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {lead.village_city}, {lead.district}</p>
+                    <p className="flex items-center gap-2"><User className="h-4 w-4" /> Created By: <span className="font-semibold text-foreground">{staffName(lead.created_by_user_id)}</span></p>
+                    <p className="flex items-center gap-2"><User className="h-4 w-4" /> Assigned To: <span className="font-semibold text-foreground">{assignedStaffName(lead.assigned_to_user_id) || 'Not assigned'}</span></p>
+                    {lead.kw_interest && <p className="flex items-center gap-2 text-primary"><Zap className="h-4 w-4" /> {lead.kw_interest} kW Interest</p>}
                   </div>
-                  <Badge className={`text-xs shrink-0 ${statusColor[lead.status] || ''}`}>
-                    {statusLabel(lead.status)}
-                  </Badge>
 
                   {/* Assign dropdown */}
                   {assigningId === lead.id ? (
                     <Select onValueChange={v => assignLead(lead.id, v)}>
-                      <SelectTrigger className="w-36 h-8 text-xs">
+                      <SelectTrigger className="mt-4 h-9 w-full text-xs">
                         <SelectValue placeholder="Assign to..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -150,8 +157,8 @@ const AdminLeadsList = () => {
                       </SelectContent>
                     </Select>
                   ) : (
-                    <Button variant="ghost" size="sm" onClick={() => setAssigningId(lead.id)} title="Assign to Sales Person">
-                      <AssignIcon className="h-4 w-4" />
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setAssigningId(lead.id)} title="Assign to Sales Person">
+                      <AssignIcon className="mr-2 h-4 w-4" /> Assign Staff
                     </Button>
                   )}
                 </div>

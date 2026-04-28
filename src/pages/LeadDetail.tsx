@@ -60,6 +60,7 @@ const LeadDetail = () => {
   const [cancelOther, setCancelOther] = useState('');
   const [updating, setUpdating] = useState(false);
   const [project, setProject] = useState<any>(null);
+  const [staff, setStaff] = useState<any[]>([]);
 
   const fetchLead = async () => {
     if (!id) return;
@@ -67,18 +68,25 @@ const LeadDetail = () => {
     const { data: leadData } = await supabase.from('leads').select('*').eq('id', id).single();
     setLead(leadData);
 
-    const [visitRes, projectRes] = await Promise.all([
+    const [visitRes, projectRes, staffRes] = await Promise.all([
       supabase.from('site_visits').select('*').eq('lead_id', id).order('visit_date', { ascending: false }),
       supabase.from('projects').select('*').eq('lead_id', id).maybeSingle(),
+      supabase.from('staff').select('user_id, full_name'),
     ]);
     setVisits(visitRes.data || []);
     setProject(projectRes.data);
+    setStaff(staffRes.data || []);
     setLoading(false);
   };
 
   useEffect(() => { fetchLead(); }, [id]);
 
   const canUpdateStatus = role === 'admin' || role === 'sales_person';
+
+  const staffName = (userId: string | null) => {
+    if (!userId) return 'Unknown user';
+    return staff.find((s) => s.user_id === userId)?.full_name || 'Unknown user';
+  };
 
   const handleStatusUpdate = async () => {
     if (!newStatus || !lead || !user) return;
@@ -202,6 +210,11 @@ const LeadDetail = () => {
             <div className="col-span-2"><span className="text-muted-foreground">Address:</span> <span className="font-medium ml-1">{lead.address}</span></div>
             {lead.notes && <div className="col-span-2"><span className="text-muted-foreground">Notes:</span> <span className="font-medium ml-1">{lead.notes}</span></div>}
             <div><span className="text-muted-foreground">Created:</span> <span className="font-medium ml-1">{new Date(lead.created_at).toLocaleDateString()}</span></div>
+            <div><span className="text-muted-foreground">Created By:</span> <span className="font-medium ml-1">{staffName(lead.created_by_user_id)}</span></div>
+            {lead.assigned_to_user_id && <div><span className="text-muted-foreground">Assigned To:</span> <span className="font-medium ml-1">{staffName(lead.assigned_to_user_id)}</span></div>}
+            {(lead.cancelled_reason || lead.cancelled_reason_other) && (
+              <div className="col-span-2"><span className="text-muted-foreground">Cancel/Delete Reason:</span> <span className="font-medium ml-1 text-destructive">{lead.cancelled_reason_other || statusLabel(lead.cancelled_reason)}</span></div>
+            )}
             {lead.follow_up_date && (
               <div>
                 <span className="text-muted-foreground">Follow-up:</span>

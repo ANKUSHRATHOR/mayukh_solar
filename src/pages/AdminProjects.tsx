@@ -4,11 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText } from 'lucide-react';
+import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText, User, MapPin, Zap, IndianRupee, Hash } from 'lucide-react';
 import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
@@ -54,6 +55,7 @@ const AdminProjects = () => {
   const [assignDialog, setAssignDialog] = useState<{ projectId: string; type: 'welder' | 'electrician' } | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [projectToDelete, setProjectToDelete] = useState<any | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -65,11 +67,16 @@ const AdminProjects = () => {
   const fetchData = async () => {
     const [projectsRes, staffRes] = await Promise.all([
       supabase.from('projects').select('*, leads(customer_name, mobile, district)').order('created_at', { ascending: false }),
-      supabase.from('staff').select('user_id, full_name').eq('is_active', true),
+      supabase.from('staff').select('user_id, full_name, is_active'),
     ]);
     setProjects(projectsRes.data || []);
     setStaff(staffRes.data || []);
     setLoading(false);
+  };
+
+  const staffName = (userId: string | null) => {
+    if (!userId) return 'Not assigned';
+    return staff.find((s) => s.user_id === userId)?.full_name || 'Unknown user';
   };
 
   const handleAssign = async () => {
@@ -103,9 +110,20 @@ const AdminProjects = () => {
 
   const handleDeleteProject = async () => {
     if (!projectToDelete) return;
+    if (!deleteReason.trim()) {
+      toast({ title: 'Reason required', description: 'Please enter why this project is being deleted.', variant: 'destructive' });
+      return;
+    }
     setDeletingId(projectToDelete.id);
 
     try {
+      await supabase
+        .from('projects')
+        .update({
+          special_notes: `${projectToDelete.special_notes || ''}\n\nDelete reason: ${deleteReason.trim()}`.trim(),
+        })
+        .eq('id', projectToDelete.id);
+
       const { data: storedFiles } = await supabase.storage
         .from('project-documents')
         .list(projectToDelete.id);
@@ -130,12 +148,13 @@ const AdminProjects = () => {
           status: 'cancelled',
           is_in_bin: true,
           cancelled_reason: 'other',
-          cancelled_reason_other: 'Installation refused after finalization',
+          cancelled_reason_other: deleteReason.trim(),
         })
         .eq('id', projectToDelete.lead_id);
 
       toast({ title: 'Project deleted', description: 'The project was removed and the lead moved to the cancelled bin.' });
       setProjectToDelete(null);
+      setDeleteReason('');
       fetchData();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -203,7 +222,7 @@ const AdminProjects = () => {
                   <div className="min-w-0 space-y-4 p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Project</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{p.leads?.customer_name || 'Project'}</p>
                         <h2 className="break-words text-xl font-extrabold leading-tight text-foreground sm:text-2xl">
                           {p.project_code}
                         </h2>
@@ -215,33 +234,31 @@ const AdminProjects = () => {
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">Customer</p>
-                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={p.leads?.customer_name || ''}>
-                          {p.leads?.customer_name || '—'}
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><User className="h-3 w-3" /> Created By</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={staffName(p.created_by_user_id)}>
+                          {staffName(p.created_by_user_id)}
                         </p>
                       </div>
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">District</p>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><MapPin className="h-3 w-3" /> District</p>
                         <p className="mt-1 truncate text-sm font-semibold text-foreground" title={p.leads?.district || ''}>
                           {p.leads?.district || '—'}
                         </p>
                       </div>
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">System Size</p>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Zap className="h-3 w-3" /> System Size</p>
                         <p className="mt-1 text-sm font-semibold text-foreground">{p.capacity_kw} kW</p>
                       </div>
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">Final Amount</p>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><IndianRupee className="h-3 w-3" /> Final Amount</p>
                         <p className="mt-1 text-sm font-semibold text-foreground">₹{Number(p.final_amount).toLocaleString()}</p>
                       </div>
                     </div>
 
-                    {p.k_number && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">K Number:</span>
-                        <span className="break-all">{p.k_number}</span>
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer: <span className="font-medium text-foreground">{p.leads?.customer_name || '—'}</span></span>
+                      {p.k_number && <span className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5" /> K Number: <span className="break-all font-medium text-foreground">{p.k_number}</span></span>}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3 border-t border-border bg-muted/20 p-5 xl:w-80 xl:border-l xl:border-t-0">
@@ -301,7 +318,7 @@ const AdminProjects = () => {
               <SelectValue placeholder="Select staff member" />
             </SelectTrigger>
             <SelectContent>
-              {staff.map((s) => (
+              {staff.filter((s) => s.is_active).map((s) => (
                 <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
               ))}
             </SelectContent>
@@ -312,17 +329,23 @@ const AdminProjects = () => {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!projectToDelete} onOpenChange={(open) => { if (!open) setProjectToDelete(null); }}>
+      <AlertDialog open={!!projectToDelete} onOpenChange={(open) => { if (!open) { setProjectToDelete(null); setDeleteReason(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this project?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the project. The lead will be moved to the cancelled bin so you can track refused installations.
+              This will remove the project and keep a tracking record. Enter the reason so everyone knows why it was deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <Textarea
+            value={deleteReason}
+            onChange={(e) => setDeleteReason(e.target.value)}
+            placeholder="Example: Customer refused installation / changed plan / duplicate project"
+            className="min-h-24"
+          />
           <AlertDialogFooter>
             <AlertDialogCancel>Keep Project</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteProject} disabled={deletingId === projectToDelete?.id} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeleteProject} disabled={deletingId === projectToDelete?.id || !deleteReason.trim()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {deletingId === projectToDelete?.id ? 'Deleting...' : 'Delete Project'}
             </AlertDialogAction>
           </AlertDialogFooter>
