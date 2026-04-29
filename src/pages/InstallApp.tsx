@@ -14,7 +14,10 @@ const InstallApp = () => {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
-    setIsStandalone(window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && Boolean(navigator.standalone)));
+    setIsStandalone(
+      window.matchMedia('(display-mode: standalone)').matches ||
+        ('standalone' in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone))
+    );
 
     const handlePrompt = (event: Event) => {
       event.preventDefault();
