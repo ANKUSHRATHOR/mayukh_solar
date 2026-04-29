@@ -22,6 +22,7 @@ import AdminProjects from "./pages/AdminProjects.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import QuotationsList from "./pages/QuotationsList.tsx";
 import ActivityLogs from "./pages/ActivityLogs.tsx";
+import InstallApp from "./pages/InstallApp.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
@@ -37,6 +38,7 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/set-password" element={<SetPassword />} />
+            <Route path="/install" element={<InstallApp />} />
             <Route path="/" element={<Index />} />
             <Route
               path="/staff"
