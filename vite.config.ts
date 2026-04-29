@@ -17,10 +17,21 @@ export default defineConfig(({ mode }) => ({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      injectRegister: "auto",
       devOptions: { enabled: false },
       manifest: false,
       workbox: {
         navigateFallbackDenylist: [/^\/~oauth/],
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === "navigate",
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "html-pages",
+              networkTimeoutSeconds: 3,
+            },
+          },
+        ],
       },
     }),
     mode === "development" && componentTagger(),
