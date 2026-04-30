@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Smartphone, Share2, MoreVertical } from 'lucide-react';
+import { Download, RefreshCw, Smartphone, Share2, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import logo from '@/assets/mayukh-solar-logo.png';
@@ -12,6 +12,7 @@ interface BeforeInstallPromptEvent extends Event {
 const InstallApp = () => {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     setIsStandalone(
@@ -33,6 +34,25 @@ const InstallApp = () => {
     await installPrompt.prompt();
     await installPrompt.userChoice;
     setInstallPrompt(null);
+  };
+
+  const handleRefreshApp = async () => {
+    setIsRefreshing(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      }
+    } finally {
+      const url = new URL(window.location.href);
+      url.searchParams.set('app-refresh', Date.now().toString());
+      window.location.replace(url.toString());
+    }
   };
 
   return (
@@ -62,6 +82,11 @@ const InstallApp = () => {
                 Install App
               </Button>
             ) : null}
+
+            <Button onClick={handleRefreshApp} variant="outline" className="w-full gap-2" disabled={isRefreshing}>
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Updating app...' : 'Update Installed App'}
+            </Button>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-lg border border-border p-4">
