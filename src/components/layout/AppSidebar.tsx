@@ -15,11 +15,17 @@ import {
   Trash2,
   FileText,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import logo from '@/assets/mayukh-solar-logo.png';
+
+interface AppSidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
 
 interface NavItem {
   label: string;
@@ -63,7 +69,7 @@ const electricianNav: NavItem[] = [
   { label: 'Wiring Jobs', icon: Zap, path: '/' },
 ];
 
-const AppSidebar = () => {
+const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
   const { staff, role, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -73,13 +79,28 @@ const AppSidebar = () => {
 
   const roleLabel = role ? role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
 
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    onMobileClose?.();
+  };
+
   return (
-    <aside
-      className={cn(
-        'h-screen flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300',
-        collapsed ? 'w-16' : 'w-64'
-      )}
-    >
+    <>
+      <div
+        onClick={onMobileClose}
+        className={cn(
+          'fixed inset-0 z-40 bg-sidebar/70 backdrop-blur-[1px] transition-opacity duration-300 ease-in-out lg:hidden',
+          mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
+        aria-hidden="true"
+      />
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex h-dvh w-[82vw] max-w-sm flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-elevated transition-transform duration-300 ease-in-out lg:static lg:z-auto lg:h-screen lg:shadow-none',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+          collapsed ? 'lg:w-16' : 'lg:w-64'
+        )}
+      >
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b border-sidebar-border">
         <img src={logo} alt="Mayukh Solar" width={36} height={36} className="shrink-0" />
@@ -91,9 +112,16 @@ const AppSidebar = () => {
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="ml-auto p-1 rounded hover:bg-sidebar-accent transition-colors shrink-0"
+          className="ml-auto hidden p-1 rounded hover:bg-sidebar-accent transition-colors shrink-0 lg:inline-flex"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </button>
+        <button
+          onClick={onMobileClose}
+          className="ml-auto inline-flex p-1 rounded hover:bg-sidebar-accent transition-colors shrink-0 lg:hidden"
+          aria-label="Close menu"
+        >
+          <X className="h-5 w-5" />
         </button>
       </div>
 
@@ -104,7 +132,7 @@ const AppSidebar = () => {
           return (
             <button
               key={item.path}
-              onClick={() => navigate(item.path)}
+              onClick={() => handleNavigate(item.path)}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
                 isActive
@@ -132,15 +160,16 @@ const AppSidebar = () => {
           variant="ghost"
           className={cn(
             'w-full text-sidebar-foreground/70 hover:text-destructive hover:bg-sidebar-accent',
-            collapsed ? 'justify-center px-0' : 'justify-start'
+            collapsed ? 'lg:justify-center lg:px-0' : 'justify-start'
           )}
           size="sm"
         >
           <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span className="ml-2">Sign Out</span>}
+          <span className={cn('ml-2', collapsed && 'lg:hidden')}>Sign Out</span>
         </Button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 
