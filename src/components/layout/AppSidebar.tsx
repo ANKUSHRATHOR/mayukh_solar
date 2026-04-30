@@ -125,7 +125,7 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-4 lg:p-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
@@ -133,13 +133,13 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
               key={item.path}
               onClick={() => handleNavigate(item.path)}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+                'w-full flex items-center gap-5 rounded-md px-2 py-4 text-left text-lg font-semibold transition-all lg:gap-3 lg:px-3 lg:py-2.5 lg:text-sm lg:font-medium',
                 isActive
-                  ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                  : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent'
+                  ? 'bg-primary-foreground/15 text-primary-foreground lg:bg-sidebar-primary lg:text-sidebar-primary-foreground'
+                  : 'text-primary-foreground/90 hover:bg-primary-foreground/10 hover:text-primary-foreground lg:text-sidebar-foreground/70 lg:hover:text-sidebar-foreground lg:hover:bg-sidebar-accent'
               )}
             >
-              <item.icon className="h-5 w-5 shrink-0" />
+              <item.icon className="h-7 w-7 shrink-0 lg:h-5 lg:w-5" />
               <span className={cn(collapsed && 'lg:hidden')}>{item.label}</span>
             </button>
           );
@@ -147,18 +147,18 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       </nav>
 
       {/* User section */}
-      <div className="p-3 border-t border-sidebar-border">
+      <div className="border-t border-primary-foreground/20 p-4 lg:border-sidebar-border lg:p-3">
         {staff && (
-          <div className={cn('mb-2 px-2', collapsed && 'lg:hidden')}>
-            <p className="text-sm font-medium truncate">{staff.full_name}</p>
-            <p className="text-xs text-sidebar-foreground/50 truncate">{staff.mobile}</p>
+          <div className={cn('mb-3 px-2', collapsed && 'lg:hidden')}>
+            <p className="truncate text-sm font-semibold text-primary-foreground lg:text-sidebar-foreground">{staff.full_name}</p>
+            <p className="truncate text-xs text-primary-foreground/70 lg:text-sidebar-foreground/50">{staff.mobile}</p>
           </div>
         )}
         <Button
           onClick={signOut}
           variant="ghost"
           className={cn(
-            'w-full text-sidebar-foreground/70 hover:text-destructive hover:bg-sidebar-accent',
+            'w-full justify-start text-primary-foreground/90 hover:bg-primary-foreground/10 hover:text-primary-foreground lg:text-sidebar-foreground/70 lg:hover:text-destructive lg:hover:bg-sidebar-accent',
             collapsed ? 'lg:justify-center lg:px-0' : 'justify-start'
           )}
           size="sm"
