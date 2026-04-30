@@ -14,7 +14,7 @@ const isPreviewHost =
   window.location.hostname.includes("id-preview--") ||
   window.location.hostname.includes("lovableproject.com");
 
-if ((isPreviewHost || isInIframe) && "serviceWorker" in navigator) {
+if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     registrations.forEach((registration) => registration.unregister());
   });
