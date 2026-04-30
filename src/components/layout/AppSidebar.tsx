@@ -104,12 +104,10 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b border-sidebar-border">
         <img src={logo} alt="Mayukh Solar" width={36} height={36} className="shrink-0" />
-        {!collapsed && (
-          <div className="min-w-0">
-            <p className="font-bold text-sm truncate text-sidebar-primary-foreground">Mayukh Solar</p>
-            <p className="text-xs text-sidebar-foreground/60 truncate">{roleLabel}</p>
-          </div>
-        )}
+        <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
+          <p className="font-bold text-sm truncate text-sidebar-primary-foreground">Mayukh Solar</p>
+          <p className="text-xs text-sidebar-foreground/60 truncate">{roleLabel}</p>
+        </div>
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="ml-auto hidden p-1 rounded hover:bg-sidebar-accent transition-colors shrink-0 lg:inline-flex"
@@ -141,7 +139,7 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
               )}
             >
               <item.icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              <span className={cn(collapsed && 'lg:hidden')}>{item.label}</span>
             </button>
           );
         })}
@@ -149,8 +147,8 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
 
       {/* User section */}
       <div className="p-3 border-t border-sidebar-border">
-        {!collapsed && staff && (
-          <div className="mb-2 px-2">
+        {staff && (
+          <div className={cn('mb-2 px-2', collapsed && 'lg:hidden')}>
             <p className="text-sm font-medium truncate">{staff.full_name}</p>
             <p className="text-xs text-sidebar-foreground/50 truncate">{staff.mobile}</p>
           </div>
