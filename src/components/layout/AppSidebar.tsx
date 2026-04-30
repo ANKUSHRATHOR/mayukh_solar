@@ -96,17 +96,18 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       />
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-dvh w-[82vw] max-w-sm flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-elevated transition-transform duration-300 ease-in-out lg:static lg:z-auto lg:h-screen lg:shadow-none',
+          'fixed inset-y-0 left-0 z-50 flex h-dvh w-[82vw] max-w-sm flex-col overflow-hidden border-r border-primary/20 bg-primary text-primary-foreground shadow-elevated transition-transform duration-300 ease-in-out lg:static lg:z-auto lg:h-screen lg:bg-sidebar lg:text-sidebar-foreground lg:shadow-none',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
           collapsed ? 'lg:w-16' : 'lg:w-64'
         )}
       >
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-sidebar-border">
-        <img src={logo} alt="Mayukh Solar" width={36} height={36} className="shrink-0" />
+      <div className="flex min-h-28 items-center gap-4 border-b border-border bg-card p-5 text-card-foreground lg:min-h-0 lg:border-sidebar-border lg:bg-sidebar lg:p-4 lg:text-sidebar-foreground">
+        <img src={logo} alt="Mayukh Solar" width={64} height={64} className="h-16 w-16 shrink-0 rounded-full bg-background p-1 shadow-card lg:h-9 lg:w-9 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none" />
         <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
-          <p className="font-bold text-sm truncate text-sidebar-primary-foreground">Mayukh Solar</p>
-          <p className="text-xs text-sidebar-foreground/60 truncate">{roleLabel}</p>
+          <p className="truncate text-2xl font-bold leading-tight text-foreground lg:text-sm lg:text-sidebar-primary-foreground">Mayukh Solar</p>
+          <p className="mt-1 truncate text-sm text-muted-foreground lg:mt-0 lg:text-xs lg:text-sidebar-foreground/60">{roleLabel}</p>
+          {staff && <p className="mt-1 truncate text-xs text-muted-foreground lg:hidden">{staff.full_name}</p>}
         </div>
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -116,7 +117,7 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
         </button>
         <button
           onClick={onMobileClose}
-          className="ml-auto inline-flex p-1 rounded hover:bg-sidebar-accent transition-colors shrink-0 lg:hidden"
+          className="ml-auto inline-flex rounded p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground shrink-0 lg:hidden"
           aria-label="Close menu"
         >
           <X className="h-5 w-5" />
