@@ -21,12 +21,14 @@ export default defineConfig(({ mode }) => ({
     react(),
     {
       name: "mayukh-build-version",
-      generateBundle() {
-        this.emitFile({
+      generateBundle(_, bundle) {
+        bundle["app-version.json"] = {
           type: "asset",
+          names: [],
+          originalFileNames: [],
           fileName: "app-version.json",
           source: JSON.stringify({ version: buildVersion }),
-        });
+        };
       },
     },
     mode === "development" && componentTagger(),
