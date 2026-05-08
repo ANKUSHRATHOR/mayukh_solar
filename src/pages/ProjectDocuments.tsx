@@ -104,20 +104,17 @@ const ProjectDocuments = () => {
         .upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage
-        .from('project-documents')
-        .getPublicUrl(path);
-
+      // Store the storage path (bucket is private; we'll generate signed URLs to view)
       const existingDoc = getDoc(docType);
       if (existingDoc) {
         await supabase.from('documents')
-          .update({ file_url: urlData.publicUrl, uploaded_at: new Date().toISOString(), rejection_reason: null })
+          .update({ file_url: path, uploaded_at: new Date().toISOString(), rejection_reason: null })
           .eq('id', existingDoc.id);
       } else {
         await supabase.from('documents').insert({
           project_id: projectId,
           document_type: docType,
-          file_url: urlData.publicUrl,
+          file_url: path,
           uploaded_by_user_id: user.id,
         });
       }
