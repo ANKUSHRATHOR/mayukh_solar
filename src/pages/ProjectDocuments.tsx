@@ -83,6 +83,20 @@ const ProjectDocuments = () => {
 
   const getDoc = (type: DocumentType) => docs.find(d => d.document_type === type);
 
+  const getSignedUrl = async (fileUrl: string, download = false): Promise<string | null> => {
+    let path = fileUrl;
+    const marker = '/project-documents/';
+    if (path.includes(marker)) path = path.split(marker)[1];
+    const { data, error } = await supabase.storage
+      .from('project-documents')
+      .createSignedUrl(path, 60 * 10, download ? { download: true } : undefined);
+    if (error || !data?.signedUrl) {
+      toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
+      return null;
+    }
+    return data.signedUrl;
+  };
+
   const uploadedCount = requiredDocs.filter(req => {
     const doc = getDoc(req.type);
     return doc && (doc.file_url || doc.text_value);
