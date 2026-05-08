@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, Upload, CheckCircle2, AlertCircle, FileText,
-  Image as ImageIcon, Send, RefreshCw, Eye
+  Image as ImageIcon, Send, RefreshCw, Eye, Download, Share2
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -56,14 +56,18 @@ const ProjectDocuments = () => {
   const [textInputs, setTextInputs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  const [quotationNumber, setQuotationNumber] = useState<string | null>(null);
+
   const fetchData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const [projRes, docsRes] = await Promise.all([
+    const [projRes, docsRes, quoteRes] = await Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
       supabase.from('documents').select('*').eq('project_id', projectId),
+      supabase.from('quotations').select('quotation_number').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
     setProject(projRes.data);
+    setQuotationNumber(quoteRes.data?.quotation_number || null);
     setDocs((docsRes.data as DocRecord[]) || []);
 
     // Pre-fill text inputs from existing docs
@@ -78,6 +82,20 @@ const ProjectDocuments = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const getDoc = (type: DocumentType) => docs.find(d => d.document_type === type);
+
+  const getSignedUrl = async (fileUrl: string, download = false): Promise<string | null> => {
+    let path = fileUrl;
+    const marker = '/project-documents/';
+    if (path.includes(marker)) path = path.split(marker)[1];
+    const { data, error } = await supabase.storage
+      .from('project-documents')
+      .createSignedUrl(path, 60 * 10, download ? { download: true } : undefined);
+    if (error || !data?.signedUrl) {
+      toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
+      return null;
+    }
+    return data.signedUrl;
+  };
 
   const uploadedCount = requiredDocs.filter(req => {
     const doc = getDoc(req.type);
@@ -97,7 +115,8 @@ const ProjectDocuments = () => {
     setUploading(docType);
     try {
       const ext = file.name.split('.').pop();
-      const path = `${projectId}/${docType}.${ext}`;
+      const folder = quotationNumber || projectId;
+      const path = `${folder}/${docType}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('project-documents')
@@ -267,25 +286,55 @@ const ProjectDocuments = () => {
                         </div>
                       </label>
                       {isUploaded && doc?.file_url && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            let path = doc.file_url!;
-                            const marker = '/project-documents/';
-                            if (path.includes(marker)) path = path.split(marker)[1];
-                            const { data, error } = await supabase.storage
-                              .from('project-documents')
-                              .createSignedUrl(path, 60 * 10);
-                            if (error || !data?.signedUrl) {
-                              toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
-                              return;
-                            }
-                            window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="View"
+                            onClick={async () => {
+                              const url = await getSignedUrl(doc.file_url!);
+                              if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Download"
+                            onClick={async () => {
+                              const url = await getSignedUrl(doc.file_url!, true);
+                              if (!url) return;
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${req.label}-${quotationNumber || project.project_code}.${doc.file_url!.split('.').pop()}`;
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Share"
+                            onClick={async () => {
+                              const url = await getSignedUrl(doc.file_url!);
+                              if (!url) return;
+                              if (navigator.share) {
+                                try {
+                                  await navigator.share({ title: req.label, url });
+                                } catch {}
+                              } else {
+                                await navigator.clipboard.writeText(url);
+                                toast({ title: 'Link copied', description: 'Share link copied to clipboard' });
+                              }
+                            }}
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                        </>
                       )}
                     </div>
                   ) : (
