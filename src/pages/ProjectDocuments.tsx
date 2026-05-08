@@ -267,10 +267,21 @@ const ProjectDocuments = () => {
                         </div>
                       </label>
                       {isUploaded && doc?.file_url && (
-                        <Button variant="ghost" size="sm" asChild>
-                          <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
-                            <Eye className="h-4 w-4" />
-                          </a>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            const { data, error } = await supabase.storage
+                              .from('project-documents')
+                              .createSignedUrl(doc.file_url!, 60 * 10);
+                            if (error || !data?.signedUrl) {
+                              toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
+                              return;
+                            }
+                            window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
