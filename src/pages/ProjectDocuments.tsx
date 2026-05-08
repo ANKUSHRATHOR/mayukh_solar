@@ -56,14 +56,18 @@ const ProjectDocuments = () => {
   const [textInputs, setTextInputs] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  const [quotationNumber, setQuotationNumber] = useState<string | null>(null);
+
   const fetchData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const [projRes, docsRes] = await Promise.all([
+    const [projRes, docsRes, quoteRes] = await Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
       supabase.from('documents').select('*').eq('project_id', projectId),
+      supabase.from('quotations').select('quotation_number').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
     setProject(projRes.data);
+    setQuotationNumber(quoteRes.data?.quotation_number || null);
     setDocs((docsRes.data as DocRecord[]) || []);
 
     // Pre-fill text inputs from existing docs
