@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, Upload, CheckCircle2, AlertCircle, FileText,
-  Image as ImageIcon, Send, RefreshCw, Eye
+  Image as ImageIcon, Send, RefreshCw, Eye, Download, Share2
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
