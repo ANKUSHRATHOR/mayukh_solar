@@ -101,7 +101,8 @@ const ProjectDocuments = () => {
     setUploading(docType);
     try {
       const ext = file.name.split('.').pop();
-      const path = `${projectId}/${docType}.${ext}`;
+      const folder = quotationNumber || projectId;
+      const path = `${folder}/${docType}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('project-documents')
