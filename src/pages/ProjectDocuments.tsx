@@ -272,25 +272,55 @@ const ProjectDocuments = () => {
                         </div>
                       </label>
                       {isUploaded && doc?.file_url && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            let path = doc.file_url!;
-                            const marker = '/project-documents/';
-                            if (path.includes(marker)) path = path.split(marker)[1];
-                            const { data, error } = await supabase.storage
-                              .from('project-documents')
-                              .createSignedUrl(path, 60 * 10);
-                            if (error || !data?.signedUrl) {
-                              toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
-                              return;
-                            }
-                            window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="View"
+                            onClick={async () => {
+                              const url = await getSignedUrl(doc.file_url!);
+                              if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Download"
+                            onClick={async () => {
+                              const url = await getSignedUrl(doc.file_url!, true);
+                              if (!url) return;
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${req.label}-${quotationNumber || project.project_code}.${doc.file_url!.split('.').pop()}`;
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Share"
+                            onClick={async () => {
+                              const url = await getSignedUrl(doc.file_url!);
+                              if (!url) return;
+                              if (navigator.share) {
+                                try {
+                                  await navigator.share({ title: req.label, url });
+                                } catch {}
+                              } else {
+                                await navigator.clipboard.writeText(url);
+                                toast({ title: 'Link copied', description: 'Share link copied to clipboard' });
+                              }
+                            }}
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                        </>
                       )}
                     </div>
                   ) : (
