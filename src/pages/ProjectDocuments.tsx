@@ -271,9 +271,12 @@ const ProjectDocuments = () => {
                           variant="ghost"
                           size="sm"
                           onClick={async () => {
+                            let path = doc.file_url!;
+                            const marker = '/project-documents/';
+                            if (path.includes(marker)) path = path.split(marker)[1];
                             const { data, error } = await supabase.storage
                               .from('project-documents')
-                              .createSignedUrl(doc.file_url!, 60 * 10);
+                              .createSignedUrl(path, 60 * 10);
                             if (error || !data?.signedUrl) {
                               toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
                               return;
