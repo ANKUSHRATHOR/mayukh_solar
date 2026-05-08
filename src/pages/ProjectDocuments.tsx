@@ -104,20 +104,17 @@ const ProjectDocuments = () => {
         .upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage
-        .from('project-documents')
-        .getPublicUrl(path);
-
+      // Store the storage path (bucket is private; we'll generate signed URLs to view)
       const existingDoc = getDoc(docType);
       if (existingDoc) {
         await supabase.from('documents')
-          .update({ file_url: urlData.publicUrl, uploaded_at: new Date().toISOString(), rejection_reason: null })
+          .update({ file_url: path, uploaded_at: new Date().toISOString(), rejection_reason: null })
           .eq('id', existingDoc.id);
       } else {
         await supabase.from('documents').insert({
           project_id: projectId,
           document_type: docType,
-          file_url: urlData.publicUrl,
+          file_url: path,
           uploaded_by_user_id: user.id,
         });
       }
@@ -270,10 +267,24 @@ const ProjectDocuments = () => {
                         </div>
                       </label>
                       {isUploaded && doc?.file_url && (
-                        <Button variant="ghost" size="sm" asChild>
-                          <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
-                            <Eye className="h-4 w-4" />
-                          </a>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            let path = doc.file_url!;
+                            const marker = '/project-documents/';
+                            if (path.includes(marker)) path = path.split(marker)[1];
+                            const { data, error } = await supabase.storage
+                              .from('project-documents')
+                              .createSignedUrl(path, 60 * 10);
+                            if (error || !data?.signedUrl) {
+                              toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
+                              return;
+                            }
+                            window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
