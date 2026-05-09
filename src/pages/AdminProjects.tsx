@@ -241,9 +241,9 @@ const AdminProjects = () => {
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><User className="h-3 w-3" /> Created By</p>
-                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={staffName(p.created_by_user_id)}>
-                          {staffName(p.created_by_user_id)}
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><User className="h-3 w-3" /> Sales Person</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={staffName(p.assigned_sales_person_id || p.created_by_user_id)}>
+                          {staffName(p.assigned_sales_person_id || p.created_by_user_id)}
                         </p>
                       </div>
                       <div className="rounded-md border border-border bg-muted/30 p-3">
