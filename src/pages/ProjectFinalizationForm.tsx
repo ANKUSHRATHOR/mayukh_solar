@@ -155,6 +155,7 @@ const ProjectFinalizationForm = () => {
           expected_install_date: form.expected_install_date || null,
           special_notes: form.special_notes.trim() || null,
           created_by_user_id: user!.id,
+          assigned_sales_person_id: user!.id,
           status: 'pending_documents',
         }).select().single();
 

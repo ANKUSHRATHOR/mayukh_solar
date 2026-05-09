@@ -52,7 +52,7 @@ const AdminProjects = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [assignDialog, setAssignDialog] = useState<{ projectId: string; type: 'welder' | 'electrician' } | null>(null);
+  const [assignDialog, setAssignDialog] = useState<{ projectId: string; type: 'welder' | 'electrician' | 'sales_person' } | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [projectToDelete, setProjectToDelete] = useState<any | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
@@ -65,12 +65,13 @@ const AdminProjects = () => {
   }, []);
 
   const fetchData = async () => {
-    const [projectsRes, staffRes] = await Promise.all([
+    const [projectsRes, staffRes, rolesRes] = await Promise.all([
       supabase.from('projects').select('*, leads(customer_name, mobile, district)').order('created_at', { ascending: false }),
       supabase.from('staff').select('user_id, full_name, is_active'),
+      supabase.from('user_roles').select('user_id, role'),
     ]);
     setProjects(projectsRes.data || []);
-    setStaff(staffRes.data || []);
+    setStaff((staffRes.data || []).map(s => ({ ...s, role: rolesRes.data?.find(r => r.user_id === s.user_id)?.role })));
     setLoading(false);
   };
 
@@ -81,14 +82,20 @@ const AdminProjects = () => {
 
   const handleAssign = async () => {
     if (!assignDialog || !selectedStaffId) return;
-    const field = assignDialog.type === 'welder' ? 'assigned_welder_id' : 'assigned_electrician_id';
-    const updateData = field === 'assigned_welder_id'
-      ? { assigned_welder_id: selectedStaffId }
-      : { assigned_electrician_id: selectedStaffId };
+    const project = projects.find(p => p.id === assignDialog.projectId);
+    let updateData: any = {};
+    if (assignDialog.type === 'welder') updateData = { assigned_welder_id: selectedStaffId };
+    else if (assignDialog.type === 'electrician') updateData = { assigned_electrician_id: selectedStaffId };
+    else if (assignDialog.type === 'sales_person') updateData = { assigned_sales_person_id: selectedStaffId };
+
     const { error } = await supabase.from('projects').update(updateData).eq('id', assignDialog.projectId);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
+      // When transferring sales person, also reassign the linked lead so they can access it
+      if (assignDialog.type === 'sales_person' && project?.lead_id) {
+        await supabase.from('leads').update({ assigned_to_user_id: selectedStaffId }).eq('id', project.lead_id);
+      }
       toast({ title: 'Assigned successfully' });
       fetchData();
     }
@@ -234,9 +241,9 @@ const AdminProjects = () => {
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><User className="h-3 w-3" /> Created By</p>
-                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={staffName(p.created_by_user_id)}>
-                          {staffName(p.created_by_user_id)}
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><User className="h-3 w-3" /> Sales Person</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-foreground" title={staffName(p.assigned_sales_person_id || p.created_by_user_id)}>
+                          {staffName(p.assigned_sales_person_id || p.created_by_user_id)}
                         </p>
                       </div>
                       <div className="rounded-md border border-border bg-muted/30 p-3">
@@ -276,6 +283,13 @@ const AdminProjects = () => {
                     <div className="grid grid-cols-2 gap-2">
                     <Dialog>
                       <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="col-span-2 justify-start" onClick={() => { setAssignDialog({ projectId: p.id, type: 'sales_person' }); setSelectedStaffId(p.assigned_sales_person_id || ''); }}>
+                          <UserCog className="h-3 w-3 mr-1" /> Transfer Sales Person
+                        </Button>
+                      </DialogTrigger>
+                    </Dialog>
+                    <Dialog>
+                      <DialogTrigger asChild>
                           <Button variant="outline" size="sm" className="justify-start" onClick={() => { setAssignDialog({ projectId: p.id, type: 'welder' }); setSelectedStaffId(p.assigned_welder_id || ''); }}>
                           <UserCog className="h-3 w-3 mr-1" /> Welder
                         </Button>
@@ -311,14 +325,22 @@ const AdminProjects = () => {
       <Dialog open={!!assignDialog} onOpenChange={(o) => { if (!o) { setAssignDialog(null); setSelectedStaffId(''); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign {assignDialog?.type === 'welder' ? 'Welder' : 'Electrician'}</DialogTitle>
+            <DialogTitle>Assign {assignDialog?.type === 'welder' ? 'Welder' : assignDialog?.type === 'electrician' ? 'Electrician' : 'Sales Person'}</DialogTitle>
           </DialogHeader>
           <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
             <SelectTrigger>
               <SelectValue placeholder="Select staff member" />
             </SelectTrigger>
             <SelectContent>
-              {staff.filter((s) => s.is_active).map((s) => (
+              {staff
+                .filter((s) => s.is_active)
+                .filter((s) => {
+                  if (assignDialog?.type === 'sales_person') return s.role === 'sales_person';
+                  if (assignDialog?.type === 'welder') return s.role === 'welder';
+                  if (assignDialog?.type === 'electrician') return s.role === 'electrician';
+                  return true;
+                })
+                .map((s) => (
                 <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
               ))}
             </SelectContent>

@@ -211,6 +211,7 @@ export type Database = {
       projects: {
         Row: {
           assigned_electrician_id: string | null
+          assigned_sales_person_id: string | null
           assigned_welder_id: string | null
           capacity_kw: number
           completed_at: string | null
@@ -244,6 +245,7 @@ export type Database = {
         }
         Insert: {
           assigned_electrician_id?: string | null
+          assigned_sales_person_id?: string | null
           assigned_welder_id?: string | null
           capacity_kw: number
           completed_at?: string | null
@@ -277,6 +279,7 @@ export type Database = {
         }
         Update: {
           assigned_electrician_id?: string | null
+          assigned_sales_person_id?: string | null
           assigned_welder_id?: string | null
           capacity_kw?: number
           completed_at?: string | null
