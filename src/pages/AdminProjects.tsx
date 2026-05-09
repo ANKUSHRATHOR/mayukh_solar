@@ -283,6 +283,13 @@ const AdminProjects = () => {
                     <div className="grid grid-cols-2 gap-2">
                     <Dialog>
                       <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="col-span-2 justify-start" onClick={() => { setAssignDialog({ projectId: p.id, type: 'sales_person' }); setSelectedStaffId(p.assigned_sales_person_id || ''); }}>
+                          <UserCog className="h-3 w-3 mr-1" /> Transfer Sales Person
+                        </Button>
+                      </DialogTrigger>
+                    </Dialog>
+                    <Dialog>
+                      <DialogTrigger asChild>
                           <Button variant="outline" size="sm" className="justify-start" onClick={() => { setAssignDialog({ projectId: p.id, type: 'welder' }); setSelectedStaffId(p.assigned_welder_id || ''); }}>
                           <UserCog className="h-3 w-3 mr-1" /> Welder
                         </Button>
