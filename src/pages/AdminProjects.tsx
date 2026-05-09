@@ -82,14 +82,20 @@ const AdminProjects = () => {
 
   const handleAssign = async () => {
     if (!assignDialog || !selectedStaffId) return;
-    const field = assignDialog.type === 'welder' ? 'assigned_welder_id' : 'assigned_electrician_id';
-    const updateData = field === 'assigned_welder_id'
-      ? { assigned_welder_id: selectedStaffId }
-      : { assigned_electrician_id: selectedStaffId };
+    const project = projects.find(p => p.id === assignDialog.projectId);
+    let updateData: any = {};
+    if (assignDialog.type === 'welder') updateData = { assigned_welder_id: selectedStaffId };
+    else if (assignDialog.type === 'electrician') updateData = { assigned_electrician_id: selectedStaffId };
+    else if (assignDialog.type === 'sales_person') updateData = { assigned_sales_person_id: selectedStaffId };
+
     const { error } = await supabase.from('projects').update(updateData).eq('id', assignDialog.projectId);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
+      // When transferring sales person, also reassign the linked lead so they can access it
+      if (assignDialog.type === 'sales_person' && project?.lead_id) {
+        await supabase.from('leads').update({ assigned_to_user_id: selectedStaffId }).eq('id', project.lead_id);
+      }
       toast({ title: 'Assigned successfully' });
       fetchData();
     }
