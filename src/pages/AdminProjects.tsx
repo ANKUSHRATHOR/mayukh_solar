@@ -332,7 +332,15 @@ const AdminProjects = () => {
               <SelectValue placeholder="Select staff member" />
             </SelectTrigger>
             <SelectContent>
-              {staff.filter((s) => s.is_active).map((s) => (
+              {staff
+                .filter((s) => s.is_active)
+                .filter((s) => {
+                  if (assignDialog?.type === 'sales_person') return s.role === 'sales_person';
+                  if (assignDialog?.type === 'welder') return s.role === 'welder';
+                  if (assignDialog?.type === 'electrician') return s.role === 'electrician';
+                  return true;
+                })
+                .map((s) => (
                 <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
               ))}
             </SelectContent>
