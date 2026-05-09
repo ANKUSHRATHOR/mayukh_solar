@@ -65,12 +65,13 @@ const AdminProjects = () => {
   }, []);
 
   const fetchData = async () => {
-    const [projectsRes, staffRes] = await Promise.all([
+    const [projectsRes, staffRes, rolesRes] = await Promise.all([
       supabase.from('projects').select('*, leads(customer_name, mobile, district)').order('created_at', { ascending: false }),
       supabase.from('staff').select('user_id, full_name, is_active'),
+      supabase.from('user_roles').select('user_id, role'),
     ]);
     setProjects(projectsRes.data || []);
-    setStaff(staffRes.data || []);
+    setStaff((staffRes.data || []).map(s => ({ ...s, role: rolesRes.data?.find(r => r.user_id === s.user_id)?.role })));
     setLoading(false);
   };
 
