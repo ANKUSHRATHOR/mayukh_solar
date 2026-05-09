@@ -325,7 +325,7 @@ const AdminProjects = () => {
       <Dialog open={!!assignDialog} onOpenChange={(o) => { if (!o) { setAssignDialog(null); setSelectedStaffId(''); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign {assignDialog?.type === 'welder' ? 'Welder' : 'Electrician'}</DialogTitle>
+            <DialogTitle>Assign {assignDialog?.type === 'welder' ? 'Welder' : assignDialog?.type === 'electrician' ? 'Electrician' : 'Sales Person'}</DialogTitle>
           </DialogHeader>
           <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
             <SelectTrigger>
