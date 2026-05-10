@@ -60,7 +60,7 @@ export async function enablePushNotifications(): Promise<{ ok: boolean; reason?:
     const publicKey = await getPublicKey();
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
+      applicationServerKey: urlBase64ToUint8Array(publicKey).buffer as ArrayBuffer,
     });
   }
 
