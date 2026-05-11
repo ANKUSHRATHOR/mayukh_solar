@@ -9,11 +9,24 @@ interface StatCardProps {
   change?: string;
   changeType?: 'up' | 'down' | 'neutral';
   className?: string;
+  onClick?: () => void;
 }
 
-const StatCard = forwardRef<HTMLDivElement, StatCardProps>(({ title, value, icon: Icon, change, changeType = 'neutral', className }, ref) => {
+const StatCard = forwardRef<HTMLDivElement, StatCardProps>(({ title, value, icon: Icon, change, changeType = 'neutral', className, onClick }, ref) => {
+  const interactive = typeof onClick === 'function';
   return (
-    <div ref={ref} className={cn('bg-card rounded-xl p-5 shadow-card border border-border hover:shadow-elevated transition-shadow', className)}>
+    <div
+      ref={ref}
+      onClick={onClick}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } } : undefined}
+      className={cn(
+        'bg-card rounded-xl p-5 shadow-card border border-border hover:shadow-elevated transition-shadow',
+        interactive && 'cursor-pointer hover:border-primary/40 active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-primary/40',
+        className,
+      )}
+    >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-muted-foreground font-medium">{title}</p>

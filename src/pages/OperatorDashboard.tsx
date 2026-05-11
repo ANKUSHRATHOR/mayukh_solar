@@ -136,10 +136,10 @@ const OperatorDashboard = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Pending Review" value={reviewCount} icon={FileSearch} change={reviewCount > 0 ? 'Needs attention' : 'All clear'} />
-        <StatCard title="Installation" value={installCount} icon={Wrench} />
-        <StatCard title="Net Metering" value={netMeterCount} icon={ClipboardCheck} />
-        <StatCard title="Completed" value={completedCount} icon={CheckCircle2} />
+        <StatCard onClick={() => setActiveTab('review')} title="Pending Review" value={reviewCount} icon={FileSearch} change={reviewCount > 0 ? 'Needs attention' : 'All clear'} />
+        <StatCard onClick={() => setActiveTab('installation')} title="Installation" value={installCount} icon={Wrench} />
+        <StatCard onClick={() => setActiveTab('netmetering')} title="Net Metering" value={netMeterCount} icon={ClipboardCheck} />
+        <StatCard onClick={() => setActiveTab('completed')} title="Completed" value={completedCount} icon={CheckCircle2} />
       </div>
 
       {/* Tabs + Search */}

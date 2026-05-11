@@ -67,9 +67,9 @@ const TelecallerDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Leads" value={stats.total} icon={Users} />
-        <StatCard title="This Month" value={stats.thisMonth} icon={TrendingUp} />
-        <StatCard title="Today" value={stats.today} icon={Calendar} />
+        <StatCard onClick={() => navigate('/leads/new')} title="Total Leads" value={stats.total} icon={Users} />
+        <StatCard onClick={() => navigate('/leads/new')} title="This Month" value={stats.thisMonth} icon={TrendingUp} />
+        <StatCard onClick={() => navigate('/leads/new')} title="Today" value={stats.today} icon={Calendar} />
       </div>
 
       <Card className="shadow-card border-border">
