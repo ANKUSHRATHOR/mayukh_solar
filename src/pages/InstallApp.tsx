@@ -25,6 +25,7 @@ const InstallApp = () => {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'default',
   );
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const onIos = isIos();
   const onSafari = isSafari();
