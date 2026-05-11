@@ -67,10 +67,10 @@ const SalesPersonDashboard = () => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Leads" value={stats.total} icon={Users} />
-        <StatCard title="New Leads" value={stats.newLeads} icon={Briefcase} />
-        <StatCard title="Follow-ups" value={stats.followUps} icon={CalendarIcon} />
-        <StatCard title="Overdue" value={stats.overdue} icon={Clock} changeType={stats.overdue > 0 ? 'down' : 'neutral'} change={stats.overdue > 0 ? 'Action needed!' : 'All clear'} />
+        <StatCard onClick={() => setFilterStatus('all')} title="Total Leads" value={stats.total} icon={Users} />
+        <StatCard onClick={() => setFilterStatus('new')} title="New Leads" value={stats.newLeads} icon={Briefcase} />
+        <StatCard onClick={() => setFilterStatus('follow_up')} title="Follow-ups" value={stats.followUps} icon={CalendarIcon} />
+        <StatCard onClick={() => setFilterStatus('follow_up')} title="Overdue" value={stats.overdue} icon={Clock} changeType={stats.overdue > 0 ? 'down' : 'neutral'} change={stats.overdue > 0 ? 'Action needed!' : 'All clear'} />
       </div>
 
       {/* Filters */}
