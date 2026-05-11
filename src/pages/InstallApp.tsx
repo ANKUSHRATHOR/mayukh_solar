@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, RefreshCw, Smartphone, Share2, MoreVertical, Bell, BellOff, AlertCircle } from 'lucide-react';
+import { Download, RefreshCw, Smartphone, Share2, MoreVertical, Bell, BellOff, AlertCircle, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -25,6 +25,7 @@ const InstallApp = () => {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'default',
   );
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const onIos = isIos();
   const onSafari = isSafari();
@@ -80,6 +81,17 @@ const InstallApp = () => {
     }
   };
 
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      toast.success('Link copied — now open Safari and paste it');
+      setTimeout(() => setLinkCopied(false), 3000);
+    } catch {
+      toast.error('Could not copy. Long-press the address bar to copy manually.');
+    }
+  };
+
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6">
       <section className="mx-auto flex max-w-2xl flex-col items-center text-center">
@@ -89,13 +101,26 @@ const InstallApp = () => {
           Add the CRM to your phone Home Screen for faster access and to receive push notifications.
         </p>
 
-        {onIos && !onSafari && !isStandalone && (
-          <div className="mt-6 flex w-full items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-left text-sm text-destructive">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-            <div>
-              <strong>Open in Safari to install on iPhone.</strong> Chrome and other browsers on iPhone do not support
-              installing apps to the Home Screen. Tap the address bar, copy this link, then paste it into Safari.
+        {onIos && !isStandalone && (
+          <div className="mt-6 w-full rounded-lg border border-primary/40 bg-primary/10 p-4 text-left text-sm text-foreground">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div className="space-y-2">
+                <p>
+                  <strong>iPhone install requires Safari.</strong> Apple does not allow one-tap install
+                  like Android — you must use Safari's <b>Share → Add to Home Screen</b>.
+                </p>
+                {!onSafari && (
+                  <p className="text-destructive">
+                    You're currently in Chrome (or another browser). Copy this link and open it in Safari:
+                  </p>
+                )}
+              </div>
             </div>
+            <Button onClick={handleCopyLink} variant="outline" size="sm" className="mt-3 w-full gap-2">
+              {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {linkCopied ? 'Copied!' : 'Copy link for Safari'}
+            </Button>
           </div>
         )}
 
