@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, RefreshCw, Smartphone, Share2, MoreVertical, Bell, BellOff, AlertCircle } from 'lucide-react';
+import { Download, RefreshCw, Smartphone, Share2, MoreVertical, Bell, BellOff, AlertCircle, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
