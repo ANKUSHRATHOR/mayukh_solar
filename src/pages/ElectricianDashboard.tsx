@@ -155,8 +155,8 @@ const ElectricianDashboard = () => {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard title="Pending Wiring" value={pending.length} icon={Clock} change={pending.length > 0 ? 'Needs work' : 'All clear'} />
-        <StatCard title="Completed" value={done.length} icon={CheckCircle2} />
+        <StatCard onClick={() => setTab('pending')} title="Pending Wiring" value={pending.length} icon={Clock} change={pending.length > 0 ? 'Needs work' : 'All clear'} />
+        <StatCard onClick={() => setTab('done')} title="Completed" value={done.length} icon={CheckCircle2} />
       </div>
 
       <div className="relative max-w-sm">
