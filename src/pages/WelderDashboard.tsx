@@ -115,8 +115,8 @@ const WelderDashboard = () => {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard title="Pending Installations" value={pending.length} icon={Clock} change={pending.length > 0 ? 'Needs work' : 'All clear'} />
-        <StatCard title="Completed" value={done.length} icon={CheckCircle2} />
+        <StatCard onClick={() => setTab('pending')} title="Pending Installations" value={pending.length} icon={Clock} change={pending.length > 0 ? 'Needs work' : 'All clear'} />
+        <StatCard onClick={() => setTab('done')} title="Completed" value={done.length} icon={CheckCircle2} />
       </div>
 
       <div className="relative max-w-sm">
