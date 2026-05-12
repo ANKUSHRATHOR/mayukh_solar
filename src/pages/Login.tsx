@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Phone, Lock, ArrowRight, Sun, Mail } from 'lucide-react';
+import { Phone, Lock, ArrowRight, Sun, Mail, KeyRound, ShieldCheck } from 'lucide-react';
 import logo from '@/assets/mayukh-solar-logo.png';
 
-type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp';
+type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'forgot_password';
 
 const Login = () => {
   const [mobile, setMobile] = useState('');
@@ -16,6 +16,8 @@ const Login = () => {
   const [mode, setMode] = useState<LoginMode>('choose');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const { toast } = useToast();
@@ -71,7 +73,12 @@ const Login = () => {
       const verifyEmail = mode === 'email_otp' ? email : mobileEmail;
       const { error } = await supabase.auth.verifyOtp({ email: verifyEmail, token: otp, type: 'email' });
       if (error) throw error;
-      navigate('/');
+
+      if (mode === 'forgot_password') {
+        toast({ title: 'Identity Verified', description: 'Set your new password below' });
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       toast({ title: 'Verification Failed', description: err.message, variant: 'destructive' });
     } finally {
@@ -100,7 +107,36 @@ const Login = () => {
     }
   };
 
-  const resetMode = () => { setMode('choose'); setOtpSent(false); setOtp(''); setPassword(''); };
+  const handleResetPassword = async () => {
+    if (newPassword.length < 8) {
+      toast({ title: 'Weak password', description: 'Password must be at least 8 characters', variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Mismatch', description: 'Passwords do not match', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast({ title: 'Password Reset', description: 'Your password has been updated successfully.' });
+      navigate('/');
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetMode = () => {
+    setMode('choose');
+    setOtpSent(false);
+    setOtp('');
+    setPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -121,7 +157,7 @@ const Login = () => {
 
           <div className="space-y-4">
             {/* Mobile Input (shown for mobile-based modes) */}
-            {(mode === 'choose' || mode === 'otp' || mode === 'password') && (
+            {(mode === 'choose' || mode === 'otp' || mode === 'password' || mode === 'forgot_password') && (
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -131,7 +167,7 @@ const Login = () => {
                   onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   className="pl-10 h-12 text-base"
                   maxLength={10}
-                  disabled={mode !== 'choose' && otpSent}
+                  disabled={mode !== 'choose' && mode !== 'forgot_password' && otpSent}
                 />
               </div>
             )}
@@ -205,6 +241,90 @@ const Login = () => {
               </div>
             )}
 
+            {/* Mode: Forgot Password — Send OTP */}
+            {mode === 'forgot_password' && !otpSent && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground text-center">
+                  Enter your registered mobile number and we'll send you a verification code to reset your password.
+                </p>
+                <Button
+                  onClick={handleSendOtp}
+                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
+                  disabled={loading || !validateMobile(mobile)}
+                >
+                  {loading ? 'Sending...' : 'Send Reset Code'} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
+                  ← Back to login options
+                </button>
+              </div>
+            )}
+
+            {/* Mode: Forgot Password — Verify OTP */}
+            {mode === 'forgot_password' && otpSent && otp.length !== 6 && (
+              <div className="space-y-4">
+                <Input
+                  type="text"
+                  placeholder="Enter 6-digit OTP"
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="h-12 text-center text-xl tracking-[0.5em] font-mono"
+                  maxLength={6}
+                />
+                <Button
+                  onClick={handleVerifyOtp}
+                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
+                  disabled={loading || otp.length !== 6}
+                >
+                  Verify <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
+                  ← Back to login options
+                </button>
+              </div>
+            )}
+
+            {/* Mode: Forgot Password — Set New Password */}
+            {mode === 'forgot_password' && otpSent && otp.length === 6 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                  <span className="text-sm font-medium text-foreground">Set a new password</span>
+                </div>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    placeholder="New password (min 8 chars)"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    className="pl-10 h-12"
+                  />
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    className="pl-10 h-12"
+                    onKeyDown={e => e.key === 'Enter' && handleResetPassword()}
+                  />
+                </div>
+                <Button
+                  onClick={handleResetPassword}
+                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
+                  disabled={loading || !newPassword || !confirmPassword}
+                >
+                  {loading ? 'Updating...' : 'Reset Password & Login'} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
+                  ← Back to login options
+                </button>
+              </div>
+            )}
+
             {/* Mode: Email OTP */}
             {mode === 'email_otp' && !otpSent && (
               <div className="space-y-4">
@@ -267,6 +387,18 @@ const Login = () => {
                 </Button>
                 <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
                   ← Back to login options
+                </button>
+              </div>
+            )}
+
+            {/* Forgot password link on password mode */}
+            {mode === 'password' && (
+              <div className="text-center -mt-2">
+                <button
+                  onClick={() => { setMode('forgot_password'); setOtpSent(false); setOtp(''); setPassword(''); }}
+                  className="text-sm text-primary hover:underline font-medium"
+                >
+                  Forgot password?
                 </button>
               </div>
             )}
