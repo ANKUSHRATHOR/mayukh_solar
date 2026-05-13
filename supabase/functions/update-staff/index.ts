@@ -107,10 +107,15 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Delete role, staff, then auth user
+      // Delete role, staff, then auth user. Tolerate missing rows so partial state can still be cleaned.
       await adminClient.from("user_roles").delete().eq("user_id", user_id);
       await adminClient.from("staff").delete().eq("id", staff_id);
-      await adminClient.auth.admin.deleteUser(user_id);
+      try {
+        await adminClient.auth.admin.deleteUser(user_id);
+      } catch (e: any) {
+        // ignore "user not found" so re-add works after partial deletes
+        if (!String(e?.message || "").toLowerCase().includes("not found")) throw e;
+      }
 
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
