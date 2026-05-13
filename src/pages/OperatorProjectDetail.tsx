@@ -152,6 +152,53 @@ const OperatorProjectDetail = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const getSignedUrl = async (fileUrl: string, download = false): Promise<string | null> => {
+    let path = fileUrl;
+    const marker = '/project-documents/';
+    if (path.includes(marker)) path = path.split(marker)[1];
+    const { data, error } = await supabase.storage
+      .from('project-documents')
+      .createSignedUrl(path, 60 * 10, download ? { download: true } : undefined);
+    if (error || !data?.signedUrl) {
+      toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
+      return null;
+    }
+    return data.signedUrl;
+  };
+
+  const handleViewDoc = async (fileUrl: string) => {
+    const url = await getSignedUrl(fileUrl);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDownloadDoc = async (fileUrl: string, label: string) => {
+    const url = await getSignedUrl(fileUrl, true);
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${label}.${fileUrl.split('.').pop()}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const handleShareDoc = async (fileUrl: string, label: string) => {
+    const url = await getSignedUrl(fileUrl);
+    if (!url) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: label, url });
+        return;
+      } catch { /* fallthrough to copy */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copied', description: 'Share link copied to clipboard.' });
+    } catch {
+      toast({ title: 'Share link', description: url });
+    }
+  };
+
   const handleApproveDoc = async (docId: string) => {
     const { error } = await supabase.from('documents').update({
       is_verified: true,
