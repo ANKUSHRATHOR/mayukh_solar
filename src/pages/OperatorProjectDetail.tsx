@@ -307,6 +307,45 @@ const OperatorProjectDetail = () => {
         </CardContent>
       </Card>
 
+      {/* All Project Documents — always visible to operator */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <FileText className="h-5 w-5 text-primary" /> All Project Documents
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {docs.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No documents uploaded yet.</p>
+          ) : (
+            docs.map(doc => (
+              <div key={`all-${doc.id}`} className="flex items-center justify-between gap-2 border border-border rounded-lg p-3 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{docLabels[doc.document_type]}</p>
+                    {doc.text_value && <p className="text-xs text-muted-foreground truncate">{doc.text_value}</p>}
+                  </div>
+                </div>
+                {doc.file_url && (
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => handleViewDoc(doc.file_url!)}>
+                      <Eye className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">View</span>
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}>
+                      <Download className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Download</span>
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleShareDoc(doc.file_url!, docLabels[doc.document_type])}>
+                      <Share2 className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Share</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
       {/* Document Review — only show when in review status */}
       {(project.status === 'pending_operator_review' || project.status === 'pending_documents') && (
         <Card className="shadow-card">
