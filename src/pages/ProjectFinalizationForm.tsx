@@ -21,8 +21,20 @@ const structureOptions: { value: StructureType; label: string }[] = [
   { value: 'ground_mount', label: 'Ground Mount' },
 ];
 
+type AppRole = Database['public']['Enums']['app_role'];
+
+const ASSIGNABLE_ROLES: { key: 'assigned_sales_person_id' | 'assigned_telecaller_id' | 'assigned_operator_id' | 'assigned_welder_id' | 'assigned_electrician_id'; role: AppRole; label: string }[] = [
+  { key: 'assigned_sales_person_id', role: 'sales_person', label: 'Sales Person' },
+  { key: 'assigned_telecaller_id', role: 'telecaller', label: 'Telecaller' },
+  { key: 'assigned_operator_id', role: 'operator', label: 'Operator' },
+  { key: 'assigned_welder_id', role: 'welder', label: 'Welder' },
+  { key: 'assigned_electrician_id', role: 'electrician', label: 'Electrician' },
+];
+
+const UNASSIGNED = '__unassigned__';
+
 const ProjectFinalizationForm = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { projectId } = useParams<{ projectId: string }>();
@@ -30,6 +42,15 @@ const ProjectFinalizationForm = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
+  const isAdmin = role === 'admin';
+  const [staffByRole, setStaffByRole] = useState<Record<string, { user_id: string; full_name: string }[]>>({});
+  const [assignments, setAssignments] = useState<Record<string, string | null>>({
+    assigned_sales_person_id: null,
+    assigned_telecaller_id: null,
+    assigned_operator_id: null,
+    assigned_welder_id: null,
+    assigned_electrician_id: null,
+  });
 
   const [form, setForm] = useState({
     k_number: '',
@@ -84,11 +105,35 @@ const ProjectFinalizationForm = () => {
         expected_install_date: data.expected_install_date?.split('T')[0] ?? '',
         special_notes: data.special_notes ?? '',
       });
+      setAssignments({
+        assigned_sales_person_id: data.assigned_sales_person_id ?? null,
+        assigned_telecaller_id: (data as any).assigned_telecaller_id ?? null,
+        assigned_operator_id: (data as any).assigned_operator_id ?? null,
+        assigned_welder_id: data.assigned_welder_id ?? null,
+        assigned_electrician_id: data.assigned_electrician_id ?? null,
+      });
       setPageLoading(false);
     };
 
     fetchProject();
   }, [projectId, navigate, toast]);
+
+  // Admin: load staff lists per role for assignment dropdowns
+  useEffect(() => {
+    if (!isAdmin) return;
+    (async () => {
+      const { data: rolesData } = await supabase.from('user_roles').select('user_id, role');
+      const { data: staffData } = await supabase.from('staff').select('user_id, full_name, is_active').eq('is_active', true);
+      if (!rolesData || !staffData) return;
+      const nameById = new Map(staffData.map(s => [s.user_id, s.full_name]));
+      const grouped: Record<string, { user_id: string; full_name: string }[]> = {};
+      for (const r of rolesData) {
+        if (!nameById.has(r.user_id)) continue;
+        (grouped[r.role] ||= []).push({ user_id: r.user_id, full_name: nameById.get(r.user_id)! });
+      }
+      setStaffByRole(grouped);
+    })();
+  }, [isAdmin]);
 
   const handleSubmit = async () => {
     if (!projectId && !leadId) { toast({ title: 'Missing lead', variant: 'destructive' }); return; }
@@ -109,24 +154,28 @@ const ProjectFinalizationForm = () => {
       let project;
 
       if (projectId) {
+        const updatePayload: any = {
+          k_number: form.k_number.trim(),
+          capacity_kw: parseFloat(form.capacity_kw),
+          panel_watt: parseInt(form.panel_watt),
+          panel_qty: parseInt(form.panel_qty),
+          panel_brand: form.panel_brand.trim(),
+          inverter_capacity: parseFloat(form.inverter_capacity),
+          inverter_brand: form.inverter_brand.trim(),
+          structure_type: form.structure_type as StructureType,
+          final_amount: parseFloat(form.final_amount),
+          discount: form.discount ? parseFloat(form.discount) : 0,
+          payment_type: form.payment_type as PaymentType,
+          loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
+          expected_install_date: form.expected_install_date || null,
+          special_notes: form.special_notes.trim() || null,
+        };
+        if (isAdmin) {
+          for (const r of ASSIGNABLE_ROLES) updatePayload[r.key] = assignments[r.key] || null;
+        }
         const { data, error } = await supabase
           .from('projects')
-          .update({
-            k_number: form.k_number.trim(),
-            capacity_kw: parseFloat(form.capacity_kw),
-            panel_watt: parseInt(form.panel_watt),
-            panel_qty: parseInt(form.panel_qty),
-            panel_brand: form.panel_brand.trim(),
-            inverter_capacity: parseFloat(form.inverter_capacity),
-            inverter_brand: form.inverter_brand.trim(),
-            structure_type: form.structure_type as StructureType,
-            final_amount: parseFloat(form.final_amount),
-            discount: form.discount ? parseFloat(form.discount) : 0,
-            payment_type: form.payment_type as PaymentType,
-            loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
-            expected_install_date: form.expected_install_date || null,
-            special_notes: form.special_notes.trim() || null,
-          })
+          .update(updatePayload)
           .eq('id', projectId)
           .select()
           .single();
@@ -301,6 +350,31 @@ const ProjectFinalizationForm = () => {
             <Label>Special Notes</Label>
             <Textarea value={form.special_notes} onChange={e => updateField('special_notes', e.target.value)} placeholder="Any special instructions" rows={2} />
           </div>
+
+          {/* Admin-only: Assignments */}
+          {isAdmin && projectId && (
+            <div className="space-y-3 pt-2 border-t border-border">
+              <Label className="text-base font-semibold">Assignments</Label>
+              <p className="text-xs text-muted-foreground -mt-2">Assign staff for each role. Leave unassigned if not applicable.</p>
+              {ASSIGNABLE_ROLES.map(r => (
+                <div key={r.key} className="space-y-1.5">
+                  <Label className="text-sm">{r.label}</Label>
+                  <Select
+                    value={assignments[r.key] || UNASSIGNED}
+                    onValueChange={v => setAssignments(prev => ({ ...prev, [r.key]: v === UNASSIGNED ? null : v }))}
+                  >
+                    <SelectTrigger className="h-11"><SelectValue placeholder={`Select ${r.label}`} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNASSIGNED}>— Unassigned —</SelectItem>
+                      {(staffByRole[r.role] || []).map(s => (
+                        <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          )}
 
           <Button
             onClick={handleSubmit}

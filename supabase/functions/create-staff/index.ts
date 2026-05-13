@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     let userId: string;
 
     if (existingUser) {
-      // Check if already in staff table
+      // Check if already in staff table (active staff with this mobile already exists)
       const { data: existingStaff } = await adminClient
         .from("staff")
         .select("id")
@@ -95,10 +95,14 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Update password for existing auth user
-      await adminClient.auth.admin.updateUserById(existingUser.id, {
+      // Orphan auth user from a previous delete — clean up any stale role rows,
+      // reset password, and re-confirm email so they can sign in again.
+      await adminClient.from("user_roles").delete().eq("user_id", existingUser.id);
+      const { error: resetErr } = await adminClient.auth.admin.updateUserById(existingUser.id, {
         password: tempPin,
+        email_confirm: true,
       });
+      if (resetErr) throw resetErr;
       userId = existingUser.id;
     } else {
       // Create new auth user

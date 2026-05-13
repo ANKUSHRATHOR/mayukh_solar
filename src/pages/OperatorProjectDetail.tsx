@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, CheckCircle2, XCircle, FileText, Eye,
   ClipboardCheck, CreditCard, Package, Truck, Wrench, Zap,
-  Calendar, Search, Award, PartyPopper
+  Calendar, Search, Award, PartyPopper, Download, Share2
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import type { Database } from '@/integrations/supabase/types';
@@ -152,6 +152,53 @@ const OperatorProjectDetail = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const getSignedUrl = async (fileUrl: string, download = false): Promise<string | null> => {
+    let path = fileUrl;
+    const marker = '/project-documents/';
+    if (path.includes(marker)) path = path.split(marker)[1];
+    const { data, error } = await supabase.storage
+      .from('project-documents')
+      .createSignedUrl(path, 60 * 10, download ? { download: true } : undefined);
+    if (error || !data?.signedUrl) {
+      toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
+      return null;
+    }
+    return data.signedUrl;
+  };
+
+  const handleViewDoc = async (fileUrl: string) => {
+    const url = await getSignedUrl(fileUrl);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDownloadDoc = async (fileUrl: string, label: string) => {
+    const url = await getSignedUrl(fileUrl, true);
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${label}.${fileUrl.split('.').pop()}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const handleShareDoc = async (fileUrl: string, label: string) => {
+    const url = await getSignedUrl(fileUrl);
+    if (!url) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: label, url });
+        return;
+      } catch { /* fallthrough to copy */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Link copied', description: 'Share link copied to clipboard.' });
+    } catch {
+      toast({ title: 'Share link', description: url });
+    }
+  };
+
   const handleApproveDoc = async (docId: string) => {
     const { error } = await supabase.from('documents').update({
       is_verified: true,
@@ -257,6 +304,45 @@ const OperatorProjectDetail = () => {
             <div><p className="text-muted-foreground text-xs">Amount</p><p className="font-medium">₹{Number(project.final_amount).toLocaleString('en-IN')}</p></div>
             {project.loan_bank && <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* All Project Documents — always visible to operator */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <FileText className="h-5 w-5 text-primary" /> All Project Documents
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {docs.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No documents uploaded yet.</p>
+          ) : (
+            docs.map(doc => (
+              <div key={`all-${doc.id}`} className="flex items-center justify-between gap-2 border border-border rounded-lg p-3 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{docLabels[doc.document_type]}</p>
+                    {doc.text_value && <p className="text-xs text-muted-foreground truncate">{doc.text_value}</p>}
+                  </div>
+                </div>
+                {doc.file_url && (
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => handleViewDoc(doc.file_url!)}>
+                      <Eye className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">View</span>
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}>
+                      <Download className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Download</span>
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleShareDoc(doc.file_url!, docLabels[doc.document_type])}>
+                      <Share2 className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Share</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
 
