@@ -21,8 +21,20 @@ const structureOptions: { value: StructureType; label: string }[] = [
   { value: 'ground_mount', label: 'Ground Mount' },
 ];
 
+type AppRole = Database['public']['Enums']['app_role'];
+
+const ASSIGNABLE_ROLES: { key: 'assigned_sales_person_id' | 'assigned_telecaller_id' | 'assigned_operator_id' | 'assigned_welder_id' | 'assigned_electrician_id'; role: AppRole; label: string }[] = [
+  { key: 'assigned_sales_person_id', role: 'sales_person', label: 'Sales Person' },
+  { key: 'assigned_telecaller_id', role: 'telecaller', label: 'Telecaller' },
+  { key: 'assigned_operator_id', role: 'operator', label: 'Operator' },
+  { key: 'assigned_welder_id', role: 'welder', label: 'Welder' },
+  { key: 'assigned_electrician_id', role: 'electrician', label: 'Electrician' },
+];
+
+const UNASSIGNED = '__unassigned__';
+
 const ProjectFinalizationForm = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { projectId } = useParams<{ projectId: string }>();
@@ -30,6 +42,15 @@ const ProjectFinalizationForm = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
+  const isAdmin = role === 'admin';
+  const [staffByRole, setStaffByRole] = useState<Record<string, { user_id: string; full_name: string }[]>>({});
+  const [assignments, setAssignments] = useState<Record<string, string | null>>({
+    assigned_sales_person_id: null,
+    assigned_telecaller_id: null,
+    assigned_operator_id: null,
+    assigned_welder_id: null,
+    assigned_electrician_id: null,
+  });
 
   const [form, setForm] = useState({
     k_number: '',
