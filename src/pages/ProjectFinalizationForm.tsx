@@ -154,24 +154,28 @@ const ProjectFinalizationForm = () => {
       let project;
 
       if (projectId) {
+        const updatePayload: any = {
+          k_number: form.k_number.trim(),
+          capacity_kw: parseFloat(form.capacity_kw),
+          panel_watt: parseInt(form.panel_watt),
+          panel_qty: parseInt(form.panel_qty),
+          panel_brand: form.panel_brand.trim(),
+          inverter_capacity: parseFloat(form.inverter_capacity),
+          inverter_brand: form.inverter_brand.trim(),
+          structure_type: form.structure_type as StructureType,
+          final_amount: parseFloat(form.final_amount),
+          discount: form.discount ? parseFloat(form.discount) : 0,
+          payment_type: form.payment_type as PaymentType,
+          loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
+          expected_install_date: form.expected_install_date || null,
+          special_notes: form.special_notes.trim() || null,
+        };
+        if (isAdmin) {
+          for (const r of ASSIGNABLE_ROLES) updatePayload[r.key] = assignments[r.key] || null;
+        }
         const { data, error } = await supabase
           .from('projects')
-          .update({
-            k_number: form.k_number.trim(),
-            capacity_kw: parseFloat(form.capacity_kw),
-            panel_watt: parseInt(form.panel_watt),
-            panel_qty: parseInt(form.panel_qty),
-            panel_brand: form.panel_brand.trim(),
-            inverter_capacity: parseFloat(form.inverter_capacity),
-            inverter_brand: form.inverter_brand.trim(),
-            structure_type: form.structure_type as StructureType,
-            final_amount: parseFloat(form.final_amount),
-            discount: form.discount ? parseFloat(form.discount) : 0,
-            payment_type: form.payment_type as PaymentType,
-            loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
-            expected_install_date: form.expected_install_date || null,
-            special_notes: form.special_notes.trim() || null,
-          })
+          .update(updatePayload)
           .eq('id', projectId)
           .select()
           .single();
