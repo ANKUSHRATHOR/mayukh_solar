@@ -105,11 +105,35 @@ const ProjectFinalizationForm = () => {
         expected_install_date: data.expected_install_date?.split('T')[0] ?? '',
         special_notes: data.special_notes ?? '',
       });
+      setAssignments({
+        assigned_sales_person_id: data.assigned_sales_person_id ?? null,
+        assigned_telecaller_id: (data as any).assigned_telecaller_id ?? null,
+        assigned_operator_id: (data as any).assigned_operator_id ?? null,
+        assigned_welder_id: data.assigned_welder_id ?? null,
+        assigned_electrician_id: data.assigned_electrician_id ?? null,
+      });
       setPageLoading(false);
     };
 
     fetchProject();
   }, [projectId, navigate, toast]);
+
+  // Admin: load staff lists per role for assignment dropdowns
+  useEffect(() => {
+    if (!isAdmin) return;
+    (async () => {
+      const { data: rolesData } = await supabase.from('user_roles').select('user_id, role');
+      const { data: staffData } = await supabase.from('staff').select('user_id, full_name, is_active').eq('is_active', true);
+      if (!rolesData || !staffData) return;
+      const nameById = new Map(staffData.map(s => [s.user_id, s.full_name]));
+      const grouped: Record<string, { user_id: string; full_name: string }[]> = {};
+      for (const r of rolesData) {
+        if (!nameById.has(r.user_id)) continue;
+        (grouped[r.role] ||= []).push({ user_id: r.user_id, full_name: nameById.get(r.user_id)! });
+      }
+      setStaffByRole(grouped);
+    })();
+  }, [isAdmin]);
 
   const handleSubmit = async () => {
     if (!projectId && !leadId) { toast({ title: 'Missing lead', variant: 'destructive' }); return; }
