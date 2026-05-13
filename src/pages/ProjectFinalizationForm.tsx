@@ -351,6 +351,31 @@ const ProjectFinalizationForm = () => {
             <Textarea value={form.special_notes} onChange={e => updateField('special_notes', e.target.value)} placeholder="Any special instructions" rows={2} />
           </div>
 
+          {/* Admin-only: Assignments */}
+          {isAdmin && projectId && (
+            <div className="space-y-3 pt-2 border-t border-border">
+              <Label className="text-base font-semibold">Assignments</Label>
+              <p className="text-xs text-muted-foreground -mt-2">Assign staff for each role. Leave unassigned if not applicable.</p>
+              {ASSIGNABLE_ROLES.map(r => (
+                <div key={r.key} className="space-y-1.5">
+                  <Label className="text-sm">{r.label}</Label>
+                  <Select
+                    value={assignments[r.key] || UNASSIGNED}
+                    onValueChange={v => setAssignments(prev => ({ ...prev, [r.key]: v === UNASSIGNED ? null : v }))}
+                  >
+                    <SelectTrigger className="h-11"><SelectValue placeholder={`Select ${r.label}`} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNASSIGNED}>— Unassigned —</SelectItem>
+                      {(staffByRole[r.role] || []).map(s => (
+                        <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          )}
+
           <Button
             onClick={handleSubmit}
             className="w-full h-12 gradient-primary text-primary-foreground font-semibold mt-2"
