@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Download, RefreshCw, Smartphone, Share2, MoreVertical, Bell, BellOff, AlertCircle, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -94,6 +95,14 @@ const InstallApp = () => {
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6">
+      <Helmet>
+        <title>Install the App | Mayukh Solar CRM</title>
+        <meta name="description" content="Install Mayukh Solar CRM on iPhone or Android for faster access, offline use, and push notifications for staff." />
+        <link rel="canonical" href="https://mayukh-solar.lovable.app/install" />
+        <meta property="og:title" content="Install Mayukh Solar CRM on Your Phone" />
+        <meta property="og:description" content="Add the CRM to your Home Screen and enable push notifications." />
+        <meta property="og:url" content="https://mayukh-solar.lovable.app/install" />
+      </Helmet>
       <section className="mx-auto flex max-w-2xl flex-col items-center text-center">
         <img src={logo} alt="Mayukh Solar" className="h-20 w-20 object-contain" />
         <h1 className="mt-5 text-3xl font-bold text-foreground">Install Mayukh Solar CRM</h1>
