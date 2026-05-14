@@ -1,0 +1,10 @@
+# Mayukh Solar CRM
+
+> Internal CRM for Mayukh Solar (V R Enterprises) — manages leads, projects, quotations, staff, and field workflow for solar installations.
+
+This is a private staff portal. Public pages are limited to login and the install guide; all other routes require authentication.
+
+## Pages
+
+- [Sign in](/login): Staff login for admins, telecallers, sales, operators, welders, and electricians.
+- [Install the app](/install): Instructions for installing the Mayukh Solar CRM as a mobile/desktop app.
