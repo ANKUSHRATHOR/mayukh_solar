@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -139,7 +140,15 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <main className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Helmet>
+        <title>Sign In | Mayukh Solar Staff Portal</title>
+        <meta name="description" content="Secure staff sign-in for Mayukh Solar CRM. Access your leads, projects, quotations, and field workflow." />
+        <link rel="canonical" href="https://mayukh-solar.lovable.app/login" />
+        <meta property="og:title" content="Sign In | Mayukh Solar Staff Portal" />
+        <meta property="og:description" content="Secure staff sign-in for Mayukh Solar CRM." />
+        <meta property="og:url" content="https://mayukh-solar.lovable.app/login" />
+      </Helmet>
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full gradient-primary opacity-10 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full gradient-primary opacity-5 blur-3xl" />
@@ -151,8 +160,8 @@ const Login = () => {
             <div className="flex justify-center mb-4">
               <img src={logo} alt="Mayukh Solar" width={80} height={80} className="drop-shadow-md" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Mayukh Solar</h1>
-            <p className="text-sm text-muted-foreground mt-1">Staff Portal — V R Enterprises</p>
+            <h1 className="text-2xl font-bold text-foreground">Mayukh Solar — Staff Portal</h1>
+            <p className="text-sm text-muted-foreground mt-1">V R Enterprises CRM</p>
           </div>
 
           <div className="space-y-4">
@@ -410,7 +419,7 @@ const Login = () => {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 };
 

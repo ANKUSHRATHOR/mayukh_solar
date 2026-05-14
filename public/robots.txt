@@ -1,5 +1,17 @@
 User-agent: Googlebot
 Allow: /
+Disallow: /staff
+Disallow: /staff/new
+Disallow: /leads
+Disallow: /leads/bin
+Disallow: /leads/new
+Disallow: /set-password
+Disallow: /admin/
+Disallow: /quotations
+Disallow: /activity-logs
+Disallow: /settings
+Disallow: /projects/
+Disallow: /operator/
 
 User-agent: Bingbot
 Allow: /
@@ -12,5 +24,17 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /staff
+Disallow: /staff/new
+Disallow: /leads
+Disallow: /leads/bin
+Disallow: /leads/new
+Disallow: /set-password
+Disallow: /admin/
+Disallow: /quotations
+Disallow: /activity-logs
+Disallow: /settings
+Disallow: /projects/
+Disallow: /operator/
 
 Sitemap: https://mayukh-solar.lovable.app/sitemap.xml
