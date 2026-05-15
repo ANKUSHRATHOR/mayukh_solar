@@ -261,7 +261,65 @@ const LeadDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Project Info (if exists) */}
+      {/* Assigned Sales Person + Reassign */}
+      {(canAssignSales || assignedStaff) && (
+        <Card className="shadow-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <User className="h-4 w-4 text-primary" /> Assigned Sales Person
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {assignedStaff ? (
+              <div className="rounded-lg border border-border bg-accent/30 p-3 space-y-1">
+                <p className="font-semibold text-foreground">{assignedStaff.full_name}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Phone className="h-3.5 w-3.5" /> {assignedStaff.mobile}
+                </p>
+                {assignedStaff.email && (
+                  <p className="text-sm text-muted-foreground">{assignedStaff.email}</p>
+                )}
+                {assignedStaff.role && (
+                  <Badge variant="outline" className="mt-1 text-xs">{statusLabel(assignedStaff.role)}</Badge>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No sales person assigned yet.</p>
+            )}
+
+            {canAssignSales && lead.status !== 'cancelled' && lead.status !== 'final' && (
+              <div className="space-y-2">
+                <Label>{assignedStaff ? 'Reassign to' : 'Assign to sales person'}</Label>
+                <div className="flex gap-2">
+                  <Select value={reassignTarget} onValueChange={setReassignTarget}>
+                    <SelectTrigger className="h-11 flex-1">
+                      <SelectValue placeholder="Select sales person" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {salesPersons.map(sp => (
+                        <SelectItem key={sp.user_id} value={sp.user_id}>
+                          {sp.full_name} — {sp.mobile}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={handleReassign}
+                    disabled={reassigning || !reassignTarget || reassignTarget === lead.assigned_to_user_id}
+                    className="gradient-primary text-primary-foreground font-semibold"
+                  >
+                    {reassigning ? 'Saving...' : (assignedStaff ? 'Reassign' : 'Assign')}
+                  </Button>
+                </div>
+                {salesPersons.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No active sales persons available.</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {project && (
         <Card className="shadow-card border-primary/20 bg-accent/30">
           <CardContent className="p-5">
