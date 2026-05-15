@@ -378,11 +378,14 @@ const OperatorProjectDetail = () => {
 
                   {/* Value / preview */}
                   {doc.file_url && (
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                    <div className="flex gap-2 flex-wrap">
+                      <Button variant="outline" size="sm" onClick={() => handleViewDoc(doc.file_url!)}>
                         <Eye className="h-4 w-4 mr-1" /> View File
-                      </a>
-                    </Button>
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}>
+                        <Download className="h-4 w-4 mr-1" /> Download
+                      </Button>
+                    </div>
                   )}
                   {doc.text_value && (
                     <p className="text-sm bg-muted/50 rounded px-3 py-2">{doc.text_value}</p>
