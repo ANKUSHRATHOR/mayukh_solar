@@ -564,6 +564,25 @@ export type Database = {
       count_admins: { Args: never; Returns: number }
       generate_project_code: { Args: never; Returns: string }
       generate_quotation_number: { Args: never; Returns: string }
+      get_assignable_sales_persons: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          mobile: string
+          user_id: string
+        }[]
+      }
+      get_staff_public: {
+        Args: { _user_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          mobile: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
