@@ -61,6 +61,10 @@ const LeadDetail = () => {
   const [updating, setUpdating] = useState(false);
   const [project, setProject] = useState<any>(null);
   const [staff, setStaff] = useState<any[]>([]);
+  const [salesPersons, setSalesPersons] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null }[]>([]);
+  const [assignedStaff, setAssignedStaff] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null; role: string | null } | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<string>('');
+  const [reassigning, setReassigning] = useState(false);
 
   const fetchLead = async () => {
     if (!id) return;
@@ -68,24 +72,54 @@ const LeadDetail = () => {
     const { data: leadData } = await supabase.from('leads').select('*').eq('id', id).single();
     setLead(leadData);
 
-    const [visitRes, projectRes, staffRes] = await Promise.all([
+    const [visitRes, projectRes, salesRes] = await Promise.all([
       supabase.from('site_visits').select('*').eq('lead_id', id).order('visit_date', { ascending: false }),
       supabase.from('projects').select('*').eq('lead_id', id).maybeSingle(),
-      supabase.from('staff').select('user_id, full_name'),
+      supabase.rpc('get_assignable_sales_persons'),
     ]);
     setVisits(visitRes.data || []);
     setProject(projectRes.data);
-    setStaff(staffRes.data || []);
+    const sales = (salesRes.data as any[]) || [];
+    setSalesPersons(sales);
+    // Build a quick staff lookup from sales list (covers most assigned cases)
+    setStaff(sales);
+
+    if (leadData?.assigned_to_user_id) {
+      const { data: assigned } = await supabase.rpc('get_staff_public', { _user_id: leadData.assigned_to_user_id });
+      const row = Array.isArray(assigned) && assigned.length > 0 ? assigned[0] : null;
+      setAssignedStaff(row as any);
+      setReassignTarget(leadData.assigned_to_user_id);
+    } else {
+      setAssignedStaff(null);
+      setReassignTarget('');
+    }
     setLoading(false);
   };
 
   useEffect(() => { fetchLead(); }, [id]);
 
   const canUpdateStatus = role === 'admin' || role === 'sales_person';
+  const canAssignSales = role === 'admin' || role === 'telecaller';
+
+  const handleReassign = async () => {
+    if (!reassignTarget || !lead) return;
+    setReassigning(true);
+    const { error } = await supabase
+      .from('leads')
+      .update({ assigned_to_user_id: reassignTarget })
+      .eq('id', lead.id);
+    if (error) {
+      toast({ title: 'Reassignment failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Lead assigned', description: 'Sales person has been notified.' });
+      fetchLead();
+    }
+    setReassigning(false);
+  };
 
   const staffName = (userId: string | null) => {
     if (!userId) return 'Unknown user';
-    return staff.find((s) => s.user_id === userId)?.full_name || 'Unknown user';
+    return staff.find((s) => s.user_id === userId)?.full_name || assignedStaff?.full_name || 'Unknown user';
   };
 
   const handleStatusUpdate = async () => {
