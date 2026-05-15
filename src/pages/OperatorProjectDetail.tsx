@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import JSZip from 'jszip';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -109,6 +110,7 @@ const OperatorProjectDetail = () => {
   const [inspectionDate, setInspectionDate] = useState('');
   const [inspectionNotes, setInspectionNotes] = useState('');
   const [netMeterNumber, setNetMeterNumber] = useState('');
+  const [bulkDownloading, setBulkDownloading] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!projectId) return;
@@ -196,6 +198,51 @@ const OperatorProjectDetail = () => {
       toast({ title: 'Link copied', description: 'Share link copied to clipboard.' });
     } catch {
       toast({ title: 'Share link', description: url });
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    const fileDocs = docs.filter(d => d.file_url);
+    if (fileDocs.length === 0) return;
+    setBulkDownloading(true);
+    // Suppress auto-refresh during long download
+    (window as any).__mayukhDownloading = true;
+    try {
+      const zip = new JSZip();
+      let added = 0;
+      for (const d of fileDocs) {
+        const url = await getSignedUrl(d.file_url!);
+        if (!url) continue;
+        try {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const ext = (d.file_url!.split('.').pop() || 'bin').split('?')[0];
+          zip.file(`${docLabels[d.document_type]}.${ext}`, blob);
+          added++;
+        } catch (e) {
+          console.warn('skip doc', d.document_type, e);
+        }
+      }
+      if (added === 0) {
+        toast({ title: 'No files downloaded', variant: 'destructive' });
+        return;
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `${project?.project_code || 'project'}-documents.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      toast({ title: 'ZIP ready', description: `${added} file(s) downloaded` });
+    } catch (err: any) {
+      toast({ title: 'Bulk download failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setBulkDownloading(false);
+      (window as any).__mayukhDownloading = false;
     }
   };
 
