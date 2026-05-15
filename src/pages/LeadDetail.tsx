@@ -61,6 +61,10 @@ const LeadDetail = () => {
   const [updating, setUpdating] = useState(false);
   const [project, setProject] = useState<any>(null);
   const [staff, setStaff] = useState<any[]>([]);
+  const [salesPersons, setSalesPersons] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null }[]>([]);
+  const [assignedStaff, setAssignedStaff] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null; role: string | null } | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<string>('');
+  const [reassigning, setReassigning] = useState(false);
 
   const fetchLead = async () => {
     if (!id) return;
@@ -68,24 +72,54 @@ const LeadDetail = () => {
     const { data: leadData } = await supabase.from('leads').select('*').eq('id', id).single();
     setLead(leadData);
 
-    const [visitRes, projectRes, staffRes] = await Promise.all([
+    const [visitRes, projectRes, salesRes] = await Promise.all([
       supabase.from('site_visits').select('*').eq('lead_id', id).order('visit_date', { ascending: false }),
       supabase.from('projects').select('*').eq('lead_id', id).maybeSingle(),
-      supabase.from('staff').select('user_id, full_name'),
+      supabase.rpc('get_assignable_sales_persons'),
     ]);
     setVisits(visitRes.data || []);
     setProject(projectRes.data);
-    setStaff(staffRes.data || []);
+    const sales = (salesRes.data as any[]) || [];
+    setSalesPersons(sales);
+    // Build a quick staff lookup from sales list (covers most assigned cases)
+    setStaff(sales);
+
+    if (leadData?.assigned_to_user_id) {
+      const { data: assigned } = await supabase.rpc('get_staff_public', { _user_id: leadData.assigned_to_user_id });
+      const row = Array.isArray(assigned) && assigned.length > 0 ? assigned[0] : null;
+      setAssignedStaff(row as any);
+      setReassignTarget(leadData.assigned_to_user_id);
+    } else {
+      setAssignedStaff(null);
+      setReassignTarget('');
+    }
     setLoading(false);
   };
 
   useEffect(() => { fetchLead(); }, [id]);
 
   const canUpdateStatus = role === 'admin' || role === 'sales_person';
+  const canAssignSales = role === 'admin' || role === 'telecaller';
+
+  const handleReassign = async () => {
+    if (!reassignTarget || !lead) return;
+    setReassigning(true);
+    const { error } = await supabase
+      .from('leads')
+      .update({ assigned_to_user_id: reassignTarget })
+      .eq('id', lead.id);
+    if (error) {
+      toast({ title: 'Reassignment failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Lead assigned', description: 'Sales person has been notified.' });
+      fetchLead();
+    }
+    setReassigning(false);
+  };
 
   const staffName = (userId: string | null) => {
     if (!userId) return 'Unknown user';
-    return staff.find((s) => s.user_id === userId)?.full_name || 'Unknown user';
+    return staff.find((s) => s.user_id === userId)?.full_name || assignedStaff?.full_name || 'Unknown user';
   };
 
   const handleStatusUpdate = async () => {
@@ -227,7 +261,65 @@ const LeadDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Project Info (if exists) */}
+      {/* Assigned Sales Person + Reassign */}
+      {(canAssignSales || assignedStaff) && (
+        <Card className="shadow-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <User className="h-4 w-4 text-primary" /> Assigned Sales Person
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {assignedStaff ? (
+              <div className="rounded-lg border border-border bg-accent/30 p-3 space-y-1">
+                <p className="font-semibold text-foreground">{assignedStaff.full_name}</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Phone className="h-3.5 w-3.5" /> {assignedStaff.mobile}
+                </p>
+                {assignedStaff.email && (
+                  <p className="text-sm text-muted-foreground">{assignedStaff.email}</p>
+                )}
+                {assignedStaff.role && (
+                  <Badge variant="outline" className="mt-1 text-xs">{statusLabel(assignedStaff.role)}</Badge>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No sales person assigned yet.</p>
+            )}
+
+            {canAssignSales && lead.status !== 'cancelled' && lead.status !== 'final' && (
+              <div className="space-y-2">
+                <Label>{assignedStaff ? 'Reassign to' : 'Assign to sales person'}</Label>
+                <div className="flex gap-2">
+                  <Select value={reassignTarget} onValueChange={setReassignTarget}>
+                    <SelectTrigger className="h-11 flex-1">
+                      <SelectValue placeholder="Select sales person" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {salesPersons.map(sp => (
+                        <SelectItem key={sp.user_id} value={sp.user_id}>
+                          {sp.full_name} — {sp.mobile}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={handleReassign}
+                    disabled={reassigning || !reassignTarget || reassignTarget === lead.assigned_to_user_id}
+                    className="gradient-primary text-primary-foreground font-semibold"
+                  >
+                    {reassigning ? 'Saving...' : (assignedStaff ? 'Reassign' : 'Assign')}
+                  </Button>
+                </div>
+                {salesPersons.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No active sales persons available.</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {project && (
         <Card className="shadow-card border-primary/20 bg-accent/30">
           <CardContent className="p-5">

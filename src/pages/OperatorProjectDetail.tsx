@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import JSZip from 'jszip';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -109,6 +110,7 @@ const OperatorProjectDetail = () => {
   const [inspectionDate, setInspectionDate] = useState('');
   const [inspectionNotes, setInspectionNotes] = useState('');
   const [netMeterNumber, setNetMeterNumber] = useState('');
+  const [bulkDownloading, setBulkDownloading] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!projectId) return;
@@ -196,6 +198,51 @@ const OperatorProjectDetail = () => {
       toast({ title: 'Link copied', description: 'Share link copied to clipboard.' });
     } catch {
       toast({ title: 'Share link', description: url });
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    const fileDocs = docs.filter(d => d.file_url);
+    if (fileDocs.length === 0) return;
+    setBulkDownloading(true);
+    // Suppress auto-refresh during long download
+    (window as any).__mayukhDownloading = true;
+    try {
+      const zip = new JSZip();
+      let added = 0;
+      for (const d of fileDocs) {
+        const url = await getSignedUrl(d.file_url!);
+        if (!url) continue;
+        try {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const ext = (d.file_url!.split('.').pop() || 'bin').split('?')[0];
+          zip.file(`${docLabels[d.document_type]}.${ext}`, blob);
+          added++;
+        } catch (e) {
+          console.warn('skip doc', d.document_type, e);
+        }
+      }
+      if (added === 0) {
+        toast({ title: 'No files downloaded', variant: 'destructive' });
+        return;
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `${project?.project_code || 'project'}-documents.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      toast({ title: 'ZIP ready', description: `${added} file(s) downloaded` });
+    } catch (err: any) {
+      toast({ title: 'Bulk download failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setBulkDownloading(false);
+      (window as any).__mayukhDownloading = false;
     }
   };
 
@@ -310,9 +357,17 @@ const OperatorProjectDetail = () => {
       {/* All Project Documents — always visible to operator */}
       <Card className="shadow-card">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-primary" /> All Project Documents
-          </CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5 text-primary" /> All Project Documents
+            </CardTitle>
+            {docs.some(d => d.file_url) && (
+              <Button size="sm" variant="outline" onClick={handleBulkDownload} disabled={bulkDownloading}>
+                <Download className="h-4 w-4 mr-1" />
+                {bulkDownloading ? 'Preparing ZIP...' : 'Bulk Download (ZIP)'}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {docs.length === 0 ? (
@@ -378,11 +433,14 @@ const OperatorProjectDetail = () => {
 
                   {/* Value / preview */}
                   {doc.file_url && (
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                    <div className="flex gap-2 flex-wrap">
+                      <Button variant="outline" size="sm" onClick={() => handleViewDoc(doc.file_url!)}>
                         <Eye className="h-4 w-4 mr-1" /> View File
-                      </a>
-                    </Button>
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}>
+                        <Download className="h-4 w-4 mr-1" /> Download
+                      </Button>
+                    </div>
                   )}
                   {doc.text_value && (
                     <p className="text-sm bg-muted/50 rounded px-3 py-2">{doc.text_value}</p>
