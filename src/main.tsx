@@ -39,6 +39,10 @@ const cleanupPreviewServiceWorkers = async () => {
 
 const checkForPublishedUpdate = async () => {
   if (isInIframe || isPreviewHost) return;
+  // Don't auto-refresh while a download/preview is in progress
+  if ((window as any).__mayukhDownloading) return;
+  // Only auto-refresh once per session
+  if (sessionStorage.getItem("mayukh-app-refreshed") === "1") return;
   try {
     const response = await fetch(`/app-version.json?t=${Date.now()}`, {
       cache: "no-store",
@@ -52,6 +56,7 @@ const checkForPublishedUpdate = async () => {
 
     if (storedVersion && storedVersion !== version && sessionStorage.getItem(APP_REFRESH_KEY) !== version) {
       sessionStorage.setItem(APP_REFRESH_KEY, version);
+      sessionStorage.setItem("mayukh-app-refreshed", "1");
       const url = new URL(window.location.href);
       url.searchParams.set("app-refresh", Date.now().toString());
       window.location.replace(url.toString());

@@ -33,8 +33,21 @@ const QuotationsList = () => {
     );
   });
 
-  const totalValue = quotations?.reduce((sum, q) => sum + Number(q.total_amount ?? 0), 0) ?? 0;
-  const totalCapacity = quotations?.reduce((sum, q) => sum + Number(q.capacity_kw ?? 0), 0) ?? 0;
+  // Dedupe by project_id (latest quotation per project) for accurate totals
+  const dedupedByProject = (() => {
+    const map = new Map<string, typeof quotations[number]>();
+    (quotations || []).forEach((q) => {
+      if (!q.project_id) return;
+      const existing = map.get(q.project_id);
+      if (!existing || new Date(q.created_at) > new Date(existing.created_at)) {
+        map.set(q.project_id, q);
+      }
+    });
+    return Array.from(map.values());
+  })();
+  const totalValue = dedupedByProject.reduce((sum, q) => sum + Number(q.total_amount ?? 0), 0);
+  const totalCapacity = dedupedByProject.reduce((sum, q) => sum + Number(q.capacity_kw ?? 0), 0);
+  const uniqueProjectsCount = dedupedByProject.length;
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -44,7 +57,7 @@ const QuotationsList = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard title="Total Quotations" value={String(quotations?.length ?? 0)} icon={FileText} change="" changeType="neutral" />
+          <StatCard title="Unique Projects Quoted" value={String(uniqueProjectsCount)} icon={FileText} change="" changeType="neutral" />
           <StatCard title="Quoted Value" value={`₹${(totalValue / 100000).toFixed(1)}L`} icon={IndianRupee} change="" changeType="neutral" />
           <StatCard title="System Capacity" value={`${totalCapacity.toFixed(1)} kW`} icon={Zap} change="" changeType="neutral" />
         </div>
