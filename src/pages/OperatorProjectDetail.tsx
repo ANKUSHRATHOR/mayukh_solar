@@ -310,9 +310,17 @@ const OperatorProjectDetail = () => {
       {/* All Project Documents — always visible to operator */}
       <Card className="shadow-card">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-primary" /> All Project Documents
-          </CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5 text-primary" /> All Project Documents
+            </CardTitle>
+            {docs.some(d => d.file_url) && (
+              <Button size="sm" variant="outline" onClick={handleBulkDownload} disabled={bulkDownloading}>
+                <Download className="h-4 w-4 mr-1" />
+                {bulkDownloading ? 'Preparing ZIP...' : 'Bulk Download (ZIP)'}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {docs.length === 0 ? (
