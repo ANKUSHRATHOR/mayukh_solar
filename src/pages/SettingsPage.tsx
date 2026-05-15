@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, User, Phone, Mail, Shield } from 'lucide-react';
+import { Lock, User, Phone, Mail, Shield, Bell, BellOff } from 'lucide-react';
+import { isPushSupported, enablePushNotifications, disablePushNotifications, getPushPermission } from '@/lib/push';
 
 const SettingsPage = () => {
   const { staff, role, refreshProfile } = useAuth();
@@ -18,6 +19,35 @@ const SettingsPage = () => {
   const [editEmail, setEditEmail] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const { toast } = useToast();
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const pushSupported = isPushSupported();
+
+  useEffect(() => {
+    if (!pushSupported) return;
+    getPushPermission().then(p => setPushEnabled(p === 'granted'));
+  }, [pushSupported]);
+
+  const handleTogglePush = async () => {
+    setPushBusy(true);
+    try {
+      if (pushEnabled) {
+        await disablePushNotifications();
+        setPushEnabled(false);
+        toast({ title: 'Notifications disabled' });
+      } else {
+        const res = await enablePushNotifications();
+        if (res.ok) {
+          setPushEnabled(true);
+          toast({ title: 'Notifications enabled', description: 'You will get device alerts for new updates.' });
+        } else {
+          toast({ title: 'Could not enable', description: res.reason, variant: 'destructive' });
+        }
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const roleLabel = role ? role.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) : '';
 
@@ -143,6 +173,36 @@ const SettingsPage = () => {
           <Button onClick={handleChangePassword} disabled={loading || !newPassword || !confirmPassword} className="gradient-primary text-primary-foreground">
             {loading ? 'Updating...' : 'Update Password'}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Push Notifications */}
+      <Card className="shadow-card border-border">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            {pushEnabled ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />} Device Notifications
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!pushSupported ? (
+            <p className="text-sm text-muted-foreground">
+              Your browser does not support push notifications. On iPhone, install this app to your Home Screen first.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Get instant alerts on your device for new leads, document approvals, and project updates — even when the app is closed.
+              </p>
+              <Button
+                onClick={handleTogglePush}
+                disabled={pushBusy}
+                variant={pushEnabled ? 'outline' : 'default'}
+                className={pushEnabled ? '' : 'gradient-primary text-primary-foreground'}
+              >
+                {pushBusy ? 'Working...' : pushEnabled ? 'Disable Notifications' : 'Enable Notifications'}
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
