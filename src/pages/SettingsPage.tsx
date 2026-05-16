@@ -28,16 +28,27 @@ const SettingsPage = () => {
     getPushPermission().then(p => setPushEnabled(p === 'granted'));
   }, [pushSupported]);
 
+  const savePushPref = async (enabled: boolean) => {
+    if (!staff?.user_id) return;
+    await (supabase as any).from('notification_preferences').upsert({
+      user_id: staff.user_id,
+      push_enabled: enabled,
+      in_app_enabled: true,
+    }, { onConflict: 'user_id' });
+  };
+
   const handleTogglePush = async () => {
     setPushBusy(true);
     try {
       if (pushEnabled) {
         await disablePushNotifications();
+        await savePushPref(false);
         setPushEnabled(false);
         toast({ title: 'Notifications disabled' });
       } else {
         const res = await enablePushNotifications();
         if (res.ok) {
+          await savePushPref(true);
           setPushEnabled(true);
           toast({ title: 'Notifications enabled', description: 'You will get device alerts for new updates.' });
         } else {
