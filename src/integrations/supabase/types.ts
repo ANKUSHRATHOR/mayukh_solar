@@ -94,6 +94,33 @@ export type Database = {
           },
         ]
       }
+      lead_assignments: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          from_user_id: string | null
+          id: string
+          lead_id: string
+          to_user_id: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          from_user_id?: string | null
+          id?: string
+          lead_id: string
+          to_user_id?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          from_user_id?: string | null
+          id?: string
+          lead_id?: string
+          to_user_id?: string | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           address: string
@@ -172,6 +199,27 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          in_app_enabled: boolean
+          push_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          in_app_enabled?: boolean
+          push_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          in_app_enabled?: boolean
+          push_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -205,6 +253,36 @@ export type Database = {
           title?: string
           type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      project_assignments: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          from_user_id: string | null
+          id: string
+          project_id: string
+          role_column: string
+          to_user_id: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          from_user_id?: string | null
+          id?: string
+          project_id: string
+          role_column: string
+          to_user_id?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          from_user_id?: string | null
+          id?: string
+          project_id?: string
+          role_column?: string
+          to_user_id?: string | null
         }
         Relationships: []
       }
@@ -593,6 +671,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      quotation_totals: {
+        Args: never
+        Returns: {
+          project_count: number
+          total_kw: number
+          total_value: number
+        }[]
       }
     }
     Enums: {
