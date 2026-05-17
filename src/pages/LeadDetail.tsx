@@ -126,7 +126,9 @@ const LeadDetail = () => {
 
   const staffName = (userId: string | null) => {
     if (!userId) return 'Unknown user';
-    return staff.find((s) => s.user_id === userId)?.full_name || assignedStaff?.full_name || 'Unknown user';
+    if (people?.creator?.user_id === userId) return people.creator.full_name;
+    if (people?.assignee?.user_id === userId) return people.assignee.full_name;
+    return staff.find((s) => s.user_id === userId)?.full_name || 'Staff member';
   };
 
   const handleStatusUpdate = async () => {
