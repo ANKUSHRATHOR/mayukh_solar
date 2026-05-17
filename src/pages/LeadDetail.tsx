@@ -329,6 +329,37 @@ const LeadDetail = () => {
         </Card>
       )}
 
+      {people?.history && people.history.length > 0 && (
+        <Card className="shadow-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" /> Assignment History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {people.history.map((h: any) => (
+                <div key={h.id} className="flex items-start gap-3 p-3 rounded-lg bg-accent/30">
+                  <div className="mt-0.5 p-1.5 rounded-md bg-accent shrink-0">
+                    <User className="h-3.5 w-3.5 text-accent-foreground" />
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-foreground">
+                      <span className="font-medium">{h.from || 'Unassigned'}</span>
+                      <span className="text-muted-foreground"> → </span>
+                      <span className="font-medium">{h.to || 'Unassigned'}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      By {h.by || 'Unknown'} • {new Date(h.at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {project && (
         <Card className="shadow-card border-primary/20 bg-accent/30">
           <CardContent className="p-5">
