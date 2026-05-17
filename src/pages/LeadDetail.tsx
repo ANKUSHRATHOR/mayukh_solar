@@ -65,6 +65,7 @@ const LeadDetail = () => {
   const [assignedStaff, setAssignedStaff] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null; role: string | null } | null>(null);
   const [reassignTarget, setReassignTarget] = useState<string>('');
   const [reassigning, setReassigning] = useState(false);
+  const [people, setPeople] = useState<{ creator: any; assignee: any; history: any[] } | null>(null);
 
   const fetchLead = async () => {
     if (!id) return;
@@ -72,23 +73,29 @@ const LeadDetail = () => {
     const { data: leadData } = await supabase.from('leads').select('*').eq('id', id).single();
     setLead(leadData);
 
-    const [visitRes, projectRes, salesRes] = await Promise.all([
+    const [visitRes, projectRes, salesRes, peopleRes] = await Promise.all([
       supabase.from('site_visits').select('*').eq('lead_id', id).order('visit_date', { ascending: false }),
       supabase.from('projects').select('*').eq('lead_id', id).maybeSingle(),
       supabase.rpc('get_assignable_sales_persons'),
+      supabase.rpc('get_lead_people' as any, { _lead_id: id }),
     ]);
     setVisits(visitRes.data || []);
     setProject(projectRes.data);
     const sales = (salesRes.data as any[]) || [];
     setSalesPersons(sales);
-    // Build a quick staff lookup from sales list (covers most assigned cases)
     setStaff(sales);
 
-    if (leadData?.assigned_to_user_id) {
-      const { data: assigned } = await supabase.rpc('get_staff_public', { _user_id: leadData.assigned_to_user_id });
-      const row = Array.isArray(assigned) && assigned.length > 0 ? assigned[0] : null;
-      setAssignedStaff(row as any);
-      setReassignTarget(leadData.assigned_to_user_id);
+    const p = (peopleRes.data as any) || null;
+    setPeople(p);
+    if (p?.assignee) {
+      setAssignedStaff({
+        user_id: p.assignee.user_id,
+        full_name: p.assignee.full_name,
+        mobile: p.assignee.mobile,
+        email: p.assignee.email,
+        role: 'sales_person',
+      });
+      setReassignTarget(p.assignee.user_id);
     } else {
       setAssignedStaff(null);
       setReassignTarget('');
