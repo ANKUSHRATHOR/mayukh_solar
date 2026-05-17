@@ -14,6 +14,105 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance: {
+        Row: {
+          check_in_at: string | null
+          check_out_at: string | null
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          overtime_minutes: number
+          staff_user_id: string
+          status: Database["public"]["Enums"]["attendance_status"]
+          updated_at: string
+          worked_minutes: number
+        }
+        Insert: {
+          check_in_at?: string | null
+          check_out_at?: string | null
+          created_at?: string
+          date: string
+          id?: string
+          notes?: string | null
+          overtime_minutes?: number
+          staff_user_id: string
+          status?: Database["public"]["Enums"]["attendance_status"]
+          updated_at?: string
+          worked_minutes?: number
+        }
+        Update: {
+          check_in_at?: string | null
+          check_out_at?: string | null
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          overtime_minutes?: number
+          staff_user_id?: string
+          status?: Database["public"]["Enums"]["attendance_status"]
+          updated_at?: string
+          worked_minutes?: number
+        }
+        Relationships: []
+      }
+      attendance_events: {
+        Row: {
+          accuracy_m: number | null
+          attendance_id: string | null
+          bike_meter_image_path: string | null
+          bike_meter_reading: number | null
+          captured_at: string
+          created_at: string
+          id: string
+          is_rejected: boolean
+          kind: Database["public"]["Enums"]["attendance_kind"]
+          latitude: number | null
+          longitude: number | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          replaced_by_event_id: string | null
+          staff_user_id: string
+        }
+        Insert: {
+          accuracy_m?: number | null
+          attendance_id?: string | null
+          bike_meter_image_path?: string | null
+          bike_meter_reading?: number | null
+          captured_at?: string
+          created_at?: string
+          id?: string
+          is_rejected?: boolean
+          kind: Database["public"]["Enums"]["attendance_kind"]
+          latitude?: number | null
+          longitude?: number | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          replaced_by_event_id?: string | null
+          staff_user_id: string
+        }
+        Update: {
+          accuracy_m?: number | null
+          attendance_id?: string | null
+          bike_meter_image_path?: string | null
+          bike_meter_reading?: number | null
+          captured_at?: string
+          created_at?: string
+          id?: string
+          is_rejected?: boolean
+          kind?: Database["public"]["Enums"]["attendance_kind"]
+          latitude?: number | null
+          longitude?: number | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          replaced_by_event_id?: string | null
+          staff_user_id?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -488,6 +587,90 @@ export type Database = {
           },
         ]
       }
+      salary_profiles: {
+        Row: {
+          created_at: string
+          effective_from: string
+          id: string
+          monthly_salary: number
+          overtime_hourly_rate: number
+          staff_user_id: string
+          updated_at: string
+          working_days_per_month: number
+        }
+        Insert: {
+          created_at?: string
+          effective_from?: string
+          id?: string
+          monthly_salary?: number
+          overtime_hourly_rate?: number
+          staff_user_id: string
+          updated_at?: string
+          working_days_per_month?: number
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string
+          id?: string
+          monthly_salary?: number
+          overtime_hourly_rate?: number
+          staff_user_id?: string
+          updated_at?: string
+          working_days_per_month?: number
+        }
+        Relationships: []
+      }
+      salary_runs: {
+        Row: {
+          absent_days: number
+          deductions: number
+          generated_at: string
+          generated_by: string | null
+          gross: number
+          half_days: number
+          id: string
+          late_days: number
+          month: number
+          net: number
+          overtime_minutes: number
+          present_days: number
+          staff_user_id: string
+          year: number
+        }
+        Insert: {
+          absent_days?: number
+          deductions?: number
+          generated_at?: string
+          generated_by?: string | null
+          gross?: number
+          half_days?: number
+          id?: string
+          late_days?: number
+          month: number
+          net?: number
+          overtime_minutes?: number
+          present_days?: number
+          staff_user_id: string
+          year: number
+        }
+        Update: {
+          absent_days?: number
+          deductions?: number
+          generated_at?: string
+          generated_by?: string | null
+          gross?: number
+          half_days?: number
+          id?: string
+          late_days?: number
+          month?: number
+          net?: number
+          overtime_minutes?: number
+          present_days?: number
+          staff_user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       serial_numbers: {
         Row: {
           created_at: string
@@ -639,6 +822,31 @@ export type Database = {
         }[]
       }
       complete_staff_password_setup: { Args: never; Returns: undefined }
+      compute_salary: {
+        Args: { _month: number; _user: string; _year: number }
+        Returns: {
+          absent_days: number
+          deductions: number
+          generated_at: string
+          generated_by: string | null
+          gross: number
+          half_days: number
+          id: string
+          late_days: number
+          month: number
+          net: number
+          overtime_minutes: number
+          present_days: number
+          staff_user_id: string
+          year: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "salary_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       count_admins: { Args: never; Returns: number }
       generate_project_code: { Args: never; Returns: string }
       generate_quotation_number: { Args: never; Returns: string }
@@ -651,6 +859,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_lead_people: { Args: { _lead_id: string }; Returns: Json }
       get_staff_public: {
         Args: { _user_id: string }
         Returns: {
@@ -680,6 +889,17 @@ export type Database = {
           total_value: number
         }[]
       }
+      reupload_event_image: {
+        Args: {
+          _accuracy?: number
+          _event_id: string
+          _new_lat: number
+          _new_lng: number
+          _new_path: string
+          _reading?: number
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role:
@@ -689,6 +909,8 @@ export type Database = {
         | "operator"
         | "welder"
         | "electrician"
+      attendance_kind: "check_in" | "field_visit" | "check_out"
+      attendance_status: "present" | "absent" | "half_day" | "late"
       cancellation_reason:
         | "price_too_high"
         | "already_installed"
@@ -872,6 +1094,8 @@ export const Constants = {
         "welder",
         "electrician",
       ],
+      attendance_kind: ["check_in", "field_visit", "check_out"],
+      attendance_status: ["present", "absent", "half_day", "late"],
       cancellation_reason: [
         "price_too_high",
         "already_installed",

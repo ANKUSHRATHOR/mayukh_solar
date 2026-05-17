@@ -65,6 +65,7 @@ const LeadDetail = () => {
   const [assignedStaff, setAssignedStaff] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null; role: string | null } | null>(null);
   const [reassignTarget, setReassignTarget] = useState<string>('');
   const [reassigning, setReassigning] = useState(false);
+  const [people, setPeople] = useState<{ creator: any; assignee: any; history: any[] } | null>(null);
 
   const fetchLead = async () => {
     if (!id) return;
@@ -72,23 +73,29 @@ const LeadDetail = () => {
     const { data: leadData } = await supabase.from('leads').select('*').eq('id', id).single();
     setLead(leadData);
 
-    const [visitRes, projectRes, salesRes] = await Promise.all([
+    const [visitRes, projectRes, salesRes, peopleRes] = await Promise.all([
       supabase.from('site_visits').select('*').eq('lead_id', id).order('visit_date', { ascending: false }),
       supabase.from('projects').select('*').eq('lead_id', id).maybeSingle(),
       supabase.rpc('get_assignable_sales_persons'),
+      supabase.rpc('get_lead_people' as any, { _lead_id: id }),
     ]);
     setVisits(visitRes.data || []);
     setProject(projectRes.data);
     const sales = (salesRes.data as any[]) || [];
     setSalesPersons(sales);
-    // Build a quick staff lookup from sales list (covers most assigned cases)
     setStaff(sales);
 
-    if (leadData?.assigned_to_user_id) {
-      const { data: assigned } = await supabase.rpc('get_staff_public', { _user_id: leadData.assigned_to_user_id });
-      const row = Array.isArray(assigned) && assigned.length > 0 ? assigned[0] : null;
-      setAssignedStaff(row as any);
-      setReassignTarget(leadData.assigned_to_user_id);
+    const p = (peopleRes.data as any) || null;
+    setPeople(p);
+    if (p?.assignee) {
+      setAssignedStaff({
+        user_id: p.assignee.user_id,
+        full_name: p.assignee.full_name,
+        mobile: p.assignee.mobile,
+        email: p.assignee.email,
+        role: 'sales_person',
+      });
+      setReassignTarget(p.assignee.user_id);
     } else {
       setAssignedStaff(null);
       setReassignTarget('');
@@ -119,7 +126,9 @@ const LeadDetail = () => {
 
   const staffName = (userId: string | null) => {
     if (!userId) return 'Unknown user';
-    return staff.find((s) => s.user_id === userId)?.full_name || assignedStaff?.full_name || 'Unknown user';
+    if (people?.creator?.user_id === userId) return people.creator.full_name;
+    if (people?.assignee?.user_id === userId) return people.assignee.full_name;
+    return staff.find((s) => s.user_id === userId)?.full_name || 'Staff member';
   };
 
   const handleStatusUpdate = async () => {
@@ -316,6 +325,37 @@ const LeadDetail = () => {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {people?.history && people.history.length > 0 && (
+        <Card className="shadow-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" /> Assignment History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {people.history.map((h: any) => (
+                <div key={h.id} className="flex items-start gap-3 p-3 rounded-lg bg-accent/30">
+                  <div className="mt-0.5 p-1.5 rounded-md bg-accent shrink-0">
+                    <User className="h-3.5 w-3.5 text-accent-foreground" />
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-foreground">
+                      <span className="font-medium">{h.from || 'Unassigned'}</span>
+                      <span className="text-muted-foreground"> → </span>
+                      <span className="font-medium">{h.to || 'Unassigned'}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      By {h.by || 'Unknown'} • {new Date(h.at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

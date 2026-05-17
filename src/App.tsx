@@ -23,6 +23,9 @@ import SettingsPage from "./pages/SettingsPage.tsx";
 import QuotationsList from "./pages/QuotationsList.tsx";
 import ActivityLogs from "./pages/ActivityLogs.tsx";
 import InstallApp from "./pages/InstallApp.tsx";
+import Attendance from "./pages/Attendance.tsx";
+import AdminAttendance from "./pages/AdminAttendance.tsx";
+import SalaryManagement from "./pages/SalaryManagement.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
@@ -149,6 +152,30 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}>
                   <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/attendance"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}>
+                  <Attendance />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/attendance"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminAttendance />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/salary"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <SalaryManagement />
                 </ProtectedRoute>
               }
             />

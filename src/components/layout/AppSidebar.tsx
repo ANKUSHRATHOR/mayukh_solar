@@ -15,6 +15,8 @@ import {
   Trash2,
   FileText,
   ShieldCheck,
+  CalendarCheck,
+  Wallet,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,6 +41,8 @@ const adminNav: NavItem[] = [
   { label: 'All Projects', icon: Briefcase, path: '/admin/projects' },
   { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
   { label: 'Staff Management', icon: Users, path: '/staff' },
+  { label: 'Attendance', icon: CalendarCheck, path: '/admin/attendance' },
+  { label: 'Salary', icon: Wallet, path: '/admin/salary' },
   { label: 'Quotations', icon: FileText, path: '/quotations' },
   { label: 'Activity Logs', icon: ShieldCheck, path: '/activity-logs' },
   { label: 'Settings', icon: Settings, path: '/settings' },
@@ -47,26 +51,31 @@ const adminNav: NavItem[] = [
 const telecallerNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
+  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
 ];
 
 const salesNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'My Leads', icon: Briefcase, path: '/' },
+  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
 ];
 
 const operatorNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Projects', icon: ClipboardCheck, path: '/' },
+  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
 ];
 
 const welderNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Installations', icon: Wrench, path: '/' },
+  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
 ];
 
 const electricianNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Wiring Jobs', icon: Zap, path: '/' },
+  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
 ];
 
 const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
