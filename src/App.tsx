@@ -155,6 +155,30 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/attendance"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}>
+                  <Attendance />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/attendance"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminAttendance />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/salary"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <SalaryManagement />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
