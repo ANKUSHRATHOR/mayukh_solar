@@ -23,6 +23,9 @@ import SettingsPage from "./pages/SettingsPage.tsx";
 import QuotationsList from "./pages/QuotationsList.tsx";
 import ActivityLogs from "./pages/ActivityLogs.tsx";
 import InstallApp from "./pages/InstallApp.tsx";
+import Attendance from "./pages/Attendance.tsx";
+import AdminAttendance from "./pages/AdminAttendance.tsx";
+import SalaryManagement from "./pages/SalaryManagement.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
