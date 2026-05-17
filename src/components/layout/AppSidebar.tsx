@@ -15,6 +15,8 @@ import {
   Trash2,
   FileText,
   ShieldCheck,
+  CalendarCheck,
+  Wallet,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
