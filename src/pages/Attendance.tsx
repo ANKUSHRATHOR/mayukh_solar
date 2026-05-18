@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,9 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { Camera, MapPin, LogIn, LogOut as LogOutIcon, Navigation, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  Camera, MapPin, LogIn, LogOut as LogOutIcon, Navigation, RefreshCw,
+  AlertCircle, CheckCircle2, AlertTriangle,
+} from 'lucide-react';
 import { format } from 'date-fns';
+import { compressImage, estimateBlur } from '@/lib/capture';
+import { Link } from 'react-router-dom';
 
 type Kind = 'check_in' | 'field_visit' | 'check_out';
 
@@ -29,10 +35,13 @@ const Attendance = () => {
   const [activeKind, setActiveKind] = useState<Kind | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [reading, setReading] = useState<string>('');
+  const [imgInfo, setImgInfo] = useState<{ kb: number; blur: number } | null>(null);
+  const [reading, setReading] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [locating, setLocating] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState<string>('');
 
   const requiresPhoto = role === 'sales_person';
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -41,12 +50,8 @@ const Attendance = () => {
     queryKey: ['attendance-today', staff?.user_id],
     enabled: !!staff?.user_id,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('attendance' as any)
-        .select('*')
-        .eq('staff_user_id', staff!.user_id)
-        .eq('date', today)
-        .maybeSingle();
+      const { data } = await supabase.from('attendance' as any)
+        .select('*').eq('staff_user_id', staff!.user_id).eq('date', today).maybeSingle();
       return data as any;
     },
   });
@@ -55,12 +60,9 @@ const Attendance = () => {
     queryKey: ['attendance-recent', staff?.user_id],
     enabled: !!staff?.user_id,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('attendance' as any)
-        .select('*')
-        .eq('staff_user_id', staff!.user_id)
-        .order('date', { ascending: false })
-        .limit(30);
+      const { data } = await supabase.from('attendance' as any)
+        .select('*').eq('staff_user_id', staff!.user_id)
+        .order('date', { ascending: false }).limit(30);
       return (data as any[]) || [];
     },
   });
@@ -70,12 +72,9 @@ const Attendance = () => {
     enabled: !!staff?.user_id,
     queryFn: async () => {
       const start = new Date(); start.setHours(0, 0, 0, 0);
-      const { data } = await supabase
-        .from('attendance_events' as any)
-        .select('*')
-        .eq('staff_user_id', staff!.user_id)
-        .gte('captured_at', start.toISOString())
-        .order('captured_at', { ascending: false });
+      const { data } = await supabase.from('attendance_events' as any)
+        .select('*').eq('staff_user_id', staff!.user_id)
+        .gte('captured_at', start.toISOString()).order('captured_at', { ascending: false });
       return (data as any[]) || [];
     },
   });
@@ -99,36 +98,40 @@ const Attendance = () => {
     );
   };
 
-  const onFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
+    e.target.value = '';
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) {
-      toast({ title: 'Image too large', description: 'Max 5 MB', variant: 'destructive' });
-      return;
+    if (!/^image\//.test(f.type)) {
+      toast({ title: 'Pick an image', variant: 'destructive' }); return;
     }
-    if (!/^image\/(jpeg|jpg|png|webp)$/.test(f.type)) {
-      toast({ title: 'Invalid image format', variant: 'destructive' });
-      return;
+    setBusy(true); setPhase('Compressing...'); setProgress(20);
+    try {
+      const compressed = await compressImage(f);
+      setProgress(60); setPhase('Checking quality...');
+      const blur = await estimateBlur(compressed);
+      setImageFile(compressed);
+      setImagePreview(URL.createObjectURL(compressed));
+      setImgInfo({ kb: Math.round(compressed.size / 1024), blur: Math.round(blur) });
+      if (blur < 25) {
+        toast({ title: 'Image looks blurry', description: 'Retake for a clearer shot if possible.', variant: 'destructive' });
+      }
+    } finally {
+      setBusy(false); setProgress(0); setPhase('');
     }
-    setImageFile(f);
-    setImagePreview(URL.createObjectURL(f));
   };
 
   const startPunch = (kind: Kind) => {
     setActiveKind(kind);
-    setImageFile(null);
-    setImagePreview(null);
-    setReading('');
-    setCoords(null);
+    setImageFile(null); setImagePreview(null); setImgInfo(null);
+    setReading(''); setCoords(null); setProgress(0); setPhase('');
     captureLocation();
   };
 
   const cancelPunch = () => {
     setActiveKind(null);
-    setImageFile(null);
-    setImagePreview(null);
-    setReading('');
-    setCoords(null);
+    setImageFile(null); setImagePreview(null); setImgInfo(null);
+    setReading(''); setCoords(null); setProgress(0); setPhase('');
   };
 
   const submitPunch = async () => {
@@ -136,100 +139,85 @@ const Attendance = () => {
     if (!coords) { toast({ title: 'Capture location first', variant: 'destructive' }); return; }
     if (requiresPhoto && !imageFile) { toast({ title: 'Bike meter photo is required', variant: 'destructive' }); return; }
 
-    setUploading(true);
+    setBusy(true);
     try {
       let imagePath: string | null = null;
       if (imageFile) {
-        const ext = imageFile.name.split('.').pop() || 'jpg';
-        const path = `${staff.user_id}/${today}/${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from('attendance-media').upload(path, imageFile, { upsert: false, contentType: imageFile.type });
+        setPhase('Uploading image...'); setProgress(10);
+        const path = `${staff.user_id}/${today}/${crypto.randomUUID()}.jpg`;
+        const { error: upErr } = await supabase.storage.from('attendance-media')
+          .upload(path, imageFile, { contentType: 'image/jpeg', upsert: false });
         if (upErr) throw upErr;
-        imagePath = path;
+        imagePath = path; setProgress(70);
       }
-
-      const { error } = await supabase.from('attendance_events' as any).insert({
-        staff_user_id: staff.user_id,
-        kind: activeKind,
-        captured_at: new Date().toISOString(),
-        latitude: coords.lat,
-        longitude: coords.lng,
-        accuracy_m: coords.acc,
-        bike_meter_image_path: imagePath,
-        bike_meter_reading: reading ? Number(reading) : null,
+      setPhase('Saving punch...'); setProgress(85);
+      const { error } = await supabase.rpc('punch_attendance' as any, {
+        _kind: activeKind,
+        _lat: coords.lat,
+        _lng: coords.lng,
+        _accuracy: coords.acc,
+        _image_path: imagePath,
+        _reading: reading ? Number(reading) : null,
       });
       if (error) throw error;
-
+      setProgress(100);
       toast({ title: 'Recorded', description: `${activeKind.replace('_', ' ')} saved` });
       cancelPunch();
       qc.invalidateQueries({ queryKey: ['attendance-today', staff.user_id] });
       qc.invalidateQueries({ queryKey: ['attendance-recent', staff.user_id] });
       qc.invalidateQueries({ queryKey: ['attendance-events-today', staff.user_id] });
     } catch (e: any) {
-      toast({ title: 'Failed', description: e.message, variant: 'destructive' });
+      toast({ title: 'Failed', description: e.message || 'Unknown error', variant: 'destructive' });
     } finally {
-      setUploading(false);
+      setBusy(false); setPhase(''); setProgress(0);
     }
   };
 
   return (
     <div className="p-4 lg:p-8 max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">My Attendance</h1>
-        <p className="text-sm text-muted-foreground mt-1">{format(new Date(), 'EEEE, dd MMM yyyy')}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">My Attendance</h1>
+          <p className="text-sm text-muted-foreground mt-1">{format(new Date(), 'EEEE, dd MMM yyyy')}</p>
+        </div>
+        <Link to="/my-attendance" className="text-sm text-primary underline shrink-0">Monthly view</Link>
       </div>
 
       <Card className="border-border shadow-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Today</CardTitle>
-        </CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Today</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Badge className={statusColor[todayAttendance?.status ?? 'absent']}>
               {(todayAttendance?.status ?? 'absent').replace('_', ' ').toUpperCase()}
             </Badge>
-            {todayAttendance?.check_in_at && (
-              <span className="text-sm text-muted-foreground">In: {format(new Date(todayAttendance.check_in_at), 'HH:mm')}</span>
-            )}
-            {todayAttendance?.check_out_at && (
-              <span className="text-sm text-muted-foreground">Out: {format(new Date(todayAttendance.check_out_at), 'HH:mm')}</span>
-            )}
+            {todayAttendance?.check_in_at && <span className="text-sm text-muted-foreground">In: {format(new Date(todayAttendance.check_in_at), 'HH:mm')}</span>}
+            {todayAttendance?.check_out_at && <span className="text-sm text-muted-foreground">Out: {format(new Date(todayAttendance.check_out_at), 'HH:mm')}</span>}
             {!!todayAttendance?.worked_minutes && (
-              <span className="text-sm text-muted-foreground">
-                Worked: {Math.floor(todayAttendance.worked_minutes / 60)}h {todayAttendance.worked_minutes % 60}m
-              </span>
+              <span className="text-sm text-muted-foreground">Worked: {Math.floor(todayAttendance.worked_minutes / 60)}h {todayAttendance.worked_minutes % 60}m</span>
             )}
           </div>
 
           {!activeKind ? (
             <div className="grid grid-cols-3 gap-2">
-              <Button onClick={() => startPunch('check_in')} className="gradient-primary text-primary-foreground">
-                <LogIn className="h-4 w-4 mr-1" /> Check In
-              </Button>
-              <Button onClick={() => startPunch('field_visit')} variant="outline">
-                <Navigation className="h-4 w-4 mr-1" /> Field Visit
-              </Button>
-              <Button onClick={() => startPunch('check_out')} variant="outline">
-                <LogOutIcon className="h-4 w-4 mr-1" /> Check Out
-              </Button>
+              <Button onClick={() => startPunch('check_in')} className="gradient-primary text-primary-foreground"><LogIn className="h-4 w-4 mr-1" /> Check In</Button>
+              <Button onClick={() => startPunch('field_visit')} variant="outline"><Navigation className="h-4 w-4 mr-1" /> Field</Button>
+              <Button onClick={() => startPunch('check_out')} variant="outline"><LogOutIcon className="h-4 w-4 mr-1" /> Check Out</Button>
             </div>
           ) : (
             <div className="space-y-3 rounded-lg border border-border p-3">
               <div className="flex items-center justify-between">
                 <p className="font-semibold capitalize">{activeKind.replace('_', ' ')}</p>
-                <Button variant="ghost" size="sm" onClick={cancelPunch}>Cancel</Button>
+                <Button variant="ghost" size="sm" onClick={cancelPunch} disabled={busy}>Cancel</Button>
               </div>
 
               <div className="space-y-2">
-                <Label>Live Location {requiresPhoto && <span className="text-destructive">*</span>}</Label>
+                <Label>Live Location <span className="text-destructive">*</span></Label>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={captureLocation} disabled={locating}>
-                    <MapPin className="h-4 w-4 mr-1" /> {locating ? 'Getting...' : 'Get / Refresh'}
+                  <Button variant="outline" size="sm" onClick={captureLocation} disabled={locating || busy}>
+                    <MapPin className="h-4 w-4 mr-1" /> {locating ? 'Getting...' : (coords ? 'Refresh' : 'Get')}
                   </Button>
                   {coords ? (
-                    <span className="text-xs text-muted-foreground">
-                      {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc)}m)
-                    </span>
+                    <span className="text-xs text-muted-foreground">{coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc)}m)</span>
                   ) : (
                     <span className="text-xs text-muted-foreground">Not captured yet</span>
                   )}
@@ -241,34 +229,41 @@ const Attendance = () => {
                   Bike Meter Photo {requiresPhoto && <span className="text-destructive">*</span>}
                   {!requiresPhoto && <span className="text-muted-foreground"> (optional)</span>}
                 </Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={onFileChosen}
-                />
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                    <Camera className="h-4 w-4 mr-1" /> {imagePreview ? 'Retake' : 'Capture'}
+                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChosen} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={busy}>
+                    <Camera className="h-4 w-4 mr-1" /> {imagePreview ? 'Retake' : 'Open camera'}
                   </Button>
-                  {imagePreview && (
-                    <span className="text-xs text-muted-foreground">{(imageFile!.size / 1024).toFixed(0)} KB</span>
+                  {imgInfo && (
+                    <>
+                      <span className="text-xs text-muted-foreground">{imgInfo.kb} KB</span>
+                      {imgInfo.blur < 25 ? (
+                        <span className="text-xs text-warning flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Looks blurry</span>
+                      ) : (
+                        <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sharp</span>
+                      )}
+                    </>
                   )}
                 </div>
                 {imagePreview && (
-                  <img src={imagePreview} alt="Bike meter preview" className="mt-2 max-h-48 rounded-md border border-border" />
+                  <img src={imagePreview} alt="Bike meter preview" className="mt-2 max-h-56 rounded-md border border-border object-contain" />
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label>Odometer Reading (km) <span className="text-muted-foreground">(optional)</span></Label>
+                <Label>Odometer reading (km) <span className="text-muted-foreground">(optional)</span></Label>
                 <Input type="number" inputMode="decimal" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="e.g. 12450" />
               </div>
 
-              <Button onClick={submitPunch} disabled={uploading} className="w-full gradient-primary text-primary-foreground">
-                {uploading ? 'Saving...' : 'Submit'}
+              {busy && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">{phase}</p>
+                  <Progress value={progress} className="h-2" />
+                </div>
+              )}
+
+              <Button onClick={submitPunch} disabled={busy || !coords || (requiresPhoto && !imageFile)} className="w-full gradient-primary text-primary-foreground">
+                {busy ? phase || 'Saving...' : 'Submit'}
               </Button>
             </div>
           )}
@@ -277,7 +272,7 @@ const Attendance = () => {
 
       {!!todayEvents?.length && (
         <Card className="border-border shadow-card">
-          <CardHeader className="pb-3"><CardTitle className="text-base">Today's Punches</CardTitle></CardHeader>
+          <CardHeader className="pb-3"><CardTitle className="text-base">Today's punches</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {todayEvents.map((e: any) => (
@@ -307,18 +302,14 @@ const Attendance = () => {
       <Card className="border-border shadow-card">
         <CardHeader className="pb-3"><CardTitle className="text-base">Last 30 days</CardTitle></CardHeader>
         <CardContent>
-          {!recent?.length ? (
-            <p className="text-sm text-muted-foreground">No records yet.</p>
-          ) : (
+          {!recent?.length ? <p className="text-sm text-muted-foreground">No records yet.</p> : (
             <div className="space-y-2">
               {recent.map((r: any) => (
                 <div key={r.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-2 text-sm">
                   <span className="font-medium">{format(new Date(r.date), 'dd MMM, EEE')}</span>
                   <div className="flex items-center gap-3">
                     <Badge className={statusColor[r.status]}>{r.status.replace('_', ' ')}</Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {Math.floor((r.worked_minutes || 0) / 60)}h {(r.worked_minutes || 0) % 60}m
-                    </span>
+                    <span className="text-xs text-muted-foreground">{Math.floor((r.worked_minutes || 0) / 60)}h {(r.worked_minutes || 0) % 60}m</span>
                   </div>
                 </div>
               ))}
