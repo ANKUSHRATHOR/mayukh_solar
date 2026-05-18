@@ -1,67 +1,115 @@
-# Implementation Plan
+## Scope
 
-This is a large multi-feature build. I'll ship it in 3 phases so each piece is stable before the next.
+This is a large multi-domain build. I'll deliver it in one migration + a set of focused frontend changes, reusing the existing tables (`attendance`, `attendance_events`, `salary_*`, `audit_logs`, `quotations`).
 
-## Phase 1 — Lead Visibility (small, ship first)
+---
 
-**Problem:** Lead detail shows current user's name everywhere because joins to `staff` aren't being fetched (no FK = PostgREST embedded select fails silently).
+## 1. Attendance image UX (mobile-first)
 
-**Backend**
-- New RPC `get_lead_people(_lead_id uuid)` (SECURITY DEFINER) returning creator, currently-assigned sales person, and last 20 reassignment events with from/to/changed-by names — all resolved against `staff`. Uses the `lead_assignments` table from the last migration.
-- RLS check inside the RPC: caller must be admin, the creator, currently assigned, or have a project linked to that lead.
+Rebuild capture flow in `src/pages/Attendance.tsx`:
+- Native `<input type="file" accept="image/*" capture="environment">` (works on every Android/iOS without WebRTC quirks).
+- In-browser compression via `browser-image-compression` (max 1600px, ~0.8 quality, target ≤400 KB) — preserves readability of bike meter.
+- Blur detection: Laplacian variance on a downscaled canvas; warn (not block) if score < threshold.
+- Preview card with **Retake** / **Confirm & Upload** buttons.
+- Upload progress using XHR-backed signed-upload (`supabase.storage ... .upload()` with `onUploadProgress`-style chunking via fetch + a manual progress bar tied to compression + upload phases). No page refresh — TanStack mutation only.
 
-**Frontend**
-- `src/pages/LeadDetail.tsx`: replace local user-name placeholders with data from the new RPC. Render three cards: "Created by", "Currently assigned to" (with mobile/email), and "Assignment history" (timeline).
+## 2. Audit log system
 
-## Phase 2 — Attendance + Bike Meter + GPS
+Reuse `audit_logs` (already present) + add triggers for the gaps:
+- `audit_lead_insert_update` — captures lead create + edit (diff of changed columns).
+- `audit_document_decision` — captures verify/reject.
+- `audit_attendance_event_change` — captures admin rejections / reuploads.
+- `audit_salary_change` — on `salary_profiles` upsert and `salary_runs` insert.
+- `audit_login` — client-side: on successful login + logout, call `log_user_event(_action, _meta)` RPC that writes to `audit_logs` with `ip`/`user_agent` captured server-side via `current_setting('request.headers')` best-effort + client-sent UA.
+- New admin page `/audit-logs` already exists as `ActivityLogs.tsx` — extend it to show user_name, action, entity, timestamp, device. Admin-only RLS already in place.
 
-**New tables**
-- `attendance` — one row per staff per day: `staff_user_id, date, check_in_at, check_out_at, status (present|absent|half_day|late), worked_minutes (generated), overtime_minutes, notes`.
-- `attendance_events` — every check-in/out punch with `attendance_id, kind (check_in|field_visit|check_out), captured_at, latitude, longitude, accuracy_m, bike_meter_image_path, bike_meter_reading, is_rejected, rejection_reason, replaced_by_event_id`.
-- `salary_profiles` — `staff_user_id, monthly_salary, per_day_rate (generated = salary/working_days), overtime_hourly_rate, effective_from`.
-- `salary_runs` — admin-generated monthly summary: `staff_user_id, year, month, present_days, half_days, absent_days, late_days, overtime_minutes, gross, deductions, net, generated_at, generated_by`.
+## 3. Salary management upgrades
 
-**Storage**
-- New private bucket `attendance-media`. Path: `{staff_user_id}/{yyyy-mm-dd}/{event_id}.jpg`.
-- RLS: staff can read/write only their own folder; admins read all.
+Extend tables (additive):
+- `salary_advances` (staff_user_id, amount, given_on, note, created_by).
+- `salary_runs` add `advance_deduction numeric default 0`, `paid_amount numeric default 0`, `status text default 'pending'` (`pending|partial|paid`), `paid_at`, `paid_by`.
 
-**RLS / triggers**
-- Staff: SELECT/INSERT own attendance + events; UPDATE only their own non-rejected event of the current day (for reupload).
-- Admin: full access.
-- Trigger on `attendance_events` INSERT: derive/upsert the matching `attendance` row, compute `status` (late if check_in > 10:00, half_day if worked < 4 h, present if ≥ 6 h), and update `check_in_at` / `check_out_at`.
-- Trigger on `attendance_events` UPDATE when `is_rejected=true`: insert a notification to the staff member ("Your bike meter image was rejected — please reupload").
-- RPC `compute_salary(_user uuid, _year int, _month int)` (admin only) that aggregates attendance + overtime against the staff member's active `salary_profile` and inserts a `salary_runs` row.
+Update `compute_salary` to subtract outstanding (un-deducted) advances and set status='pending'. Add `mark_salary_paid(_run_id, _amount)` RPC that flips status to `paid`/`partial`.
 
-**Frontend**
-- `src/pages/Attendance.tsx` (staff): big "Check In" / "Check Out" buttons. On press → request camera + geolocation, capture photo (using `getUserMedia` with `facingMode: environment` and `<input type="file" accept="image/*" capture="environment">` fallback for mobile), show preview, allow Retake, then upload to storage and insert event with lat/lng. Today's status card + last 30 days list.
-- `src/pages/admin/AttendanceReports.tsx` (admin only): staff filter, month picker, table with present/absent/half/late counts, hours, overtime, map-link per event (`https://www.google.com/maps?q=lat,lng`), thumbnail of bike meter, Reject button, Generate Salary button per row/month.
-- `src/pages/admin/SalaryManagement.tsx` (admin only): manage `salary_profiles`, run monthly compute, view/export `salary_runs`.
-- Navigation links gated by role in `AppSidebar.tsx`.
+UI (`SalaryManagement.tsx`): add Advances tab, Mark Paid / Partial buttons, payroll history filter, and CSV export.
 
-**Anti-tamper**
-- Latitude/longitude come from `navigator.geolocation.getCurrentPosition` at submit time, sent server-side; the form has no editable lat/lng input.
-- `accuracy_m` stored — admins can flag low-accuracy entries.
-- Photo MIME enforced (`image/jpeg` or `image/png`), max 5 MB, stored in private bucket so URL forging is blocked.
-- File path includes auth.uid() folder, enforced by storage RLS — staff cannot write into another user's folder.
+## 4. CSV / Excel exports
 
-## Phase 3 — Image Reupload + Rejection Flow
+Single utility `src/lib/exportCsv.ts` (header-aware, BOM for Excel). Admin "Export" buttons added on:
+- AdminAttendance (month filtered).
+- SalaryManagement (month).
+- AdminLeadsList.
+- QuotationsList.
+- AdminProjects.
+- StaffManagement → "Performance" (leads created, leads converted, projects completed, attendance %, salary YTD) via new RPC `staff_performance(_from, _to)`.
 
-- Same-day, not-yet-rejected event: staff can call RPC `reupload_event_image(_event_id, _new_path, _new_lat, _new_lng)` which marks the old event row `replaced_by_event_id` and inserts a fresh event, preserving history.
-- Admin reject action: marks event `is_rejected=true`, sets `rejection_reason`; trigger sends notification; staff sees a "Reupload" CTA on that day's card.
-- History view (admin): all events for a date including superseded/rejected ones, with reasons and timestamps.
+Excel = same CSV with `.xls` mime — opens cleanly in Excel; avoids extra deps.
 
-## Technical notes
+## 5. Staff monthly attendance dashboard
 
-- Realtime stays off for attendance to avoid extra connections; staff page uses `react-query` with manual invalidation after upload.
-- All new RLS uses `has_role()` (no recursion).
-- All new RPCs are `SECURITY DEFINER` with `SET search_path = public` and explicit role checks in the body.
-- No changes to existing auth, notification, or quotation logic.
+New page `src/pages/MyAttendance.tsx` (staff) + reuse `AdminAttendance.tsx` (admin already has per-staff month view). Calendar grid (date-fns) colored by status, KPI cards (present/half/late/absent/work hours/attendance %). Staff sees only own (RLS already enforces this).
 
-## What I won't include unless you ask
+## 6. Geo-fencing
 
-- Geofencing / "must be at office" check
-- ML-based blur detection (will only do basic min-resolution + min-filesize warning client-side)
-- PDF salary-slip generation (will export CSV; PDF is a follow-up)
-- Bulk admin import of past attendance
+New table `attendance_geofences` (id, name, lat, lng, radius_m, is_active). Admin UI in `SettingsPage.tsx` → "Attendance locations" (lat/lng + radius, with "Use my location" helper).
 
-Reply with **go** to ship Phase 1 first, or tell me which phase to start with / change.
+Server enforcement via new RPC `punch_attendance(kind, lat, lng, accuracy, image_path, reading)`:
+- Validates against active geofences (haversine in SQL); raises if outside all of them.
+- Also enforces no duplicate same-kind punch within 5 minutes.
+- Inserts the `attendance_events` row. Client stops doing direct INSERT — guarantees the rule cannot be bypassed.
+
+If no geofence is configured, fall back to "any location allowed" so existing setups don't break.
+
+## 7. PDF quotation extraction
+
+New edge function `parse-quotation-pdf`:
+- Accepts a `multipart/form-data` PDF upload (max 10 MB).
+- Uses `unpdf` (pure-JS) to extract text.
+- Regex pass: `GSTIN[: ]*([0-9A-Z]{15})`, `Mob[il. ]*\+?91[- ]?(\d{10})`, IFSC `[A-Z]{4}0[A-Z0-9]{6}`, account no, firm name (first non-empty heading line), address (lines until phone/GSTIN).
+- Returns structured JSON.
+
+New page `src/pages/QuotationImport.tsx` (admin): upload PDF, review extracted fields, save into a new `vendor_profiles` table (firm_name, gstin, address, mobile, bank_name, account_no, ifsc, account_type, raw_text). Quotation generator then reads default vendor profile so quotations issued show real GSTIN/address/bank.
+
+## 8. Auto T&C templates
+
+New table `quotation_terms_templates` (id, title, body, section_order, is_default, is_active). Admin CRUD in `SettingsPage.tsx` → "Quotation T&C". `generate-quotation` edge function fetches all `is_active` templates ordered by `section_order` and injects them into the PDF (replaces hard-coded list). Default seed: Warranty, Payment, Delivery, AMC, Legal Jurisdiction (Kota).
+
+## 9. Performance / security
+
+- All new mutations behind RPCs with `SECURITY DEFINER` + explicit role checks.
+- TanStack Query everywhere; no `setInterval` polling.
+- `attendance_events` unique partial index `(staff_user_id, kind, (captured_at AT TIME ZONE 'Asia/Kolkata')::date) WHERE NOT is_rejected` to prevent duplicate punches.
+- Storage: keep `attendance-media` and `project-documents` private; signed URLs only.
+
+---
+
+## Technical notes (SQL highlights)
+
+```sql
+-- geofence check
+CREATE OR REPLACE FUNCTION public.punch_attendance(...)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE inside boolean; ...
+BEGIN
+  SELECT EXISTS(
+    SELECT 1 FROM attendance_geofences g WHERE g.is_active
+    AND 6371000 * acos(
+      cos(radians(g.lat))*cos(radians(_lat))*cos(radians(_lng)-radians(g.lng))
+      + sin(radians(g.lat))*sin(radians(_lat))
+    ) <= g.radius_m
+  ) INTO inside;
+  IF NOT inside AND EXISTS(SELECT 1 FROM attendance_geofences WHERE is_active) THEN
+    RAISE EXCEPTION 'Outside allowed location';
+  END IF;
+  ...
+END $$;
+```
+
+## Out of scope this turn
+- Native push for attendance alerts (already wired via existing `notifications` trigger).
+- Server-side blur ML (client heuristic only).
+- True .xlsx (using CSV-with-xls-mime; user explicitly said "if possible").
+
+---
+
+Ready to execute. Approve and I'll start with the migration, then ship UI + edge functions.
