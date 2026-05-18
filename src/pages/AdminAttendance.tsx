@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { Eye, XCircle } from 'lucide-react';
+import { Eye, XCircle, Download } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 
 const statusColor: Record<string, string> = {
   present: 'bg-success text-success-foreground',
@@ -90,12 +91,29 @@ const AdminAttendance = () => {
     return s;
   }, [rows]);
 
+  const exportRows = () => {
+    if (!rows?.length) return;
+    downloadCsv(`attendance-${month}.csv`, [
+      { header: 'Date', value: (r: any) => format(new Date(r.date), 'yyyy-MM-dd') },
+      { header: 'Staff', value: (r: any) => staffName(r.staff_user_id) },
+      { header: 'Status', value: (r: any) => r.status },
+      { header: 'Check In', value: (r: any) => r.check_in_at ? format(new Date(r.check_in_at), 'HH:mm') : '' },
+      { header: 'Check Out', value: (r: any) => r.check_out_at ? format(new Date(r.check_out_at), 'HH:mm') : '' },
+      { header: 'Worked (min)', value: (r: any) => r.worked_minutes || 0 },
+      { header: 'Overtime (min)', value: (r: any) => r.overtime_minutes || 0 },
+    ], rows);
+  };
+
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Attendance Reports</h1>
-        <p className="text-sm text-muted-foreground mt-1">Daily logs, GPS, bike-meter images and rejections</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Attendance Reports</h1>
+          <p className="text-sm text-muted-foreground mt-1">Daily logs, GPS, bike-meter images and rejections</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={exportRows} disabled={!rows?.length}><Download className="h-4 w-4 mr-1" /> Export CSV</Button>
       </div>
+
 
       <Card className="border-border shadow-card">
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">

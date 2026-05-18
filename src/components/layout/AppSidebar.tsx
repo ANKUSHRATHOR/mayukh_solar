@@ -51,31 +51,36 @@ const adminNav: NavItem[] = [
 const telecallerNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
-  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
+  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
 
 const salesNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'My Leads', icon: Briefcase, path: '/' },
-  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
+  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
 
 const operatorNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Projects', icon: ClipboardCheck, path: '/' },
-  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
+  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
 
 const welderNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Installations', icon: Wrench, path: '/' },
-  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
+  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
 
 const electricianNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Wiring Jobs', icon: Zap, path: '/' },
-  { label: 'My Attendance', icon: CalendarCheck, path: '/attendance' },
+  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
 
 const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {

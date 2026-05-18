@@ -113,6 +113,39 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_geofences: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          latitude: number
+          longitude: number
+          name: string
+          radius_m: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          latitude: number
+          longitude: number
+          name: string
+          radius_m?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          latitude?: number
+          longitude?: number
+          name?: string
+          radius_m?: number
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -537,6 +570,36 @@ export type Database = {
         }
         Relationships: []
       }
+      quotation_terms_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          is_active: boolean
+          section_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          section_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          section_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       quotations: {
         Row: {
           capacity_kw: number
@@ -587,6 +650,39 @@ export type Database = {
           },
         ]
       }
+      salary_advances: {
+        Row: {
+          amount: number
+          created_at: string
+          deducted_run_id: string | null
+          given_by: string | null
+          given_on: string
+          id: string
+          note: string | null
+          staff_user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          deducted_run_id?: string | null
+          given_by?: string | null
+          given_on?: string
+          id?: string
+          note?: string | null
+          staff_user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          deducted_run_id?: string | null
+          given_by?: string | null
+          given_on?: string
+          id?: string
+          note?: string | null
+          staff_user_id?: string
+        }
+        Relationships: []
+      }
       salary_profiles: {
         Row: {
           created_at: string
@@ -623,6 +719,7 @@ export type Database = {
       salary_runs: {
         Row: {
           absent_days: number
+          advance_deduction: number
           deductions: number
           generated_at: string
           generated_by: string | null
@@ -633,12 +730,17 @@ export type Database = {
           month: number
           net: number
           overtime_minutes: number
+          paid_amount: number
+          paid_at: string | null
+          paid_by: string | null
           present_days: number
           staff_user_id: string
+          status: string
           year: number
         }
         Insert: {
           absent_days?: number
+          advance_deduction?: number
           deductions?: number
           generated_at?: string
           generated_by?: string | null
@@ -649,12 +751,17 @@ export type Database = {
           month: number
           net?: number
           overtime_minutes?: number
+          paid_amount?: number
+          paid_at?: string | null
+          paid_by?: string | null
           present_days?: number
           staff_user_id: string
+          status?: string
           year: number
         }
         Update: {
           absent_days?: number
+          advance_deduction?: number
           deductions?: number
           generated_at?: string
           generated_by?: string | null
@@ -665,8 +772,12 @@ export type Database = {
           month?: number
           net?: number
           overtime_minutes?: number
+          paid_amount?: number
+          paid_at?: string | null
+          paid_by?: string | null
           present_days?: number
           staff_user_id?: string
+          status?: string
           year?: number
         }
         Relationships: []
@@ -807,6 +918,60 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_profiles: {
+        Row: {
+          account_no: string | null
+          account_type: string | null
+          address: string | null
+          bank_name: string | null
+          created_at: string
+          email: string | null
+          firm_name: string
+          gstin: string | null
+          id: string
+          ifsc: string | null
+          is_default: boolean
+          license_no: string | null
+          mobile: string | null
+          raw_text: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_no?: string | null
+          account_type?: string | null
+          address?: string | null
+          bank_name?: string | null
+          created_at?: string
+          email?: string | null
+          firm_name: string
+          gstin?: string | null
+          id?: string
+          ifsc?: string | null
+          is_default?: boolean
+          license_no?: string | null
+          mobile?: string | null
+          raw_text?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_no?: string | null
+          account_type?: string | null
+          address?: string | null
+          bank_name?: string | null
+          created_at?: string
+          email?: string | null
+          firm_name?: string
+          gstin?: string | null
+          id?: string
+          ifsc?: string | null
+          is_default?: boolean
+          license_no?: string | null
+          mobile?: string | null
+          raw_text?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -826,6 +991,7 @@ export type Database = {
         Args: { _month: number; _user: string; _year: number }
         Returns: {
           absent_days: number
+          advance_deduction: number
           deductions: number
           generated_at: string
           generated_by: string | null
@@ -836,8 +1002,12 @@ export type Database = {
           month: number
           net: number
           overtime_minutes: number
+          paid_amount: number
+          paid_at: string | null
+          paid_by: string | null
           present_days: number
           staff_user_id: string
+          status: string
           year: number
         }
         SetofOptions: {
@@ -881,6 +1051,51 @@ export type Database = {
         }
         Returns: boolean
       }
+      log_user_event: {
+        Args: { _action: string; _meta?: Json }
+        Returns: undefined
+      }
+      mark_salary_paid: {
+        Args: { _amount: number; _run_id: string }
+        Returns: {
+          absent_days: number
+          advance_deduction: number
+          deductions: number
+          generated_at: string
+          generated_by: string | null
+          gross: number
+          half_days: number
+          id: string
+          late_days: number
+          month: number
+          net: number
+          overtime_minutes: number
+          paid_amount: number
+          paid_at: string | null
+          paid_by: string | null
+          present_days: number
+          staff_user_id: string
+          status: string
+          year: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "salary_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      punch_attendance: {
+        Args: {
+          _accuracy?: number
+          _image_path?: string
+          _kind: string
+          _lat: number
+          _lng: number
+          _reading?: number
+        }
+        Returns: string
+      }
       quotation_totals: {
         Args: never
         Returns: {
@@ -899,6 +1114,20 @@ export type Database = {
           _reading?: number
         }
         Returns: string
+      }
+      staff_performance: {
+        Args: { _from: string; _to: string }
+        Returns: {
+          absent_days: number
+          attendance_pct: number
+          full_name: string
+          leads_assigned: number
+          leads_created: number
+          present_days: number
+          projects_completed: number
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }[]
       }
     }
     Enums: {
