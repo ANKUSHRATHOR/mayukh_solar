@@ -66,8 +66,8 @@ Deno.serve(async (req) => {
     const baseAmount = Number(project.final_amount);
     const discount = Number(project.discount || 0);
     const subtotal = baseAmount - discount;
-    // GST 18% computed by extracting from inclusive total
-    const gstAmount = Math.round((subtotal * 18) / 108.9);
+    // GST 8.9% computed by extracting from inclusive total
+    const gstAmount = Math.round((subtotal * 8.9) / 108.9);
     const netCost = subtotal - gstAmount;
     const total = subtotal;
     const inst1 = Math.round(total * 0.3);
