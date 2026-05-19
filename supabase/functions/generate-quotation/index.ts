@@ -10,8 +10,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const esc = (v: unknown) =>
-  String(v ?? "").replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!),
+  String(v ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
 
 Deno.serve(async (req) => {
@@ -21,7 +22,8 @@ Deno.serve(async (req) => {
     const { projectId } = await req.json();
     if (!projectId) {
       return new Response(JSON.stringify({ error: "projectId required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -31,21 +33,32 @@ Deno.serve(async (req) => {
       const sbAuth = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: { user } } = await sbAuth.auth.getUser();
+      const {
+        data: { user },
+      } = await sbAuth.auth.getUser();
       userId = user?.id ?? null;
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const [{ data: project, error: pErr }, { data: vendor }, { data: terms }] = await Promise.all([
-      supabase.from("projects").select("*, leads(customer_name, mobile, address, village_city, district, state)").eq("id", projectId).single(),
+      supabase
+        .from("projects")
+        .select("*, leads(customer_name, mobile, address, village_city, district, state)")
+        .eq("id", projectId)
+        .single(),
       supabase.from("vendor_profiles").select("*").eq("is_default", true).maybeSingle(),
-      supabase.from("quotation_terms_templates").select("title, body, section_order").eq("is_active", true).order("section_order", { ascending: true }),
+      supabase
+        .from("quotation_terms_templates")
+        .select("title, body, section_order")
+        .eq("is_active", true)
+        .order("section_order", { ascending: true }),
     ]);
 
     if (pErr || !project) {
       return new Response(JSON.stringify({ error: "Project not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -54,7 +67,7 @@ Deno.serve(async (req) => {
     const discount = Number(project.discount || 0);
     const subtotal = baseAmount - discount;
     // GST 18% computed by extracting from inclusive total
-    const gstAmount = Math.round((subtotal * 18) / 118);
+    const gstAmount = Math.round((subtotal * 18) / 108.9);
     const netCost = subtotal - gstAmount;
     const total = subtotal;
     const inst1 = Math.round(total * 0.3);
@@ -63,7 +76,9 @@ Deno.serve(async (req) => {
     const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
     const structureLabel: Record<string, string> = {
-      rcc_roof: "RCC Roof", tin_shed_roof: "Tin Shed Roof", ground_mount: "Ground Mount",
+      rcc_roof: "RCC Roof",
+      tin_shed_roof: "Tin Shed Roof",
+      ground_mount: "Ground Mount",
     };
 
     const { data: qtNumData } = await supabase.rpc("generate_quotation_number");
@@ -86,12 +101,23 @@ Deno.serve(async (req) => {
 
     const v = vendor || {
       firm_name: "V R ENTERPRISES",
-      gstin: "", mobile: "", email: "", address: "",
-      bank_name: "", account_no: "", ifsc: "", account_type: "",
+      gstin: "",
+      mobile: "",
+      email: "",
+      address: "",
+      bank_name: "",
+      account_no: "",
+      ifsc: "",
+      account_type: "",
     };
 
     const termsHtml = (terms ?? []).length
-      ? (terms ?? []).map((t: any) => `<div class="tc-block"><div class="tc-title">${esc(t.title)}</div><div class="tc-body">${esc(t.body).replace(/\n/g, "<br/>")}</div></div>`).join("")
+      ? (terms ?? [])
+          .map(
+            (t: any) =>
+              `<div class="tc-block"><div class="tc-title">${esc(t.title)}</div><div class="tc-body">${esc(t.body).replace(/\n/g, "<br/>")}</div></div>`,
+          )
+          .join("")
       : `<div class="tc-block"><div class="tc-body">Standard terms apply.</div></div>`;
 
     const html = `<!DOCTYPE html>
@@ -171,7 +197,9 @@ Deno.serve(async (req) => {
     </table>
   </div>
 
-  ${v.bank_name || v.account_no ? `
+  ${
+    v.bank_name || v.account_no
+      ? `
   <div class="section">
     <div class="section-title">Bank Details</div>
     <table>
@@ -180,7 +208,9 @@ Deno.serve(async (req) => {
       ${v.ifsc ? `<tr><td>IFSC</td><td>${esc(v.ifsc)}</td></tr>` : ""}
       ${v.account_type ? `<tr><td>Type</td><td>${esc(v.account_type)}</td></tr>` : ""}
     </table>
-  </div>` : ""}
+  </div>`
+      : ""
+  }
 
   <div class="section">
     <div class="section-title">Terms &amp; Conditions</div>
@@ -193,13 +223,17 @@ Deno.serve(async (req) => {
   </div>
 </body></html>`;
 
-    return new Response(JSON.stringify({ html, project_code: project.project_code, quotation_number: quotationNumber }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ html, project_code: project.project_code, quotation_number: quotationNumber }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to generate quotation";
     return new Response(JSON.stringify({ error: message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
