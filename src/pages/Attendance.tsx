@@ -138,7 +138,7 @@ const Attendance = () => {
 
   const submitPunch = async () => {
     if (!activeKind || !staff?.user_id) return;
-    if (!coords) { toast({ title: 'Capture location first', variant: 'destructive' }); return; }
+    if (requiresLocation && !coords) { toast({ title: 'Capture location first', variant: 'destructive' }); return; }
     if (requiresPhoto && !imageFile) { toast({ title: 'Bike meter photo is required', variant: 'destructive' }); return; }
 
     setBusy(true);
@@ -148,16 +148,16 @@ const Attendance = () => {
         setPhase('Uploading image...'); setProgress(10);
         const path = `${staff.user_id}/${today}/${crypto.randomUUID()}.jpg`;
         const { error: upErr } = await supabase.storage.from('attendance-media')
-          .upload(path, imageFile, { contentType: 'image/jpeg', upsert: false });
+          .upload(path, imageFile, { contentType: 'image/jpeg', upsert: false, cacheControl: '3600' });
         if (upErr) throw upErr;
         imagePath = path; setProgress(70);
       }
       setPhase('Saving punch...'); setProgress(85);
       const { error } = await supabase.rpc('punch_attendance' as any, {
         _kind: activeKind,
-        _lat: coords.lat,
-        _lng: coords.lng,
-        _accuracy: coords.acc,
+        _lat: coords?.lat ?? null,
+        _lng: coords?.lng ?? null,
+        _accuracy: coords?.acc ?? null,
         _image_path: imagePath,
         _reading: reading ? Number(reading) : null,
       });
