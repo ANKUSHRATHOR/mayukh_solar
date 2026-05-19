@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Search, MapPin, PhoneCall, UserPlus as AssignIcon, User, Zap
+  Search, MapPin, PhoneCall, UserPlus as AssignIcon, User, Zap, Download
 } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 import type { Database } from '@/integrations/supabase/types';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -94,9 +95,24 @@ const AdminLeadsList = () => {
           <h1 className="text-2xl font-bold text-foreground">All Leads</h1>
           <p className="text-muted-foreground text-sm mt-1">{leads.length} total leads</p>
         </div>
-        <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
-          <PhoneCall className="mr-2 h-4 w-4" /> Create Lead
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => downloadCsv('leads.csv', [
+            { header: 'Created', value: (l: any) => new Date(l.created_at).toLocaleString() },
+            { header: 'Customer', value: (l: any) => l.customer_name },
+            { header: 'Mobile', value: (l: any) => l.mobile },
+            { header: 'City', value: (l: any) => l.village_city },
+            { header: 'District', value: (l: any) => l.district },
+            { header: 'State', value: (l: any) => l.state },
+            { header: 'kW Interest', value: (l: any) => l.kw_interest ?? '' },
+            { header: 'Status', value: (l: any) => l.status },
+            { header: 'Source', value: (l: any) => l.source },
+            { header: 'Created By', value: (l: any) => staffName(l.created_by_user_id) },
+            { header: 'Assigned To', value: (l: any) => assignedStaffName(l.assigned_to_user_id) || '' },
+          ], filtered)} disabled={!leads.length}><Download className="mr-2 h-4 w-4" /> Export</Button>
+          <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
+            <PhoneCall className="mr-2 h-4 w-4" /> Create Lead
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
