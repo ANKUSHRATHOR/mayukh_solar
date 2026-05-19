@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText, User, MapPin, Zap, IndianRupee, Hash } from 'lucide-react';
+import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText, User, MapPin, Zap, IndianRupee, Hash, Download } from 'lucide-react';
 import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
+import { downloadCsv } from '@/lib/exportCsv';
 import type { Database } from '@/integrations/supabase/types';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
@@ -189,9 +190,26 @@ const AdminProjects = () => {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">All Projects</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage all projects across every stage</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">All Projects</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage all projects across every stage</p>
+        </div>
+        <Button variant="outline" onClick={() => downloadCsv('projects.csv', [
+          { header: 'Created', value: (p: any) => new Date(p.created_at).toLocaleString() },
+          { header: 'Project Code', value: (p: any) => p.project_code },
+          { header: 'Customer', value: (p: any) => p.leads?.customer_name || '' },
+          { header: 'Mobile', value: (p: any) => p.leads?.mobile || '' },
+          { header: 'District', value: (p: any) => p.leads?.district || '' },
+          { header: 'kW', value: (p: any) => p.capacity_kw },
+          { header: 'Final ₹', value: (p: any) => p.final_amount },
+          { header: 'Payment', value: (p: any) => p.payment_type },
+          { header: 'Status', value: (p: any) => p.status },
+          { header: 'Sales Person', value: (p: any) => staffName(p.assigned_sales_person_id || p.created_by_user_id) },
+          { header: 'K Number', value: (p: any) => p.k_number || '' },
+        ], filtered)} disabled={!projects.length}>
+          <Download className="h-4 w-4 mr-1" /> Export
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

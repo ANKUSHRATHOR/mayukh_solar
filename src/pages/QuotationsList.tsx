@@ -4,9 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import StatCard from '@/components/dashboard/StatCard';
-import { Search, FileText, User, Phone, MapPin, Calendar, IndianRupee, Zap, Loader2 } from 'lucide-react';
+import { Search, FileText, User, Phone, MapPin, Calendar, IndianRupee, Zap, Loader2, Download } from 'lucide-react';
 import { format } from 'date-fns';
+import { downloadCsv } from '@/lib/exportCsv';
 
 const QuotationsList = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,14 +64,28 @@ const QuotationsList = () => {
           <StatCard title="System Capacity" value={`${totalCapacity.toFixed(1)} kW`} icon={Zap} change="" changeType="neutral" />
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by QT number, customer name, mobile, project code..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by QT number, customer name, mobile, project code..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button variant="outline" onClick={() => downloadCsv('quotations.csv', [
+            { header: 'Date', value: (q: any) => new Date(q.created_at).toLocaleString() },
+            { header: 'QT Number', value: (q: any) => q.quotation_number },
+            { header: 'Project Code', value: (q: any) => q.project_code },
+            { header: 'Customer', value: (q: any) => q.customer_name },
+            { header: 'Mobile', value: (q: any) => q.customer_mobile || '' },
+            { header: 'Address', value: (q: any) => q.customer_address || '' },
+            { header: 'Capacity kW', value: (q: any) => q.capacity_kw },
+            { header: 'Total (₹)', value: (q: any) => q.total_amount },
+          ], filtered || [])} disabled={!filtered?.length}>
+            <Download className="h-4 w-4 mr-1" /> Export
+          </Button>
         </div>
 
         {isLoading ? (
