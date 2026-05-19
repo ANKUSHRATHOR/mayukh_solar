@@ -212,50 +212,53 @@ const Attendance = () => {
                 <Button variant="ghost" size="sm" onClick={cancelPunch} disabled={busy}>Cancel</Button>
               </div>
 
-              <div className="space-y-2">
-                <Label>Live Location <span className="text-destructive">*</span></Label>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={captureLocation} disabled={locating || busy}>
-                    <MapPin className="h-4 w-4 mr-1" /> {locating ? 'Getting...' : (coords ? 'Refresh' : 'Get')}
-                  </Button>
-                  {coords ? (
-                    <span className="text-xs text-muted-foreground">{coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc)}m)</span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">Not captured yet</span>
+              {requiresLocation && (
+                <div className="space-y-2">
+                  <Label>Live Location <span className="text-destructive">*</span></Label>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={captureLocation} disabled={locating || busy}>
+                      <MapPin className="h-4 w-4 mr-1" /> {locating ? 'Getting...' : (coords ? 'Refresh' : 'Get')}
+                    </Button>
+                    {coords ? (
+                      <span className="text-xs text-muted-foreground">{coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc)}m)</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Not captured yet</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {requiresPhoto && (
+                <div className="space-y-2">
+                  <Label>Bike Meter Photo <span className="text-destructive">*</span></Label>
+                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChosen} />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={busy}>
+                      <Camera className="h-4 w-4 mr-1" /> {imagePreview ? 'Retake' : 'Open camera'}
+                    </Button>
+                    {imgInfo && (
+                      <>
+                        <span className="text-xs text-muted-foreground">{imgInfo.kb} KB</span>
+                        {imgInfo.blur < 25 ? (
+                          <span className="text-xs text-warning flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Looks blurry</span>
+                        ) : (
+                          <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sharp</span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {imagePreview && (
+                    <img src={imagePreview} alt="Bike meter preview" className="mt-2 max-h-56 rounded-md border border-border object-contain" />
                   )}
                 </div>
-              </div>
+              )}
 
-              <div className="space-y-2">
-                <Label>
-                  Bike Meter Photo {requiresPhoto && <span className="text-destructive">*</span>}
-                  {!requiresPhoto && <span className="text-muted-foreground"> (optional)</span>}
-                </Label>
-                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChosen} />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={busy}>
-                    <Camera className="h-4 w-4 mr-1" /> {imagePreview ? 'Retake' : 'Open camera'}
-                  </Button>
-                  {imgInfo && (
-                    <>
-                      <span className="text-xs text-muted-foreground">{imgInfo.kb} KB</span>
-                      {imgInfo.blur < 25 ? (
-                        <span className="text-xs text-warning flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Looks blurry</span>
-                      ) : (
-                        <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sharp</span>
-                      )}
-                    </>
-                  )}
+              {requiresPhoto && (
+                <div className="space-y-2">
+                  <Label>Odometer reading (km) <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input type="number" inputMode="decimal" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="e.g. 12450" />
                 </div>
-                {imagePreview && (
-                  <img src={imagePreview} alt="Bike meter preview" className="mt-2 max-h-56 rounded-md border border-border object-contain" />
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Odometer reading (km) <span className="text-muted-foreground">(optional)</span></Label>
-                <Input type="number" inputMode="decimal" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="e.g. 12450" />
-              </div>
+              )}
 
               {busy && (
                 <div className="space-y-1">
@@ -264,7 +267,11 @@ const Attendance = () => {
                 </div>
               )}
 
-              <Button onClick={submitPunch} disabled={busy || !coords || (requiresPhoto && !imageFile)} className="w-full gradient-primary text-primary-foreground">
+              <Button
+                onClick={submitPunch}
+                disabled={busy || (requiresLocation && !coords) || (requiresPhoto && !imageFile)}
+                className="w-full gradient-primary text-primary-foreground"
+              >
                 {busy ? phase || 'Saving...' : 'Submit'}
               </Button>
             </div>
