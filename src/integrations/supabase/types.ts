@@ -1090,8 +1090,8 @@ export type Database = {
           _accuracy?: number
           _image_path?: string
           _kind: string
-          _lat: number
-          _lng: number
+          _lat?: number
+          _lng?: number
           _reading?: number
         }
         Returns: string
