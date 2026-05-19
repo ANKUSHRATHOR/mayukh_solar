@@ -27,6 +27,9 @@ import Attendance from "./pages/Attendance.tsx";
 import AdminAttendance from "./pages/AdminAttendance.tsx";
 import SalaryManagement from "./pages/SalaryManagement.tsx";
 import MyAttendance from "./pages/MyAttendance.tsx";
+import AdminSettings from "./pages/AdminSettings.tsx";
+import QuotationImport from "./pages/QuotationImport.tsx";
+import StaffPerformance from "./pages/StaffPerformance.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
@@ -188,6 +191,9 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
+            <Route path="/admin/quotation-import" element={<ProtectedRoute allowedRoles={['admin']}><QuotationImport /></ProtectedRoute>} />
+            <Route path="/admin/performance" element={<ProtectedRoute allowedRoles={['admin']}><StaffPerformance /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

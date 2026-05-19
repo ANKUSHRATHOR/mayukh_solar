@@ -41,10 +41,13 @@ const adminNav: NavItem[] = [
   { label: 'All Projects', icon: Briefcase, path: '/admin/projects' },
   { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
   { label: 'Staff Management', icon: Users, path: '/staff' },
+  { label: 'Performance', icon: ShieldCheck, path: '/admin/performance' },
   { label: 'Attendance', icon: CalendarCheck, path: '/admin/attendance' },
   { label: 'Salary', icon: Wallet, path: '/admin/salary' },
   { label: 'Quotations', icon: FileText, path: '/quotations' },
+  { label: 'Import Quote PDF', icon: FileText, path: '/admin/quotation-import' },
   { label: 'Activity Logs', icon: ShieldCheck, path: '/activity-logs' },
+  { label: 'Admin Settings', icon: Settings, path: '/admin/settings' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
