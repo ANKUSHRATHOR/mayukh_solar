@@ -43,7 +43,9 @@ const Attendance = () => {
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState<string>('');
 
-  const requiresPhoto = role === 'sales_person';
+  const isSales = role === 'sales_person';
+  const requiresPhoto = isSales;
+  const requiresLocation = isSales;
   const today = format(new Date(), 'yyyy-MM-dd');
 
   const { data: todayAttendance } = useQuery({
