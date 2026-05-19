@@ -127,7 +127,7 @@ const Attendance = () => {
     setActiveKind(kind);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
-    captureLocation();
+    if (requiresLocation) captureLocation();
   };
 
   const cancelPunch = () => {
