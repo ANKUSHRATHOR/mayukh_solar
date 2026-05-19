@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
     <table>
       <tr><th>Description</th><th class="r">Amount (₹)</th></tr>
       <tr><td>System Cost (excl. GST)</td><td class="r">${netCost.toLocaleString("en-IN")}</td></tr>
-      <tr><td>GST @ 18% (inclusive)</td><td class="r">${gstAmount.toLocaleString("en-IN")}</td></tr>
+      <tr><td>GST @ 8.9% (inclusive)</td><td class="r">${gstAmount.toLocaleString("en-IN")}</td></tr>
       ${discount > 0 ? `<tr><td>Discount</td><td class="r">-${discount.toLocaleString("en-IN")}</td></tr>` : ""}
       <tr class="total-row"><td>Grand Total (Incl. GST)</td><td class="r">₹${total.toLocaleString("en-IN")}</td></tr>
     </table>
