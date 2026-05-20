@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import StatCard from '@/components/dashboard/StatCard';
-import { Search, FileText, User, Phone, MapPin, Calendar, IndianRupee, Zap, Loader2, Download } from 'lucide-react';
+import { Search, FileText, User, Phone, MapPin, Calendar, IndianRupee, Zap, Loader2, Download, Printer, Share2, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { downloadCsv } from '@/lib/exportCsv';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 
 const QuotationsList = () => {
   const [searchTerm, setSearchTerm] = useState('');
