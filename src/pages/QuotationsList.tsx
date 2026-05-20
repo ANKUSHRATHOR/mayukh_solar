@@ -6,12 +6,62 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import StatCard from '@/components/dashboard/StatCard';
-import { Search, FileText, User, Phone, MapPin, Calendar, IndianRupee, Zap, Loader2, Download } from 'lucide-react';
+import { Search, FileText, User, Phone, MapPin, Calendar, IndianRupee, Zap, Loader2, Download, Printer, Share2, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { downloadCsv } from '@/lib/exportCsv';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 
 const QuotationsList = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [openQ, setOpenQ] = useState<any | null>(null);
+  const [html, setHtml] = useState<string>('');
+  const [loadingHtml, setLoadingHtml] = useState(false);
+  const { toast } = useToast();
+
+  const openQuotation = async (q: any) => {
+    setOpenQ(q); setHtml(''); setLoadingHtml(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-quotation', { body: { projectId: q.project_id } });
+      if (error) throw error;
+      if (!data?.html) throw new Error('No quotation generated');
+      setHtml(data.html);
+    } catch (e: any) {
+      toast({ title: 'Failed to open quotation', description: e.message, variant: 'destructive' });
+      setOpenQ(null);
+    } finally { setLoadingHtml(false); }
+  };
+
+  const openInNewTab = () => {
+    if (!html) return;
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
+  const printQuotation = () => {
+    const iframe = document.getElementById('quotation-frame') as HTMLIFrameElement | null;
+    iframe?.contentWindow?.focus();
+    iframe?.contentWindow?.print();
+  };
+
+  const downloadHtml = () => {
+    if (!openQ) return;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${openQ.quotation_number || 'quotation'}.html`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  const shareQuotation = async () => {
+    if (!openQ) return;
+    const text = `Quotation ${openQ.quotation_number} for ${openQ.customer_name} — ₹${Number(openQ.total_amount).toLocaleString('en-IN')}`;
+    try {
+      if (navigator.share) await navigator.share({ title: openQ.quotation_number, text });
+      else { await navigator.clipboard.writeText(text); toast({ title: 'Copied to clipboard' }); }
+    } catch { /* user cancelled */ }
+  };
+
 
   const { data: quotations, isLoading } = useQuery({
     queryKey: ['quotations'],
@@ -95,7 +145,14 @@ const QuotationsList = () => {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((q) => (
-              <Card key={q.id} className="overflow-hidden border-border bg-card shadow-card transition-shadow hover:shadow-elevated">
+              <Card
+                key={q.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openQuotation(q)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openQuotation(q); } }}
+                className="cursor-pointer overflow-hidden border-border bg-card shadow-card transition-shadow hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary"
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-3">
                     <CardTitle className="min-w-0 text-base flex items-center gap-2">
@@ -125,22 +182,44 @@ const QuotationsList = () => {
                   <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">
-                        {format(new Date(q.created_at), 'dd MMM yyyy')}
-                      </span>
+                      <span className="text-muted-foreground">{format(new Date(q.created_at), 'dd MMM yyyy')}</span>
                     </div>
-                    <span className="font-semibold text-primary">
-                      ₹{Number(q.total_amount ?? 0).toLocaleString('en-IN')}
-                    </span>
+                    <span className="font-semibold text-primary">₹{Number(q.total_amount ?? 0).toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {q.capacity_kw ?? '—'} kW System
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span>{q.capacity_kw ?? '—'} kW System</span>
+                    <span className="inline-flex items-center gap-1 text-primary"><ExternalLink className="h-3 w-3" /> Open</span>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         )}
+
+        <Dialog open={!!openQ} onOpenChange={(o) => { if (!o) { setOpenQ(null); setHtml(''); } }}>
+          <DialogContent className="max-w-5xl w-[95vw] h-[90vh] p-0 flex flex-col">
+            <DialogHeader className="px-4 py-3 border-b border-border">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <DialogTitle className="text-base truncate">
+                  {openQ?.quotation_number} — {openQ?.customer_name}
+                </DialogTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" onClick={openInNewTab} disabled={!html}><ExternalLink className="h-4 w-4 mr-1" />Open</Button>
+                  <Button size="sm" variant="outline" onClick={printQuotation} disabled={!html}><Printer className="h-4 w-4 mr-1" />Print / Save PDF</Button>
+                  <Button size="sm" variant="outline" onClick={downloadHtml} disabled={!html}><Download className="h-4 w-4 mr-1" />Download</Button>
+                  <Button size="sm" variant="outline" onClick={shareQuotation}><Share2 className="h-4 w-4 mr-1" />Share</Button>
+                </div>
+              </div>
+            </DialogHeader>
+            <div className="flex-1 bg-muted overflow-hidden">
+              {loadingHtml ? (
+                <div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : html ? (
+                <iframe id="quotation-frame" title="Quotation" srcDoc={html} className="w-full h-full bg-white" />
+              ) : null}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
   );
 };
