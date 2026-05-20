@@ -14,6 +14,54 @@ import { useToast } from '@/hooks/use-toast';
 
 const QuotationsList = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [openQ, setOpenQ] = useState<any | null>(null);
+  const [html, setHtml] = useState<string>('');
+  const [loadingHtml, setLoadingHtml] = useState(false);
+  const { toast } = useToast();
+
+  const openQuotation = async (q: any) => {
+    setOpenQ(q); setHtml(''); setLoadingHtml(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-quotation', { body: { projectId: q.project_id } });
+      if (error) throw error;
+      if (!data?.html) throw new Error('No quotation generated');
+      setHtml(data.html);
+    } catch (e: any) {
+      toast({ title: 'Failed to open quotation', description: e.message, variant: 'destructive' });
+      setOpenQ(null);
+    } finally { setLoadingHtml(false); }
+  };
+
+  const openInNewTab = () => {
+    if (!html) return;
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
+  const printQuotation = () => {
+    const iframe = document.getElementById('quotation-frame') as HTMLIFrameElement | null;
+    iframe?.contentWindow?.focus();
+    iframe?.contentWindow?.print();
+  };
+
+  const downloadHtml = () => {
+    if (!openQ) return;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${openQ.quotation_number || 'quotation'}.html`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  const shareQuotation = async () => {
+    if (!openQ) return;
+    const text = `Quotation ${openQ.quotation_number} for ${openQ.customer_name} — ₹${Number(openQ.total_amount).toLocaleString('en-IN')}`;
+    try {
+      if (navigator.share) await navigator.share({ title: openQ.quotation_number, text });
+      else { await navigator.clipboard.writeText(text); toast({ title: 'Copied to clipboard' }); }
+    } catch { /* user cancelled */ }
+  };
+
 
   const { data: quotations, isLoading } = useQuery({
     queryKey: ['quotations'],
