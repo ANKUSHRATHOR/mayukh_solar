@@ -448,6 +448,30 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_logs: {
+        Row: {
+          created_at: string
+          id: string
+          meta: Json | null
+          reset_by_user_id: string
+          staff_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          reset_by_user_id: string
+          staff_user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          reset_by_user_id?: string
+          staff_user_id?: string
+        }
+        Relationships: []
+      }
       project_assignments: {
         Row: {
           changed_by: string | null
@@ -993,6 +1017,9 @@ export type Database = {
           mobile: string
           must_change_password: boolean
           pin_expiry: string | null
+          temp_password_issued_at: string | null
+          temp_password_issued_by: string | null
+          temp_password_plain: string | null
           temp_pin_hash: string | null
           updated_at: string
           user_id: string
@@ -1007,6 +1034,9 @@ export type Database = {
           mobile: string
           must_change_password?: boolean
           pin_expiry?: string | null
+          temp_password_issued_at?: string | null
+          temp_password_issued_by?: string | null
+          temp_password_plain?: string | null
           temp_pin_hash?: string | null
           updated_at?: string
           user_id: string
@@ -1021,11 +1051,83 @@ export type Database = {
           mobile?: string
           must_change_password?: boolean
           pin_expiry?: string | null
+          temp_password_issued_at?: string | null
+          temp_password_issued_by?: string | null
+          temp_password_plain?: string | null
           temp_pin_hash?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: []
+      }
+      tasks: {
+        Row: {
+          assigned_by_user_id: string
+          assigned_to_user_id: string
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          lead_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          project_id: string | null
+          proof_image_path: string | null
+          staff_notes: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_by_user_id: string
+          assigned_to_user_id: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          lead_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
+          proof_image_path?: string | null
+          staff_notes?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_by_user_id?: string
+          assigned_to_user_id?: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          lead_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
+          proof_image_path?: string | null
+          staff_notes?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -1383,6 +1485,8 @@ export type Database = {
         | "project_completed"
       punch_out_request_status: "pending" | "approved" | "rejected" | "consumed"
       structure_type: "rcc_roof" | "tin_shed_roof" | "ground_mount"
+      task_priority: "low" | "medium" | "high" | "urgent"
+      task_status: "pending" | "in_progress" | "completed"
       visit_outcome:
         | "interested"
         | "unavailable"
@@ -1581,6 +1685,8 @@ export const Constants = {
       ],
       punch_out_request_status: ["pending", "approved", "rejected", "consumed"],
       structure_type: ["rcc_roof", "tin_shed_roof", "ground_mount"],
+      task_priority: ["low", "medium", "high", "urgent"],
+      task_status: ["pending", "in_progress", "completed"],
       visit_outcome: [
         "interested",
         "unavailable",
