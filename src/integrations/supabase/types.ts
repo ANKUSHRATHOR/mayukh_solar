@@ -226,6 +226,66 @@ export type Database = {
           },
         ]
       }
+      field_visits: {
+        Row: {
+          accuracy_m: number | null
+          bike_meter_image_path: string | null
+          bike_meter_reading: number | null
+          created_at: string
+          id: string
+          latitude: number
+          lead_id: string | null
+          longitude: number
+          notes: string | null
+          outcome: Database["public"]["Enums"]["visit_outcome"]
+          project_id: string | null
+          staff_user_id: string
+        }
+        Insert: {
+          accuracy_m?: number | null
+          bike_meter_image_path?: string | null
+          bike_meter_reading?: number | null
+          created_at?: string
+          id?: string
+          latitude: number
+          lead_id?: string | null
+          longitude: number
+          notes?: string | null
+          outcome?: Database["public"]["Enums"]["visit_outcome"]
+          project_id?: string | null
+          staff_user_id: string
+        }
+        Update: {
+          accuracy_m?: number | null
+          bike_meter_image_path?: string | null
+          bike_meter_reading?: number | null
+          created_at?: string
+          id?: string
+          latitude?: number
+          lead_id?: string | null
+          longitude?: number
+          notes?: string | null
+          outcome?: Database["public"]["Enums"]["visit_outcome"]
+          project_id?: string | null
+          staff_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_visits_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_visits_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_assignments: {
         Row: {
           changed_by: string | null
@@ -435,6 +495,10 @@ export type Database = {
           documents_submitted_by_sales: boolean
           expected_install_date: string | null
           final_amount: number
+          home_latitude: number | null
+          home_location_saved_at: string | null
+          home_location_saved_by: string | null
+          home_longitude: number | null
           id: string
           inspection_date: string | null
           inspection_notes: string | null
@@ -471,6 +535,10 @@ export type Database = {
           documents_submitted_by_sales?: boolean
           expected_install_date?: string | null
           final_amount: number
+          home_latitude?: number | null
+          home_location_saved_at?: string | null
+          home_location_saved_by?: string | null
+          home_longitude?: number | null
           id?: string
           inspection_date?: string | null
           inspection_notes?: string | null
@@ -507,6 +575,10 @@ export type Database = {
           documents_submitted_by_sales?: boolean
           expected_install_date?: string | null
           final_amount?: number
+          home_latitude?: number | null
+          home_location_saved_at?: string | null
+          home_location_saved_by?: string | null
+          home_longitude?: number | null
           id?: string
           inspection_date?: string | null
           inspection_notes?: string | null
@@ -1246,6 +1318,14 @@ export type Database = {
         | "net_meter_installed"
         | "project_completed"
       structure_type: "rcc_roof" | "tin_shed_roof" | "ground_mount"
+      visit_outcome:
+        | "interested"
+        | "unavailable"
+        | "docs_pending"
+        | "site_issue"
+        | "payment_discussion"
+        | "bank_followup"
+        | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1435,6 +1515,15 @@ export const Constants = {
         "project_completed",
       ],
       structure_type: ["rcc_roof", "tin_shed_roof", "ground_mount"],
+      visit_outcome: [
+        "interested",
+        "unavailable",
+        "docs_pending",
+        "site_issue",
+        "payment_discussion",
+        "bank_followup",
+        "other",
+      ],
     },
   },
 } as const
