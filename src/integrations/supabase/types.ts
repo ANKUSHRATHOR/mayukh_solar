@@ -602,6 +602,7 @@ export type Database = {
       }
       quotations: {
         Row: {
+          bank_account_id: string | null
           capacity_kw: number
           created_at: string
           created_by_user_id: string
@@ -609,12 +610,15 @@ export type Database = {
           customer_mobile: string | null
           customer_name: string
           id: string
+          payment_schedule: Json | null
           project_code: string
           project_id: string
           quotation_number: string
+          quotation_type: string
           total_amount: number
         }
         Insert: {
+          bank_account_id?: string | null
           capacity_kw: number
           created_at?: string
           created_by_user_id: string
@@ -622,12 +626,15 @@ export type Database = {
           customer_mobile?: string | null
           customer_name: string
           id?: string
+          payment_schedule?: Json | null
           project_code: string
           project_id: string
           quotation_number: string
+          quotation_type?: string
           total_amount: number
         }
         Update: {
+          bank_account_id?: string | null
           capacity_kw?: number
           created_at?: string
           created_by_user_id?: string
@@ -635,12 +642,21 @@ export type Database = {
           customer_mobile?: string | null
           customer_name?: string
           id?: string
+          payment_schedule?: Json | null
           project_code?: string
           project_id?: string
           quotation_number?: string
+          quotation_type?: string
           total_amount?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "quotations_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "quotations_project_id_fkey"
             columns: ["project_id"]
@@ -915,6 +931,48 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      vendor_bank_accounts: {
+        Row: {
+          account_no: string
+          bank_name: string
+          branch_name: string | null
+          created_at: string
+          holder_name: string
+          id: string
+          ifsc: string
+          is_active: boolean
+          is_default: boolean
+          updated_at: string
+          upi_image_url: string | null
+        }
+        Insert: {
+          account_no: string
+          bank_name: string
+          branch_name?: string | null
+          created_at?: string
+          holder_name: string
+          id?: string
+          ifsc: string
+          is_active?: boolean
+          is_default?: boolean
+          updated_at?: string
+          upi_image_url?: string | null
+        }
+        Update: {
+          account_no?: string
+          bank_name?: string
+          branch_name?: string | null
+          created_at?: string
+          holder_name?: string
+          id?: string
+          ifsc?: string
+          is_active?: boolean
+          is_default?: boolean
+          updated_at?: string
+          upi_image_url?: string | null
         }
         Relationships: []
       }

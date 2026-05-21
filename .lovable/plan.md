@@ -1,115 +1,97 @@
-## Scope
+# Implementation Plan
 
-This is a large multi-domain build. I'll deliver it in one migration + a set of focused frontend changes, reusing the existing tables (`attendance`, `attendance_events`, `salary_*`, `audit_logs`, `quotations`).
+This is a large multi-module change. I'll ship it in cohesive phases. Each phase = one migration + matching frontend updates.
 
----
+## Phase 1 — Quotation: roles, type popup (Bank vs Consumer), bank selection
 
-## 1. Attendance image UX (mobile-first)
+**DB (migration)**
+- New table `vendor_bank_accounts` (bank_name, holder_name, account_no, ifsc, branch, upi_image_url, is_default, is_active). Admin RLS + read for staff.
+- Extend `quotations` with: `quotation_type` ('bank' | 'consumer'), `bank_account_id`, `payment_schedule jsonb`.
+- Update RLS on `quotations` so **operators** can also INSERT.
 
-Rebuild capture flow in `src/pages/Attendance.tsx`:
-- Native `<input type="file" accept="image/*" capture="environment">` (works on every Android/iOS without WebRTC quirks).
-- In-browser compression via `browser-image-compression` (max 1600px, ~0.8 quality, target ≤400 KB) — preserves readability of bike meter.
-- Blur detection: Laplacian variance on a downscaled canvas; warn (not block) if score < threshold.
-- Preview card with **Retake** / **Confirm & Upload** buttons.
-- Upload progress using XHR-backed signed-upload (`supabase.storage ... .upload()` with `onUploadProgress`-style chunking via fetch + a manual progress bar tied to compression + upload phases). No page refresh — TanStack mutation only.
+**Edge function `generate-quotation`**
+- Accept `{ projectId, quotationType: 'bank'|'consumer', bankAccountId? }`.
+- If `bank`: schedule = [{stage:'100% Advance', amount:total}].
+- If `consumer`: 30/60/10 schedule.
+- Pull selected bank account; render in PDF (replaces default vendor bank block).
+- Save `quotation_type`, `bank_account_id`, `payment_schedule` on insert.
 
-## 2. Audit log system
+**Frontend**
+- `QuotationButton`: open Dialog → choose Bank/Consumer → if Bank, pick from banks dropdown → generate.
+- Gate the button to roles: `admin | operator | sales_person`.
+- `QuotationsList`: keep Open/Download/Share buttons; ensure Share uses Web Share API (sales).
+- Admin Settings → new "Bank Accounts" tab (CRUD + set default).
 
-Reuse `audit_logs` (already present) + add triggers for the gaps:
-- `audit_lead_insert_update` — captures lead create + edit (diff of changed columns).
-- `audit_document_decision` — captures verify/reject.
-- `audit_attendance_event_change` — captures admin rejections / reuploads.
-- `audit_salary_change` — on `salary_profiles` upsert and `salary_runs` insert.
-- `audit_login` — client-side: on successful login + logout, call `log_user_event(_action, _meta)` RPC that writes to `audit_logs` with `ip`/`user_agent` captured server-side via `current_setting('request.headers')` best-effort + client-sent UA.
-- New admin page `/audit-logs` already exists as `ActivityLogs.tsx` — extend it to show user_name, action, entity, timestamp, device. Admin-only RLS already in place.
+## Phase 2 — Field Visit (sales) + Consumer Home Location
 
-## 3. Salary management upgrades
+**DB**
+- New `field_visits` table: project_id (nullable), lead_id (nullable), staff_user_id, latitude, longitude, accuracy_m, bike_meter_image_path, notes, visit_outcome enum (interested, unavailable, docs_pending, site_issue, payment_discussion, bank_followup, other), created_at. Storage uses existing `attendance-media` bucket.
+- RLS: sales insert/select own; admin/operator full.
+- Extend `projects` with `home_latitude`, `home_longitude`, `home_location_saved_by`, `home_location_saved_at`.
 
-Extend tables (additive):
-- `salary_advances` (staff_user_id, amount, given_on, note, created_by).
-- `salary_runs` add `advance_deduction numeric default 0`, `paid_amount numeric default 0`, `status text default 'pending'` (`pending|partial|paid`), `paid_at`, `paid_by`.
+**Frontend**
+- New `FieldVisit.tsx` page (sales) — capture location + bike meter photo + notes + outcome.
+- In project detail (sales): "Save Consumer Home Location" button → captures current GPS.
+- Admin/Operator project view: show map link (Google Maps) + "Navigate" button.
 
-Update `compute_salary` to subtract outstanding (un-deducted) advances and set status='pending'. Add `mark_salary_paid(_run_id, _amount)` RPC that flips status to `paid`/`partial`.
+## Phase 3 — Special Punch-Out Request (sales)
 
-UI (`SalaryManagement.tsx`): add Advances tab, Mark Paid / Partial buttons, payroll history filter, and CSV export.
+**DB**
+- New `punch_out_requests` table: staff_user_id, latitude, longitude, reason, status enum ('pending','approved','rejected'), reviewed_by, reviewed_at, created_at.
+- RLS: sales insert/select own; admin full.
+- RPC `request_special_punch_out(_lat,_lng,_reason)` → inserts row + notification to all admins.
+- RPC `approve_punch_out_request(_id)` / `reject_punch_out_request(_id,_reason)` — admin only; on approve, allows next punch_attendance to bypass geofence (set short-lived flag in row).
+- Modify `punch_attendance`: for sales, check for an approved unused request in last 30 min; if present, skip geofence and mark request consumed.
 
-## 4. CSV / Excel exports
+**Frontend**
+- In Attendance page (sales): "Request Outside Punch-Out" button when outside geofence.
+- Admin: new panel in AdminAttendance to approve/reject pending requests.
 
-Single utility `src/lib/exportCsv.ts` (header-aware, BOM for Excel). Admin "Export" buttons added on:
-- AdminAttendance (month filtered).
-- SalaryManagement (month).
-- AdminLeadsList.
-- QuotationsList.
-- AdminProjects.
-- StaffManagement → "Performance" (leads created, leads converted, projects completed, attendance %, salary YTD) via new RPC `staff_performance(_from, _to)`.
+## Phase 4 — Task / Job Assignment Module
 
-Excel = same CSV with `.xls` mime — opens cleanly in Excel; avoids extra deps.
+**DB**
+- New `tasks` table: title, description, priority enum ('low','medium','high','urgent'), due_date, status enum ('pending','in_progress','completed'), assigned_to_user_id, assigned_by_user_id, project_id (nullable), lead_id (nullable), proof_image_path, notes, completed_at.
+- RLS: admin/operator insert+update; assignee select+update (own status/proof/notes).
 
-## 5. Staff monthly attendance dashboard
+**Frontend**
+- `Tasks.tsx` (sales view — assigned to me).
+- `TaskAssignment.tsx` (admin/operator — create + list).
+- Sidebar entry for both.
 
-New page `src/pages/MyAttendance.tsx` (staff) + reuse `AdminAttendance.tsx` (admin already has per-staff month view). Calendar grid (date-fns) colored by status, KPI cards (present/half/late/absent/work hours/attendance %). Staff sees only own (RLS already enforces this).
+## Phase 5 — Password Reset & Recovery
 
-## 6. Geo-fencing
+**DB**
+- Extend `staff` with `temp_password_plain` (text, admin-only via RLS — masked), `temp_password_issued_at`, `temp_password_issued_by`.
+- Add `password_reset_logs` table.
+- RLS on `staff.temp_password_plain`: only admin can SELECT.
 
-New table `attendance_geofences` (id, name, lat, lng, radius_m, is_active). Admin UI in `SettingsPage.tsx` → "Attendance locations" (lat/lng + radius, with "Use my location" helper).
+**Edge function `reset-staff-password`** (admin)
+- Generate strong 10-char temp password.
+- Use service role `admin.updateUserById` to set password.
+- Set `must_change_password=true`, store temp password + log.
+- Return temp password to admin in response.
 
-Server enforcement via new RPC `punch_attendance(kind, lat, lng, accuracy, image_path, reading)`:
-- Validates against active geofences (haversine in SQL); raises if outside all of them.
-- Also enforces no duplicate same-kind punch within 5 minutes.
-- Inserts the `attendance_events` row. Client stops doing direct INSERT — guarantees the rule cannot be bypassed.
+**Frontend**
+- StaffManagement → "Reset Password" button → shows generated temp password modal (copy button).
+- "View Last Temp Password" (admin) on staff row.
+- Reset log history page.
 
-If no geofence is configured, fall back to "any location allowed" so existing setups don't break.
+## Phase 6 — Attendance Punch UI Fix
 
-## 7. PDF quotation extraction
-
-New edge function `parse-quotation-pdf`:
-- Accepts a `multipart/form-data` PDF upload (max 10 MB).
-- Uses `unpdf` (pure-JS) to extract text.
-- Regex pass: `GSTIN[: ]*([0-9A-Z]{15})`, `Mob[il. ]*\+?91[- ]?(\d{10})`, IFSC `[A-Z]{4}0[A-Z0-9]{6}`, account no, firm name (first non-empty heading line), address (lines until phone/GSTIN).
-- Returns structured JSON.
-
-New page `src/pages/QuotationImport.tsx` (admin): upload PDF, review extracted fields, save into a new `vendor_profiles` table (firm_name, gstin, address, mobile, bank_name, account_no, ifsc, account_type, raw_text). Quotation generator then reads default vendor profile so quotations issued show real GSTIN/address/bank.
-
-## 8. Auto T&C templates
-
-New table `quotation_terms_templates` (id, title, body, section_order, is_default, is_active). Admin CRUD in `SettingsPage.tsx` → "Quotation T&C". `generate-quotation` edge function fetches all `is_active` templates ordered by `section_order` and injects them into the PDF (replaces hard-coded list). Default seed: Warranty, Payment, Delivery, AMC, Legal Jurisdiction (Kota).
-
-## 9. Performance / security
-
-- All new mutations behind RPCs with `SECURITY DEFINER` + explicit role checks.
-- TanStack Query everywhere; no `setInterval` polling.
-- `attendance_events` unique partial index `(staff_user_id, kind, (captured_at AT TIME ZONE 'Asia/Kolkata')::date) WHERE NOT is_rejected` to prevent duplicate punches.
-- Storage: keep `attendance-media` and `project-documents` private; signed URLs only.
-
----
-
-## Technical notes (SQL highlights)
-
-```sql
--- geofence check
-CREATE OR REPLACE FUNCTION public.punch_attendance(...)
-RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE inside boolean; ...
-BEGIN
-  SELECT EXISTS(
-    SELECT 1 FROM attendance_geofences g WHERE g.is_active
-    AND 6371000 * acos(
-      cos(radians(g.lat))*cos(radians(_lat))*cos(radians(_lng)-radians(g.lng))
-      + sin(radians(g.lat))*sin(radians(_lat))
-    ) <= g.radius_m
-  ) INTO inside;
-  IF NOT inside AND EXISTS(SELECT 1 FROM attendance_geofences WHERE is_active) THEN
-    RAISE EXCEPTION 'Outside allowed location';
-  END IF;
-  ...
-END $$;
-```
-
-## Out of scope this turn
-- Native push for attendance alerts (already wired via existing `notifications` trigger).
-- Server-side blur ML (client heuristic only).
-- True .xlsx (using CSV-with-xls-mime; user explicitly said "if possible").
+**Frontend only**
+- Rebuild Attendance.tsx punch card: responsive grid, properly sized buttons, no text overflow, larger touch targets on mobile, loading states, single-submit guard.
 
 ---
 
-Ready to execute. Approve and I'll start with the migration, then ship UI + edge functions.
+## Technical notes
+
+- All status changes via DB triggers (per memory rule).
+- All schedules/totals respect existing 8.9% GST extraction.
+- Notifications use existing `notifications` table + DB triggers.
+- All new file uploads use `attendance-media` (private) bucket with signed URLs.
+- Storage paths: `field-visits/{user_id}/...`, `tasks/{user_id}/...`.
+- Will fix `src/integrations/supabase/types.ts` is regenerated automatically — no manual edits.
+
+## Delivery order in this session
+
+Given the scope, I'll deliver Phases 1–6 in order, each as a migration then code. After Phase 1 you'll see Bank vs Consumer working; subsequent phases build on top. I'll keep you updated phase by phase.
