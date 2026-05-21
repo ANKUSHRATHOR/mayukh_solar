@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   Camera, MapPin, LogIn, LogOut as LogOutIcon, Navigation, RefreshCw,
-  AlertCircle, CheckCircle2, AlertTriangle,
+  AlertCircle, CheckCircle2, AlertTriangle, Loader2, Send,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { compressImage, estimateBlur } from '@/lib/capture';
@@ -24,6 +26,12 @@ const statusColor: Record<string, string> = {
   late: 'bg-warning text-warning-foreground',
   half_day: 'bg-accent text-accent-foreground',
   absent: 'bg-destructive text-destructive-foreground',
+};
+
+const kindMeta: Record<Kind, { label: string; icon: any }> = {
+  check_in: { label: 'Check In', icon: LogIn },
+  field_visit: { label: 'Field Visit', icon: Navigation },
+  check_out: { label: 'Check Out', icon: LogOutIcon },
 };
 
 const Attendance = () => {
@@ -42,6 +50,11 @@ const Attendance = () => {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState<string>('');
+
+  // Outside punch-out request
+  const [reqOpen, setReqOpen] = useState(false);
+  const [reqReason, setReqReason] = useState('');
+  const [reqBusy, setReqBusy] = useState(false);
 
   const isSales = role === 'sales_person';
   const requiresPhoto = isSales;
@@ -81,32 +94,31 @@ const Attendance = () => {
     },
   });
 
+  const { data: myRequests } = useQuery({
+    queryKey: ['my-punchout-reqs', staff?.user_id],
+    enabled: !!staff?.user_id && isSales,
+    queryFn: async () => {
+      const { data } = await supabase.from('punch_out_requests' as any)
+        .select('*').eq('staff_user_id', staff!.user_id)
+        .order('created_at', { ascending: false }).limit(5);
+      return (data as any[]) || [];
+    },
+  });
+
   const captureLocation = () => {
-    if (!navigator.geolocation) {
-      toast({ title: 'Location not supported', variant: 'destructive' });
-      return;
-    }
+    if (!navigator.geolocation) { toast({ title: 'Location not supported', variant: 'destructive' }); return; }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy });
-        setLocating(false);
-      },
-      (err) => {
-        toast({ title: 'Location failed', description: err.message, variant: 'destructive' });
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }); setLocating(false); },
+      (err) => { toast({ title: 'Location failed', description: err.message, variant: 'destructive' }); setLocating(false); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   };
 
   const onFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    e.target.value = '';
+    const f = e.target.files?.[0]; e.target.value = '';
     if (!f) return;
-    if (!/^image\//.test(f.type)) {
-      toast({ title: 'Pick an image', variant: 'destructive' }); return;
-    }
+    if (!/^image\//.test(f.type)) { toast({ title: 'Pick an image', variant: 'destructive' }); return; }
     setBusy(true); setPhase('Compressing...'); setProgress(20);
     try {
       const compressed = await compressImage(f);
@@ -115,12 +127,8 @@ const Attendance = () => {
       setImageFile(compressed);
       setImagePreview(URL.createObjectURL(compressed));
       setImgInfo({ kb: Math.round(compressed.size / 1024), blur: Math.round(blur) });
-      if (blur < 25) {
-        toast({ title: 'Image looks blurry', description: 'Retake for a clearer shot if possible.', variant: 'destructive' });
-      }
-    } finally {
-      setBusy(false); setProgress(0); setPhase('');
-    }
+      if (blur < 25) toast({ title: 'Image looks blurry', description: 'Retake for a clearer shot if possible.', variant: 'destructive' });
+    } finally { setBusy(false); setProgress(0); setPhase(''); }
   };
 
   const startPunch = (kind: Kind) => {
@@ -137,7 +145,7 @@ const Attendance = () => {
   };
 
   const submitPunch = async () => {
-    if (!activeKind || !staff?.user_id) return;
+    if (busy || !activeKind || !staff?.user_id) return;
     if (requiresLocation && !coords) { toast({ title: 'Capture location first', variant: 'destructive' }); return; }
     if (requiresPhoto && !imageFile) { toast({ title: 'Bike meter photo is required', variant: 'destructive' }); return; }
 
@@ -154,11 +162,8 @@ const Attendance = () => {
       }
       setPhase('Saving punch...'); setProgress(85);
       const { error } = await supabase.rpc('punch_attendance' as any, {
-        _kind: activeKind,
-        _lat: coords?.lat ?? null,
-        _lng: coords?.lng ?? null,
-        _accuracy: coords?.acc ?? null,
-        _image_path: imagePath,
+        _kind: activeKind, _lat: coords?.lat ?? null, _lng: coords?.lng ?? null,
+        _accuracy: coords?.acc ?? null, _image_path: imagePath,
         _reading: reading ? Number(reading) : null,
       });
       if (error) throw error;
@@ -170,14 +175,29 @@ const Attendance = () => {
       qc.invalidateQueries({ queryKey: ['attendance-events-today', staff.user_id] });
     } catch (e: any) {
       toast({ title: 'Failed', description: e.message || 'Unknown error', variant: 'destructive' });
-    } finally {
-      setBusy(false); setPhase(''); setProgress(0);
-    }
+    } finally { setBusy(false); setPhase(''); setProgress(0); }
+  };
+
+  const sendOutsideRequest = async () => {
+    if (!reqReason.trim()) { toast({ title: 'Reason required', variant: 'destructive' }); return; }
+    if (!coords) { toast({ title: 'Capture location first', variant: 'destructive' }); return; }
+    setReqBusy(true);
+    try {
+      const { error } = await supabase.rpc('request_special_punch_out' as any, {
+        _lat: coords.lat, _lng: coords.lng, _reason: reqReason.trim(),
+      });
+      if (error) throw error;
+      toast({ title: 'Request sent', description: 'Admin has been notified.' });
+      setReqOpen(false); setReqReason('');
+      qc.invalidateQueries({ queryKey: ['my-punchout-reqs', staff?.user_id] });
+    } catch (e: any) {
+      toast({ title: 'Failed', description: e.message, variant: 'destructive' });
+    } finally { setReqBusy(false); }
   };
 
   return (
     <div className="p-4 lg:p-8 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground">My Attendance</h1>
           <p className="text-sm text-muted-foreground mt-1">{format(new Date(), 'EEEE, dd MMM yyyy')}</p>
@@ -187,26 +207,39 @@ const Attendance = () => {
 
       <Card className="border-border shadow-card">
         <CardHeader className="pb-3"><CardTitle className="text-base">Today</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge className={statusColor[todayAttendance?.status ?? 'absent']}>
               {(todayAttendance?.status ?? 'absent').replace('_', ' ').toUpperCase()}
             </Badge>
-            {todayAttendance?.check_in_at && <span className="text-sm text-muted-foreground">In: {format(new Date(todayAttendance.check_in_at), 'HH:mm')}</span>}
-            {todayAttendance?.check_out_at && <span className="text-sm text-muted-foreground">Out: {format(new Date(todayAttendance.check_out_at), 'HH:mm')}</span>}
+            {todayAttendance?.check_in_at && <span className="text-xs text-muted-foreground">In: {format(new Date(todayAttendance.check_in_at), 'HH:mm')}</span>}
+            {todayAttendance?.check_out_at && <span className="text-xs text-muted-foreground">Out: {format(new Date(todayAttendance.check_out_at), 'HH:mm')}</span>}
             {!!todayAttendance?.worked_minutes && (
-              <span className="text-sm text-muted-foreground">Worked: {Math.floor(todayAttendance.worked_minutes / 60)}h {todayAttendance.worked_minutes % 60}m</span>
+              <span className="text-xs text-muted-foreground">Worked: {Math.floor(todayAttendance.worked_minutes / 60)}h {todayAttendance.worked_minutes % 60}m</span>
             )}
           </div>
 
           {!activeKind ? (
-            <div className="grid grid-cols-3 gap-2">
-              <Button onClick={() => startPunch('check_in')} className="gradient-primary text-primary-foreground"><LogIn className="h-4 w-4 mr-1" /> Check In</Button>
-              <Button onClick={() => startPunch('field_visit')} variant="outline"><Navigation className="h-4 w-4 mr-1" /> Field</Button>
-              <Button onClick={() => startPunch('check_out')} variant="outline"><LogOutIcon className="h-4 w-4 mr-1" /> Check Out</Button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {(Object.keys(kindMeta) as Kind[]).map((k) => {
+                const Meta = kindMeta[k];
+                const Icon = Meta.icon;
+                const primary = k === 'check_in';
+                return (
+                  <Button
+                    key={k}
+                    onClick={() => startPunch(k)}
+                    variant={primary ? 'default' : 'outline'}
+                    className={`h-14 w-full justify-center text-base font-semibold whitespace-normal text-center px-3 ${primary ? 'gradient-primary text-primary-foreground' : ''}`}
+                  >
+                    <Icon className="h-5 w-5 mr-2 shrink-0" />
+                    <span className="leading-tight">{Meta.label}</span>
+                  </Button>
+                );
+              })}
             </div>
           ) : (
-            <div className="space-y-3 rounded-lg border border-border p-3">
+            <div className="space-y-4 rounded-lg border border-border p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <p className="font-semibold capitalize">{activeKind.replace('_', ' ')}</p>
                 <Button variant="ghost" size="sm" onClick={cancelPunch} disabled={busy}>Cancel</Button>
@@ -215,12 +248,12 @@ const Attendance = () => {
               {requiresLocation && (
                 <div className="space-y-2">
                   <Label>Live Location <span className="text-destructive">*</span></Label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" onClick={captureLocation} disabled={locating || busy}>
                       <MapPin className="h-4 w-4 mr-1" /> {locating ? 'Getting...' : (coords ? 'Refresh' : 'Get')}
                     </Button>
                     {coords ? (
-                      <span className="text-xs text-muted-foreground">{coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc)}m)</span>
+                      <span className="text-xs text-muted-foreground break-all">{coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc)}m)</span>
                     ) : (
                       <span className="text-xs text-muted-foreground">Not captured yet</span>
                     )}
@@ -240,22 +273,20 @@ const Attendance = () => {
                       <>
                         <span className="text-xs text-muted-foreground">{imgInfo.kb} KB</span>
                         {imgInfo.blur < 25 ? (
-                          <span className="text-xs text-warning flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Looks blurry</span>
+                          <span className="text-xs text-warning flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Blurry</span>
                         ) : (
                           <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sharp</span>
                         )}
                       </>
                     )}
                   </div>
-                  {imagePreview && (
-                    <img src={imagePreview} alt="Bike meter preview" className="mt-2 max-h-56 rounded-md border border-border object-contain" />
-                  )}
+                  {imagePreview && <img src={imagePreview} alt="Preview" className="mt-2 max-h-56 rounded-md border border-border object-contain" />}
                 </div>
               )}
 
               {requiresPhoto && (
                 <div className="space-y-2">
-                  <Label>Odometer reading (km) <span className="text-muted-foreground">(optional)</span></Label>
+                  <Label>Odometer (km) <span className="text-muted-foreground text-xs">(optional)</span></Label>
                   <Input type="number" inputMode="decimal" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="e.g. 12450" />
                 </div>
               )}
@@ -270,14 +301,40 @@ const Attendance = () => {
               <Button
                 onClick={submitPunch}
                 disabled={busy || (requiresLocation && !coords) || (requiresPhoto && !imageFile)}
-                className="w-full gradient-primary text-primary-foreground"
+                className="w-full h-12 gradient-primary text-primary-foreground text-base"
               >
-                {busy ? phase || 'Saving...' : 'Submit'}
+                {busy ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />{phase || 'Saving…'}</> : 'Submit'}
               </Button>
+
+              {isSales && activeKind === 'check_out' && (
+                <div className="pt-2 border-t border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Going home from the field? Send a request to admin to punch out from current location.</p>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setReqOpen(true)}>
+                    <Send className="h-4 w-4 mr-1" /> Request outside punch-out
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {isSales && !!myRequests?.length && (
+        <Card className="border-border shadow-card">
+          <CardHeader className="pb-3"><CardTitle className="text-base">My recent outside punch-out requests</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {myRequests.map((r: any) => (
+              <div key={r.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium capitalize">{r.status}</p>
+                  <p className="text-xs text-muted-foreground truncate">{r.reason}</p>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0">{format(new Date(r.created_at), 'dd MMM HH:mm')}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {!!todayEvents?.length && (
         <Card className="border-border shadow-card">
@@ -326,6 +383,25 @@ const Attendance = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={reqOpen} onOpenChange={setReqOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Outside Punch-Out Request</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-muted-foreground">Your current location and the reason below will be sent to admin for approval. Once approved, you can check out from here.</p>
+            <div className="space-y-1.5"><Label>Reason</Label>
+              <Textarea rows={3} value={reqReason} onChange={(e) => setReqReason(e.target.value)} placeholder="Going home directly after late site visit…" />
+            </div>
+            {coords && <p className="text-xs text-muted-foreground">📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReqOpen(false)} disabled={reqBusy}>Cancel</Button>
+            <Button onClick={sendOutsideRequest} disabled={reqBusy} className="gradient-primary text-primary-foreground">
+              {reqBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />} Send request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

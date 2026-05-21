@@ -5,10 +5,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function generateTempPassword(): string {
+  // 10 chars, letters+digits, easy to read
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const arr = new Uint32Array(10);
+  crypto.getRandomValues(arr);
+  let out = "";
+  for (let i = 0; i < arr.length; i++) out += alphabet[arr[i] % alphabet.length];
+  return out;
+}
+
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -48,24 +56,14 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      // Update staff record
       const { error: staffError } = await adminClient.from("staff").update({
-        full_name: full_name.trim(),
-        mobile,
+        full_name: full_name.trim(), mobile,
       }).eq("id", staff_id);
       if (staffError) throw staffError;
-
-      // Update role
-      const { error: roleError } = await adminClient.from("user_roles").update({
-        role,
-      }).eq("user_id", user_id);
+      const { error: roleError } = await adminClient.from("user_roles").update({ role }).eq("user_id", user_id);
       if (roleError) throw roleError;
-
-      // Update auth email to match new mobile
       const mobileEmail = `${mobile}@mayukhsolar.app`;
       await adminClient.auth.admin.updateUserById(user_id, { email: mobileEmail });
-
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -76,19 +74,22 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      // Generate a temporary password
-      const tempPassword = "Reset@" + Math.random().toString(36).slice(2, 8);
-
-      // Update auth password
+      const tempPassword = generateTempPassword();
       const { error: pwError } = await adminClient.auth.admin.updateUserById(user_id, {
-        password: tempPassword,
+        password: tempPassword, email_confirm: true,
       });
       if (pwError) throw pwError;
-
-      // Force password change on next login
-      await adminClient.from("staff").update({ must_change_password: true }).eq("id", staff_id);
-
+      await adminClient.from("staff").update({
+        must_change_password: true,
+        temp_password_plain: tempPassword,
+        temp_password_issued_at: new Date().toISOString(),
+        temp_password_issued_by: caller.id,
+      }).eq("id", staff_id);
+      await adminClient.from("password_reset_logs").insert({
+        staff_user_id: user_id,
+        reset_by_user_id: caller.id,
+        meta: { method: "admin_reset" },
+      });
       return new Response(JSON.stringify({ success: true, temp_password: tempPassword }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -99,24 +100,18 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      // Prevent self-deletion
       if (user_id === caller.id) {
         return new Response(JSON.stringify({ error: "Cannot delete your own account" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      // Delete role, staff, then auth user. Tolerate missing rows so partial state can still be cleaned.
       await adminClient.from("user_roles").delete().eq("user_id", user_id);
       await adminClient.from("staff").delete().eq("id", staff_id);
       try {
         await adminClient.auth.admin.deleteUser(user_id);
       } catch (e: any) {
-        // ignore "user not found" so re-add works after partial deletes
         if (!String(e?.message || "").toLowerCase().includes("not found")) throw e;
       }
-
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

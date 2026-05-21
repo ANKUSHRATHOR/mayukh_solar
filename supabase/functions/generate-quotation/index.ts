@@ -1,4 +1,5 @@
-// Generate quotation HTML using DB-driven T&C templates + default vendor profile.
+// Generate quotation HTML using DB-driven T&C templates, default vendor profile,
+// and a selectable Bank vs Consumer payment schedule with optional bank account.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.1";
 
 const corsHeaders = {
@@ -19,7 +20,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { projectId } = await req.json();
+    const body = await req.json();
+    const projectId: string | undefined = body?.projectId;
+    const quotationType: "bank" | "consumer" = body?.quotationType === "bank" ? "bank" : "consumer";
+    const bankAccountId: string | null = body?.bankAccountId || null;
+
     if (!projectId) {
       return new Response(JSON.stringify({ error: "projectId required" }), {
         status: 400,
@@ -33,27 +38,29 @@ Deno.serve(async (req) => {
       const sbAuth = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },
       });
-      const {
-        data: { user },
-      } = await sbAuth.auth.getUser();
+      const { data: { user } } = await sbAuth.auth.getUser();
       userId = user?.id ?? null;
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    const [{ data: project, error: pErr }, { data: vendor }, { data: terms }] = await Promise.all([
-      supabase
-        .from("projects")
-        .select("*, leads(customer_name, mobile, address, village_city, district, state)")
-        .eq("id", projectId)
-        .single(),
-      supabase.from("vendor_profiles").select("*").eq("is_default", true).maybeSingle(),
-      supabase
-        .from("quotation_terms_templates")
-        .select("title, body, section_order")
-        .eq("is_active", true)
-        .order("section_order", { ascending: true }),
-    ]);
+    const [{ data: project, error: pErr }, { data: vendor }, { data: terms }, { data: bank }] =
+      await Promise.all([
+        supabase
+          .from("projects")
+          .select("*, leads(customer_name, mobile, address, village_city, district, state)")
+          .eq("id", projectId)
+          .single(),
+        supabase.from("vendor_profiles").select("*").eq("is_default", true).maybeSingle(),
+        supabase
+          .from("quotation_terms_templates")
+          .select("title, body, section_order")
+          .eq("is_active", true)
+          .order("section_order", { ascending: true }),
+        bankAccountId
+          ? supabase.from("vendor_bank_accounts").select("*").eq("id", bankAccountId).maybeSingle()
+          : supabase.from("vendor_bank_accounts").select("*").eq("is_default", true).eq("is_active", true).maybeSingle(),
+      ]);
 
     if (pErr || !project) {
       return new Response(JSON.stringify({ error: "Project not found" }), {
@@ -66,15 +73,26 @@ Deno.serve(async (req) => {
     const baseAmount = Number(project.final_amount);
     const discount = Number(project.discount || 0);
     const subtotal = baseAmount - discount;
-    // GST 8.9% computed by extracting from inclusive total
     const gstAmount = Math.round((subtotal * 8.9) / 108.9);
     const netCost = subtotal - gstAmount;
     const total = subtotal;
-    const inst1 = Math.round(total * 0.3);
-    const inst2 = Math.round(total * 0.6);
-    const inst3 = total - inst1 - inst2;
-    const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
+    // Payment schedule based on quotationType
+    let schedule: Array<{ label: string; stage: string; amount: number }>;
+    if (quotationType === "bank") {
+      schedule = [{ label: "100% Advance", stage: "At Order Confirmation (Bank Disbursement)", amount: total }];
+    } else {
+      const inst1 = Math.round(total * 0.3);
+      const inst2 = Math.round(total * 0.6);
+      const inst3 = total - inst1 - inst2;
+      schedule = [
+        { label: "1st (30% Advance)", stage: "At Order Confirmation", amount: inst1 },
+        { label: "2nd (60% Mid Payment)", stage: "After Structure Completion", amount: inst2 },
+        { label: "3rd (10% Final)", stage: "After Generation Begins", amount: inst3 },
+      ];
+    }
+
+    const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     const structureLabel: Record<string, string> = {
       rcc_roof: "RCC Roof",
       tin_shed_roof: "Tin Shed Roof",
@@ -96,19 +114,14 @@ Deno.serve(async (req) => {
       capacity_kw: project.capacity_kw,
       total_amount: total,
       created_by_user_id: userId || project.created_by_user_id,
+      quotation_type: quotationType,
+      bank_account_id: bank?.id || null,
+      payment_schedule: schedule,
     });
     if (insertErr) console.error("Failed to save quotation record:", insertErr);
 
     const v = vendor || {
-      firm_name: "V R ENTERPRISES",
-      gstin: "",
-      mobile: "",
-      email: "",
-      address: "",
-      bank_name: "",
-      account_no: "",
-      ifsc: "",
-      account_type: "",
+      firm_name: "V R ENTERPRISES", gstin: "", mobile: "", email: "", address: "",
     };
 
     const termsHtml = (terms ?? []).length
@@ -120,6 +133,30 @@ Deno.serve(async (req) => {
           .join("")
       : `<div class="tc-block"><div class="tc-body">Standard terms apply.</div></div>`;
 
+    // Bank block: prefer selected vendor_bank_account; fall back to vendor_profile bank fields
+    const b: any = bank || {
+      bank_name: (vendor as any)?.bank_name,
+      holder_name: null,
+      account_no: (vendor as any)?.account_no,
+      ifsc: (vendor as any)?.ifsc,
+      branch_name: null,
+      upi_image_url: null,
+    };
+
+    const bankBlockHtml = (b.bank_name || b.account_no)
+      ? `<div class="section">
+          <div class="section-title">Bank Details</div>
+          <table>
+            ${b.bank_name ? `<tr><td>Bank</td><td>${esc(b.bank_name)}</td></tr>` : ""}
+            ${b.holder_name ? `<tr><td>Account Holder</td><td>${esc(b.holder_name)}</td></tr>` : ""}
+            ${b.account_no ? `<tr><td>Account No.</td><td>${esc(b.account_no)}</td></tr>` : ""}
+            ${b.ifsc ? `<tr><td>IFSC</td><td>${esc(b.ifsc)}</td></tr>` : ""}
+            ${b.branch_name ? `<tr><td>Branch</td><td>${esc(b.branch_name)}</td></tr>` : ""}
+          </table>
+          ${b.upi_image_url ? `<div style="margin-top:8px"><img src="${esc(b.upi_image_url)}" alt="UPI" style="max-height:160px;border:1px solid #e5e7eb;border-radius:6px"/></div>` : ""}
+        </div>`
+      : "";
+
     const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>${esc(quotationNumber)}</title><style>
   *{box-sizing:border-box}
@@ -129,6 +166,9 @@ Deno.serve(async (req) => {
   .sub{font-size:11px;color:#6b7280;margin-top:2px}
   .qt{text-align:right}
   .qt .num{font-weight:700;font-size:14px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;margin-top:4px}
+  .badge.bank{background:#dbeafe;color:#1d4ed8}
+  .badge.consumer{background:#fef3c7;color:#92400e}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
   .card{border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px;background:#fafafa}
   .card h4{margin:0 0 6px;font-size:12px;color:#f97316;text-transform:uppercase;letter-spacing:.5px}
@@ -158,6 +198,7 @@ Deno.serve(async (req) => {
       <div class="sub">Date: ${today}</div>
       <div class="sub">Project: ${esc(project.project_code)}</div>
       ${project.k_number ? `<div class="sub">K Number: ${esc(project.k_number)}</div>` : ""}
+      <div class="badge ${quotationType}">${quotationType === "bank" ? "BANK FINANCED" : "CONSUMER (CASH)"}</div>
     </div>
   </div>
 
@@ -188,29 +229,14 @@ Deno.serve(async (req) => {
   </div>
 
   <div class="section">
-    <div class="section-title">Payment Schedule (${project.payment_type === "loan" ? "Loan" : "Cash"})</div>
+    <div class="section-title">Payment Schedule (${quotationType === "bank" ? "Bank Financed" : "Consumer / Cash"})</div>
     <table>
       <tr><th>Installment</th><th>Stage</th><th class="r">Amount (₹)</th></tr>
-      <tr><td>1st (30%)</td><td>At Order Confirmation</td><td class="r">${inst1.toLocaleString("en-IN")}</td></tr>
-      <tr><td>2nd (60%)</td><td>After Structure Completion</td><td class="r">${inst2.toLocaleString("en-IN")}</td></tr>
-      <tr><td>3rd (10%)</td><td>After Generation Begins</td><td class="r">${inst3.toLocaleString("en-IN")}</td></tr>
+      ${schedule.map(s => `<tr><td>${esc(s.label)}</td><td>${esc(s.stage)}</td><td class="r">${s.amount.toLocaleString("en-IN")}</td></tr>`).join("")}
     </table>
   </div>
 
-  ${
-    v.bank_name || v.account_no
-      ? `
-  <div class="section">
-    <div class="section-title">Bank Details</div>
-    <table>
-      ${v.bank_name ? `<tr><td>Bank</td><td>${esc(v.bank_name)}</td></tr>` : ""}
-      ${v.account_no ? `<tr><td>Account No.</td><td>${esc(v.account_no)}</td></tr>` : ""}
-      ${v.ifsc ? `<tr><td>IFSC</td><td>${esc(v.ifsc)}</td></tr>` : ""}
-      ${v.account_type ? `<tr><td>Type</td><td>${esc(v.account_type)}</td></tr>` : ""}
-    </table>
-  </div>`
-      : ""
-  }
+  ${bankBlockHtml}
 
   <div class="section">
     <div class="section-title">Terms &amp; Conditions</div>
@@ -224,10 +250,15 @@ Deno.serve(async (req) => {
 </body></html>`;
 
     return new Response(
-      JSON.stringify({ html, project_code: project.project_code, quotation_number: quotationNumber }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
+      JSON.stringify({
+        html,
+        project_code: project.project_code,
+        quotation_number: quotationNumber,
+        quotation_type: quotationType,
+        bank_account_id: bank?.id || null,
+        payment_schedule: schedule,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to generate quotation";

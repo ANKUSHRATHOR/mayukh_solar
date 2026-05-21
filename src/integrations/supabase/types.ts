@@ -226,6 +226,66 @@ export type Database = {
           },
         ]
       }
+      field_visits: {
+        Row: {
+          accuracy_m: number | null
+          bike_meter_image_path: string | null
+          bike_meter_reading: number | null
+          created_at: string
+          id: string
+          latitude: number
+          lead_id: string | null
+          longitude: number
+          notes: string | null
+          outcome: Database["public"]["Enums"]["visit_outcome"]
+          project_id: string | null
+          staff_user_id: string
+        }
+        Insert: {
+          accuracy_m?: number | null
+          bike_meter_image_path?: string | null
+          bike_meter_reading?: number | null
+          created_at?: string
+          id?: string
+          latitude: number
+          lead_id?: string | null
+          longitude: number
+          notes?: string | null
+          outcome?: Database["public"]["Enums"]["visit_outcome"]
+          project_id?: string | null
+          staff_user_id: string
+        }
+        Update: {
+          accuracy_m?: number | null
+          bike_meter_image_path?: string | null
+          bike_meter_reading?: number | null
+          created_at?: string
+          id?: string
+          latitude?: number
+          lead_id?: string | null
+          longitude?: number
+          notes?: string | null
+          outcome?: Database["public"]["Enums"]["visit_outcome"]
+          project_id?: string | null
+          staff_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_visits_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_visits_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_assignments: {
         Row: {
           changed_by: string | null
@@ -388,6 +448,30 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_logs: {
+        Row: {
+          created_at: string
+          id: string
+          meta: Json | null
+          reset_by_user_id: string
+          staff_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          reset_by_user_id: string
+          staff_user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          reset_by_user_id?: string
+          staff_user_id?: string
+        }
+        Relationships: []
+      }
       project_assignments: {
         Row: {
           changed_by: string | null
@@ -435,6 +519,10 @@ export type Database = {
           documents_submitted_by_sales: boolean
           expected_install_date: string | null
           final_amount: number
+          home_latitude: number | null
+          home_location_saved_at: string | null
+          home_location_saved_by: string | null
+          home_longitude: number | null
           id: string
           inspection_date: string | null
           inspection_notes: string | null
@@ -471,6 +559,10 @@ export type Database = {
           documents_submitted_by_sales?: boolean
           expected_install_date?: string | null
           final_amount: number
+          home_latitude?: number | null
+          home_location_saved_at?: string | null
+          home_location_saved_by?: string | null
+          home_longitude?: number | null
           id?: string
           inspection_date?: string | null
           inspection_notes?: string | null
@@ -507,6 +599,10 @@ export type Database = {
           documents_submitted_by_sales?: boolean
           expected_install_date?: string | null
           final_amount?: number
+          home_latitude?: number | null
+          home_location_saved_at?: string | null
+          home_location_saved_by?: string | null
+          home_longitude?: number | null
           id?: string
           inspection_date?: string | null
           inspection_notes?: string | null
@@ -536,6 +632,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      punch_out_requests: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          reason: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          staff_user_id: string
+          status: Database["public"]["Enums"]["punch_out_request_status"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          reason: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          staff_user_id: string
+          status?: Database["public"]["Enums"]["punch_out_request_status"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          reason?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          staff_user_id?: string
+          status?: Database["public"]["Enums"]["punch_out_request_status"]
+        }
+        Relationships: []
       }
       push_subscriptions: {
         Row: {
@@ -602,6 +737,7 @@ export type Database = {
       }
       quotations: {
         Row: {
+          bank_account_id: string | null
           capacity_kw: number
           created_at: string
           created_by_user_id: string
@@ -609,12 +745,15 @@ export type Database = {
           customer_mobile: string | null
           customer_name: string
           id: string
+          payment_schedule: Json | null
           project_code: string
           project_id: string
           quotation_number: string
+          quotation_type: string
           total_amount: number
         }
         Insert: {
+          bank_account_id?: string | null
           capacity_kw: number
           created_at?: string
           created_by_user_id: string
@@ -622,12 +761,15 @@ export type Database = {
           customer_mobile?: string | null
           customer_name: string
           id?: string
+          payment_schedule?: Json | null
           project_code: string
           project_id: string
           quotation_number: string
+          quotation_type?: string
           total_amount: number
         }
         Update: {
+          bank_account_id?: string | null
           capacity_kw?: number
           created_at?: string
           created_by_user_id?: string
@@ -635,12 +777,21 @@ export type Database = {
           customer_mobile?: string | null
           customer_name?: string
           id?: string
+          payment_schedule?: Json | null
           project_code?: string
           project_id?: string
           quotation_number?: string
+          quotation_type?: string
           total_amount?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "quotations_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "quotations_project_id_fkey"
             columns: ["project_id"]
@@ -866,6 +1017,9 @@ export type Database = {
           mobile: string
           must_change_password: boolean
           pin_expiry: string | null
+          temp_password_issued_at: string | null
+          temp_password_issued_by: string | null
+          temp_password_plain: string | null
           temp_pin_hash: string | null
           updated_at: string
           user_id: string
@@ -880,6 +1034,9 @@ export type Database = {
           mobile: string
           must_change_password?: boolean
           pin_expiry?: string | null
+          temp_password_issued_at?: string | null
+          temp_password_issued_by?: string | null
+          temp_password_plain?: string | null
           temp_pin_hash?: string | null
           updated_at?: string
           user_id: string
@@ -894,11 +1051,83 @@ export type Database = {
           mobile?: string
           must_change_password?: boolean
           pin_expiry?: string | null
+          temp_password_issued_at?: string | null
+          temp_password_issued_by?: string | null
+          temp_password_plain?: string | null
           temp_pin_hash?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: []
+      }
+      tasks: {
+        Row: {
+          assigned_by_user_id: string
+          assigned_to_user_id: string
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          lead_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          project_id: string | null
+          proof_image_path: string | null
+          staff_notes: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_by_user_id: string
+          assigned_to_user_id: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          lead_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
+          proof_image_path?: string | null
+          staff_notes?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_by_user_id?: string
+          assigned_to_user_id?: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          lead_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
+          proof_image_path?: string | null
+          staff_notes?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -915,6 +1144,48 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      vendor_bank_accounts: {
+        Row: {
+          account_no: string
+          bank_name: string
+          branch_name: string | null
+          created_at: string
+          holder_name: string
+          id: string
+          ifsc: string
+          is_active: boolean
+          is_default: boolean
+          updated_at: string
+          upi_image_url: string | null
+        }
+        Insert: {
+          account_no: string
+          bank_name: string
+          branch_name?: string | null
+          created_at?: string
+          holder_name: string
+          id?: string
+          ifsc: string
+          is_active?: boolean
+          is_default?: boolean
+          updated_at?: string
+          upi_image_url?: string | null
+        }
+        Update: {
+          account_no?: string
+          bank_name?: string
+          branch_name?: string | null
+          created_at?: string
+          holder_name?: string
+          id?: string
+          ifsc?: string
+          is_active?: boolean
+          is_default?: boolean
+          updated_at?: string
+          upi_image_url?: string | null
         }
         Relationships: []
       }
@@ -1104,6 +1375,10 @@ export type Database = {
           total_value: number
         }[]
       }
+      request_special_punch_out: {
+        Args: { _lat: number; _lng: number; _reason: string }
+        Returns: string
+      }
       reupload_event_image: {
         Args: {
           _accuracy?: number
@@ -1114,6 +1389,27 @@ export type Database = {
           _reading?: number
         }
         Returns: string
+      }
+      review_punch_out_request: {
+        Args: { _approve: boolean; _id: string; _notes?: string }
+        Returns: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          reason: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          staff_user_id: string
+          status: Database["public"]["Enums"]["punch_out_request_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "punch_out_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       staff_performance: {
         Args: { _from: string; _to: string }
@@ -1187,7 +1483,18 @@ export type Database = {
         | "inspection_failed"
         | "net_meter_installed"
         | "project_completed"
+      punch_out_request_status: "pending" | "approved" | "rejected" | "consumed"
       structure_type: "rcc_roof" | "tin_shed_roof" | "ground_mount"
+      task_priority: "low" | "medium" | "high" | "urgent"
+      task_status: "pending" | "in_progress" | "completed"
+      visit_outcome:
+        | "interested"
+        | "unavailable"
+        | "docs_pending"
+        | "site_issue"
+        | "payment_discussion"
+        | "bank_followup"
+        | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1376,7 +1683,19 @@ export const Constants = {
         "net_meter_installed",
         "project_completed",
       ],
+      punch_out_request_status: ["pending", "approved", "rejected", "consumed"],
       structure_type: ["rcc_roof", "tin_shed_roof", "ground_mount"],
+      task_priority: ["low", "medium", "high", "urgent"],
+      task_status: ["pending", "in_progress", "completed"],
+      visit_outcome: [
+        "interested",
+        "unavailable",
+        "docs_pending",
+        "site_issue",
+        "payment_discussion",
+        "bank_followup",
+        "other",
+      ],
     },
   },
 } as const
