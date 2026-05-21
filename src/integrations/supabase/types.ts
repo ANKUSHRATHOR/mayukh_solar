@@ -609,6 +609,45 @@ export type Database = {
           },
         ]
       }
+      punch_out_requests: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          reason: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          staff_user_id: string
+          status: Database["public"]["Enums"]["punch_out_request_status"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          reason: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          staff_user_id: string
+          status?: Database["public"]["Enums"]["punch_out_request_status"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          reason?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          staff_user_id?: string
+          status?: Database["public"]["Enums"]["punch_out_request_status"]
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -1234,6 +1273,10 @@ export type Database = {
           total_value: number
         }[]
       }
+      request_special_punch_out: {
+        Args: { _lat: number; _lng: number; _reason: string }
+        Returns: string
+      }
       reupload_event_image: {
         Args: {
           _accuracy?: number
@@ -1244,6 +1287,27 @@ export type Database = {
           _reading?: number
         }
         Returns: string
+      }
+      review_punch_out_request: {
+        Args: { _approve: boolean; _id: string; _notes?: string }
+        Returns: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          reason: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          staff_user_id: string
+          status: Database["public"]["Enums"]["punch_out_request_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "punch_out_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       staff_performance: {
         Args: { _from: string; _to: string }
@@ -1317,6 +1381,7 @@ export type Database = {
         | "inspection_failed"
         | "net_meter_installed"
         | "project_completed"
+      punch_out_request_status: "pending" | "approved" | "rejected" | "consumed"
       structure_type: "rcc_roof" | "tin_shed_roof" | "ground_mount"
       visit_outcome:
         | "interested"
@@ -1514,6 +1579,7 @@ export const Constants = {
         "net_meter_installed",
         "project_completed",
       ],
+      punch_out_request_status: ["pending", "approved", "rejected", "consumed"],
       structure_type: ["rcc_roof", "tin_shed_roof", "ground_mount"],
       visit_outcome: [
         "interested",
