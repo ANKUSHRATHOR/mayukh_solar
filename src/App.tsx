@@ -197,6 +197,9 @@ const App = () => (
             <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
             <Route path="/admin/quotation-import" element={<ProtectedRoute allowedRoles={['admin']}><QuotationImport /></ProtectedRoute>} />
             <Route path="/admin/performance" element={<ProtectedRoute allowedRoles={['admin']}><StaffPerformance /></ProtectedRoute>} />
+            <Route path="/field-visit" element={<ProtectedRoute allowedRoles={['admin', 'sales_person']}><FieldVisit /></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><Tasks /></ProtectedRoute>} />
+            <Route path="/projects/:projectId/home-location" element={<ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}><ProjectHomeLocation /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
