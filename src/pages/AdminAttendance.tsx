@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { Eye, XCircle, Download } from 'lucide-react';
+import { Eye, XCircle, Download, Check, X as XIcon } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
 const statusColor: Record<string, string> = {
