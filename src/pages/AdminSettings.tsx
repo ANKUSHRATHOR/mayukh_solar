@@ -248,6 +248,44 @@ const AdminSettings = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="banks" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-base">Add bank account</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Bank name *</Label><Input value={b.bank_name} onChange={(e) => setB({ ...b, bank_name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Account holder *</Label><Input value={b.holder_name} onChange={(e) => setB({ ...b, holder_name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Account number *</Label><Input value={b.account_no} onChange={(e) => setB({ ...b, account_no: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>IFSC *</Label><Input value={b.ifsc} onChange={(e) => setB({ ...b, ifsc: e.target.value.toUpperCase() })} /></div>
+              <div className="space-y-1.5"><Label>Branch</Label><Input value={b.branch_name} onChange={(e) => setB({ ...b, branch_name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>UPI QR image URL</Label><Input value={b.upi_image_url} onChange={(e) => setB({ ...b, upi_image_url: e.target.value })} placeholder="https://..." /></div>
+              <div className="md:col-span-2 flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={b.is_default} onChange={(e) => setB({ ...b, is_default: e.target.checked })} /> Set as default</label>
+                <Button onClick={addBank} className="gradient-primary text-primary-foreground"><Plus className="h-4 w-4 mr-1" /> Add bank</Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-2">
+            {!banks?.length ? <p className="text-sm text-muted-foreground">No bank accounts yet.</p> : banks.map((acc) => (
+              <Card key={acc.id} className={acc.is_default ? 'border-primary' : ''}>
+                <CardContent className="p-4 flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="font-semibold flex items-center gap-2">{acc.bank_name} {acc.is_default && <Badge className="bg-primary text-primary-foreground"><Star className="h-3 w-3 mr-1" />Default</Badge>}</p>
+                    <p className="text-sm">{acc.holder_name} • A/C {acc.account_no} • IFSC {acc.ifsc}</p>
+                    {acc.branch_name && <p className="text-xs text-muted-foreground">Branch: {acc.branch_name}</p>}
+                    {acc.upi_image_url && <a className="text-xs text-primary underline" href={acc.upi_image_url} target="_blank" rel="noreferrer">UPI QR</a>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!acc.is_default && <Button size="sm" variant="outline" onClick={() => updateBank(acc.id, { is_default: true })}><Star className="h-3 w-3 mr-1" />Make default</Button>}
+                    <Switch checked={acc.is_active} onCheckedChange={(v) => updateBank(acc.id, { is_active: v })} />
+                    <Button size="icon" variant="ghost" onClick={() => deleteBank(acc.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );
