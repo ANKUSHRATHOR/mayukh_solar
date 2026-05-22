@@ -229,6 +229,41 @@ const AdminAttendance = () => {
           )}
         </CardContent>
       </Card>
+
+      <Card className="border-border shadow-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Outside Punch-Out Requests</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!punchReqs?.length ? (
+            <p className="text-sm text-muted-foreground">No requests.</p>
+          ) : (
+            <div className="space-y-2">
+              {punchReqs.map((r: any) => (
+                <div key={r.id} className={`rounded-md border p-3 text-sm ${r.status === 'pending' ? 'border-warning/50 bg-warning/5' : 'border-border'}`}>
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <p className="font-medium">{staffName(r.staff_user_id)} <Badge variant="outline" className="ml-2 capitalize">{r.status}</Badge></p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(r.created_at), 'dd MMM HH:mm')}</p>
+                      <p className="text-sm mt-1"><span className="text-muted-foreground">Reason:</span> {r.reason}</p>
+                      <a className="text-xs text-primary underline" href={`https://www.google.com/maps?q=${r.latitude},${r.longitude}`} target="_blank" rel="noreferrer">
+                        {Number(r.latitude).toFixed(5)}, {Number(r.longitude).toFixed(5)}
+                      </a>
+                      {r.review_notes && <p className="text-xs text-muted-foreground mt-1">Notes: {r.review_notes}</p>}
+                    </div>
+                    {r.status === 'pending' && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button size="sm" onClick={() => reviewReq(r.id, true)} className="bg-success text-success-foreground hover:bg-success/90"><Check className="h-3 w-3 mr-1" /> Approve</Button>
+                        <Button size="sm" variant="destructive" onClick={() => reviewReq(r.id, false)}><XIcon className="h-3 w-3 mr-1" /> Reject</Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
