@@ -30,6 +30,9 @@ import MyAttendance from "./pages/MyAttendance.tsx";
 import AdminSettings from "./pages/AdminSettings.tsx";
 import QuotationImport from "./pages/QuotationImport.tsx";
 import StaffPerformance from "./pages/StaffPerformance.tsx";
+import FieldVisit from "./pages/FieldVisit.tsx";
+import Tasks from "./pages/Tasks.tsx";
+import ProjectHomeLocation from "./pages/ProjectHomeLocation.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
@@ -194,6 +197,9 @@ const App = () => (
             <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
             <Route path="/admin/quotation-import" element={<ProtectedRoute allowedRoles={['admin']}><QuotationImport /></ProtectedRoute>} />
             <Route path="/admin/performance" element={<ProtectedRoute allowedRoles={['admin']}><StaffPerformance /></ProtectedRoute>} />
+            <Route path="/field-visit" element={<ProtectedRoute allowedRoles={['admin', 'sales_person']}><FieldVisit /></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><Tasks /></ProtectedRoute>} />
+            <Route path="/projects/:projectId/home-location" element={<ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}><ProjectHomeLocation /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
