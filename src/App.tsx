@@ -30,6 +30,9 @@ import MyAttendance from "./pages/MyAttendance.tsx";
 import AdminSettings from "./pages/AdminSettings.tsx";
 import QuotationImport from "./pages/QuotationImport.tsx";
 import StaffPerformance from "./pages/StaffPerformance.tsx";
+import FieldVisit from "./pages/FieldVisit.tsx";
+import Tasks from "./pages/Tasks.tsx";
+import ProjectHomeLocation from "./pages/ProjectHomeLocation.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
