@@ -116,6 +116,37 @@ const AdminSettings = () => {
     toast({ title: 'Vendor profile saved' });
   };
 
+  // Bank accounts
+  const { data: banks } = useQuery({
+    queryKey: ['vendor-banks'],
+    queryFn: async () => {
+      const { data } = await supabase.from('vendor_bank_accounts' as any).select('*').order('created_at', { ascending: false });
+      return (data as any[]) || [];
+    },
+  });
+  const [b, setB] = useState<any>({ bank_name: '', holder_name: '', account_no: '', ifsc: '', branch_name: '', upi_image_url: '', is_default: false });
+  const addBank = async () => {
+    if (!b.bank_name || !b.holder_name || !b.account_no || !b.ifsc) {
+      toast({ title: 'Bank name, holder, account no. and IFSC required', variant: 'destructive' });
+      return;
+    }
+    const { error } = await supabase.from('vendor_bank_accounts' as any).insert({ ...b, is_active: true });
+    if (error) { toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
+    setB({ bank_name: '', holder_name: '', account_no: '', ifsc: '', branch_name: '', upi_image_url: '', is_default: false });
+    qc.invalidateQueries({ queryKey: ['vendor-banks'] });
+    toast({ title: 'Bank account added' });
+  };
+  const updateBank = async (id: string, patch: any) => {
+    const { error } = await supabase.from('vendor_bank_accounts' as any).update(patch).eq('id', id);
+    if (error) { toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
+    qc.invalidateQueries({ queryKey: ['vendor-banks'] });
+  };
+  const deleteBank = async (id: string) => {
+    if (!confirm('Delete this bank account?')) return;
+    await supabase.from('vendor_bank_accounts' as any).delete().eq('id', id);
+    qc.invalidateQueries({ queryKey: ['vendor-banks'] });
+  };
+
   return (
     <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-foreground">Admin Settings</h1>
