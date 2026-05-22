@@ -11,7 +11,6 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Switch } from '@/components/ui/switch';
 import { MapPin, FileText, Building2, Plus, Trash2, Save, Landmark, Star } from 'lucide-react';
 
 const AdminSettings = () => {
