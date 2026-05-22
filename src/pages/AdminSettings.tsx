@@ -152,10 +152,11 @@ const AdminSettings = () => {
       <h1 className="text-2xl font-bold text-foreground">Admin Settings</h1>
 
       <Tabs defaultValue="geofences" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="geofences"><MapPin className="h-4 w-4 mr-1" />Geofences</TabsTrigger>
           <TabsTrigger value="terms"><FileText className="h-4 w-4 mr-1" />T&amp;C Templates</TabsTrigger>
           <TabsTrigger value="vendor"><Building2 className="h-4 w-4 mr-1" />Vendor Profile</TabsTrigger>
+          <TabsTrigger value="banks"><Landmark className="h-4 w-4 mr-1" />Bank Accounts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="geofences" className="space-y-4">
