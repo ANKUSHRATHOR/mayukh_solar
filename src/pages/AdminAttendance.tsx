@@ -81,6 +81,25 @@ const AdminAttendance = () => {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
+  // Punch-out requests panel
+  const { data: punchReqs } = useQuery({
+    queryKey: ['punch-out-requests'],
+    queryFn: async () => {
+      const { data } = await supabase.from('punch_out_requests' as any)
+        .select('*').order('created_at', { ascending: false }).limit(50);
+      return (data as any[]) || [];
+    },
+    refetchInterval: 15000,
+  });
+
+  const reviewReq = async (id: string, approve: boolean) => {
+    const notes = approve ? null : window.prompt('Reason for rejection (optional):') || null;
+    const { error } = await supabase.rpc('review_punch_out_request' as any, { _id: id, _approve: approve, _notes: notes });
+    if (error) { toast({ title: 'Failed', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: approve ? 'Approved' : 'Rejected' });
+    qc.invalidateQueries({ queryKey: ['punch-out-requests'] });
+  };
+
   const summary = useMemo(() => {
     const s = { present: 0, late: 0, half_day: 0, absent: 0, hours: 0, overtime: 0 };
     rows?.forEach((r: any) => {
