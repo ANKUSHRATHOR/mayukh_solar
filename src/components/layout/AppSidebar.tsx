@@ -43,6 +43,7 @@ const adminNav: NavItem[] = [
   { label: 'All Projects', icon: Briefcase, path: '/admin/projects' },
   { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
   { label: 'Staff Management', icon: Users, path: '/staff' },
+  { label: 'Tasks', icon: CheckSquare, path: '/tasks' },
   { label: 'Performance', icon: ShieldCheck, path: '/admin/performance' },
   { label: 'Attendance', icon: CalendarCheck, path: '/admin/attendance' },
   { label: 'Salary', icon: Wallet, path: '/admin/salary' },
@@ -56,6 +57,7 @@ const adminNav: NavItem[] = [
 const telecallerNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
+  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
   { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
   { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
@@ -63,6 +65,8 @@ const telecallerNav: NavItem[] = [
 const salesNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'My Leads', icon: Briefcase, path: '/' },
+  { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
+  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
   { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
   { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
@@ -70,6 +74,7 @@ const salesNav: NavItem[] = [
 const operatorNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Projects', icon: ClipboardCheck, path: '/' },
+  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
   { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
   { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
@@ -77,6 +82,7 @@ const operatorNav: NavItem[] = [
 const welderNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Installations', icon: Wrench, path: '/' },
+  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
   { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
   { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
@@ -84,6 +90,7 @@ const welderNav: NavItem[] = [
 const electricianNav: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Wiring Jobs', icon: Zap, path: '/' },
+  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
   { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
   { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
 ];
