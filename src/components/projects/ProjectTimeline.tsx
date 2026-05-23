@@ -58,7 +58,7 @@ interface Props {
 
 export default function ProjectTimeline({ status, paymentType, compact = false }: Props) {
   const flow = buildFlow(paymentType);
-  const currentIdx = flow.indexOf(status);
+  const currentIdx = (flow as readonly string[]).indexOf(status);
   const isFailed = status === 'inspection_failed';
   const pct = currentIdx >= 0 ? Math.round(((currentIdx + 1) / flow.length) * 100) : 0;
 
