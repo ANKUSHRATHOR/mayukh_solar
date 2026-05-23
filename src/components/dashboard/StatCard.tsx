@@ -32,16 +32,16 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
         tabIndex={interactive ? 0 : undefined}
         onKeyDown={interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } } : undefined}
         className={cn(
-          'group relative overflow-hidden rounded-2xl p-5 glass glow-border shadow-card transition-all duration-300 animate-in-up',
+          'group relative overflow-hidden rounded-2xl p-5 bento transition-all duration-300 animate-in-up',
           interactive && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary/50',
           className,
         )}
       >
-        <div className={cn('pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-gradient-to-br opacity-60 blur-2xl transition-opacity group-hover:opacity-90', accentMap[accent])} />
+        <div className={cn('pointer-events-none absolute -top-16 -right-16 h-44 w-44 rounded-full bg-gradient-to-br opacity-50 blur-3xl transition-opacity group-hover:opacity-80', accentMap[accent])} />
         <div className="relative flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{title}</p>
-            <p className="text-3xl font-bold mt-1.5 text-foreground tabular-nums">{value}</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">{title}</p>
+            <p className="text-3xl font-extrabold mt-2 text-display tabular-nums leading-none">{value}</p>
             {change && (
               <p className={cn(
                 'text-xs mt-2 font-medium inline-flex items-center gap-1',
