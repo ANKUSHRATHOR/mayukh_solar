@@ -224,6 +224,14 @@ const AdminProjects = () => {
         <StatCard title="Completed" value={String(completed)} icon={Briefcase} change={`₹${(totalRevenue / 100000).toFixed(1)}L revenue`} changeType="up" />
       </div>
 
+      <Tabs value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as any)}>
+        <TabsList className="glass">
+          <TabsTrigger value="all">All <span className="ml-1.5 text-xs opacity-70">{projects.length}</span></TabsTrigger>
+          <TabsTrigger value="cash">Cash <span className="ml-1.5 text-xs opacity-70">{cashCount}</span></TabsTrigger>
+          <TabsTrigger value="loan">Loan <span className="ml-1.5 text-xs opacity-70">{loanCount}</span></TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
