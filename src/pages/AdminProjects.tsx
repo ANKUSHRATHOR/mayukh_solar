@@ -298,6 +298,10 @@ const AdminProjects = () => {
                       <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer: <span className="font-medium text-foreground">{p.leads?.customer_name || '—'}</span></span>
                       {p.k_number && <span className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5" /> K Number: <span className="break-all font-medium text-foreground">{p.k_number}</span></span>}
                     </div>
+
+                    <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+                      <ProjectTimeline status={p.status} paymentType={p.payment_type} compact />
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3 border-t border-border bg-muted/20 p-5 xl:w-80 xl:border-l xl:border-t-0">
