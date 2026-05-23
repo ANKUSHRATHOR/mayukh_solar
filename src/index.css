@@ -55,14 +55,17 @@
     --info-foreground: 222 30% 8%;
 
     --gradient-primary: linear-gradient(135deg, hsl(22 95% 55%), hsl(32 100% 62%));
-    --gradient-glow: radial-gradient(circle at 30% 20%, hsl(22 95% 55% / 0.18), transparent 60%);
-    --gradient-card: linear-gradient(160deg, hsl(222 24% 12% / 0.9), hsl(222 26% 8% / 0.9));
-    --gradient-app: radial-gradient(1200px 600px at 80% -10%, hsl(22 95% 35% / 0.15), transparent 60%),
-                     radial-gradient(900px 500px at -10% 110%, hsl(28 100% 45% / 0.12), transparent 60%);
+    --gradient-glow: radial-gradient(circle at 30% 20%, hsl(22 95% 55% / 0.22), transparent 60%);
+    --gradient-card: linear-gradient(160deg, hsl(222 24% 12% / 0.92), hsl(222 26% 7% / 0.92));
+    --gradient-app:
+      radial-gradient(1400px 700px at 85% -15%, hsl(22 95% 40% / 0.22), transparent 60%),
+      radial-gradient(1000px 520px at -10% 110%, hsl(28 100% 50% / 0.18), transparent 60%),
+      radial-gradient(800px 400px at 50% 120%, hsl(22 95% 45% / 0.10), transparent 70%);
 
-    --shadow-card: 0 1px 0 hsl(0 0% 100% / 0.04) inset, 0 8px 24px -12px hsl(0 0% 0% / 0.6);
-    --shadow-elevated: 0 0 0 1px hsl(22 95% 55% / 0.25), 0 20px 50px -20px hsl(22 95% 55% / 0.35);
-    --shadow-glow: 0 0 40px -8px hsl(22 95% 55% / 0.55);
+    --shadow-card: 0 1px 0 hsl(0 0% 100% / 0.05) inset, 0 12px 32px -16px hsl(0 0% 0% / 0.7);
+    --shadow-elevated: 0 0 0 1px hsl(22 95% 55% / 0.28), 0 24px 60px -22px hsl(22 95% 55% / 0.45);
+    --shadow-glow: 0 0 50px -10px hsl(22 95% 55% / 0.6);
+    --shadow-bento: 0 1px 0 hsl(0 0% 100% / 0.08) inset, 0 -1px 0 hsl(0 0% 100% / 0.02) inset, 0 20px 50px -24px hsl(0 0% 0% / 0.8);
   }
 
   .light {
@@ -96,6 +99,17 @@
     background-attachment: fixed;
   }
   ::selection { background: hsl(var(--primary) / 0.35); }
+
+  /* Premium scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, hsl(var(--border)), hsl(var(--muted)));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.5); background-clip: padding-box; }
 }
 
 @layer utilities {
@@ -104,25 +118,58 @@
   .shadow-card { box-shadow: var(--shadow-card); }
   .shadow-elevated { box-shadow: var(--shadow-elevated); }
   .shadow-glow { box-shadow: var(--shadow-glow); }
+  .shadow-bento { box-shadow: var(--shadow-bento); }
 
+  /* Premium glassmorphism — soft, frosted, with subtle inner highlight */
   .glass {
-    background: linear-gradient(160deg, hsl(var(--card) / 0.85), hsl(var(--card) / 0.55));
-    backdrop-filter: blur(12px) saturate(140%);
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
-    border: 1px solid hsl(var(--border) / 0.8);
+    background:
+      linear-gradient(180deg, hsl(0 0% 100% / 0.04), hsl(0 0% 100% / 0) 40%),
+      linear-gradient(160deg, hsl(var(--card) / 0.88), hsl(var(--card) / 0.55));
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid hsl(var(--border) / 0.7);
   }
 
-  .glow-border {
+  /* Bento "premium pack" card — dark base, top edge highlight, warm bottom glow */
+  .bento {
     position: relative;
+    background:
+      radial-gradient(120% 80% at 50% 110%, hsl(22 95% 35% / 0.18), transparent 60%),
+      linear-gradient(180deg, hsl(222 28% 12%), hsl(222 30% 7%));
+    border: 1px solid hsl(var(--border) / 0.8);
+    box-shadow: var(--shadow-bento);
+    overflow: hidden;
   }
+  .bento::before {
+    content: '';
+    position: absolute; inset: 0 0 auto 0; height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.18), transparent);
+  }
+  .bento::after {
+    content: '';
+    position: absolute; inset: auto -20% -40% -20%; height: 60%;
+    background: radial-gradient(closest-side, hsl(22 95% 55% / 0.18), transparent 70%);
+    pointer-events: none;
+    filter: blur(8px);
+  }
+
+  .glow-border { position: relative; }
   .glow-border::before {
     content: '';
     position: absolute; inset: 0; border-radius: inherit; padding: 1px;
-    background: linear-gradient(135deg, hsl(var(--primary) / 0.6), hsl(var(--primary-glow) / 0.2) 40%, transparent 70%);
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.7), hsl(var(--primary-glow) / 0.25) 40%, transparent 70%);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude;
     pointer-events: none;
   }
+
+  .btn-glow {
+    background: var(--gradient-primary);
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 8px 24px -10px hsl(22 95% 55% / 0.7), 0 0 0 1px hsl(22 95% 55% / 0.4) inset;
+    transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+  }
+  .btn-glow:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow: 0 12px 32px -10px hsl(22 95% 55% / 0.85), 0 0 0 1px hsl(22 95% 55% / 0.6) inset; }
 
   .text-gradient {
     background: var(--gradient-primary);
@@ -131,10 +178,36 @@
     color: transparent;
   }
 
+  .text-display {
+    background: linear-gradient(180deg, hsl(0 0% 100%), hsl(30 20% 78%));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Ambient orange horizon — for hero sections / dashboards */
+  .ambient-glow {
+    position: relative;
+  }
+  .ambient-glow::before {
+    content: '';
+    position: absolute; inset: auto -10% -50% -10%; height: 60%;
+    background: radial-gradient(closest-side, hsl(22 95% 55% / 0.35), transparent 70%);
+    filter: blur(40px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .ambient-glow > * { position: relative; z-index: 1; }
+
   .animate-in-up { animation: in-up .5s cubic-bezier(.2,.7,.2,1) both; }
   @keyframes in-up {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 24px -6px hsl(22 95% 55% / 0.4); }
+    50% { box-shadow: 0 0 48px -6px hsl(22 95% 55% / 0.75); }
   }
   .pulse-dot::after {
     content: ''; display: inline-block; width: .5rem; height: .5rem; border-radius: 9999px;
