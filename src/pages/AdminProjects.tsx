@@ -14,6 +14,8 @@ import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
 import { downloadCsv } from '@/lib/exportCsv';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ProjectTimeline from '@/components/projects/ProjectTimeline';
 import type { Database } from '@/integrations/supabase/types';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
