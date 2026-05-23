@@ -354,16 +354,6 @@ const OperatorProjectDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Workflow Timeline */}
-      <Card className="shadow-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Workflow Progress</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ProjectTimeline status={project.status} paymentType={project.payment_type} />
-        </CardContent>
-      </Card>
-
       {/* All Project Documents — always visible to operator */}
       <Card className="shadow-card">
         <CardHeader>
