@@ -180,9 +180,12 @@ const AdminProjects = () => {
       p.leads?.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
       p.k_number?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchPayment = paymentFilter === 'all' || p.payment_type === paymentFilter;
+    return matchSearch && matchStatus && matchPayment;
   });
 
+  const cashCount = projects.filter(p => p.payment_type === 'cash').length;
+  const loanCount = projects.filter(p => p.payment_type === 'loan').length;
   const totalRevenue = projects.reduce((s, p) => s + Number(p.final_amount || 0), 0);
   const completed = projects.filter(p => p.status === 'project_completed').length;
   const inProgress = projects.filter(p => p.status !== 'project_completed').length;
