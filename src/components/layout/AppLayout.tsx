@@ -18,7 +18,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       <AppSidebar mobileOpen={mobileSidebarOpen} onMobileClose={() => setMobileSidebarOpen(false)} />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="h-14 border-b border-border flex items-center justify-between lg:justify-end px-3 sm:px-4 gap-3 shrink-0 bg-card">
+        <header className="h-14 border-b border-border/60 flex items-center justify-between lg:justify-end px-3 sm:px-4 gap-3 shrink-0 glass">
           <Button
             type="button"
             variant="ghost"
