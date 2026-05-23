@@ -14,6 +14,8 @@ import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
 import { downloadCsv } from '@/lib/exportCsv';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ProjectTimeline from '@/components/projects/ProjectTimeline';
 import type { Database } from '@/integrations/supabase/types';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
@@ -53,6 +55,7 @@ const AdminProjects = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'loan'>('all');
   const [assignDialog, setAssignDialog] = useState<{ projectId: string; type: 'welder' | 'electrician' | 'sales_person' } | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [projectToDelete, setProjectToDelete] = useState<any | null>(null);
@@ -177,9 +180,12 @@ const AdminProjects = () => {
       p.leads?.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
       p.k_number?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchPayment = paymentFilter === 'all' || p.payment_type === paymentFilter;
+    return matchSearch && matchStatus && matchPayment;
   });
 
+  const cashCount = projects.filter(p => p.payment_type === 'cash').length;
+  const loanCount = projects.filter(p => p.payment_type === 'loan').length;
   const totalRevenue = projects.reduce((s, p) => s + Number(p.final_amount || 0), 0);
   const completed = projects.filter(p => p.status === 'project_completed').length;
   const inProgress = projects.filter(p => p.status !== 'project_completed').length;
@@ -217,6 +223,14 @@ const AdminProjects = () => {
         <StatCard title="In Progress" value={String(inProgress)} icon={Filter} change="" changeType="neutral" />
         <StatCard title="Completed" value={String(completed)} icon={Briefcase} change={`₹${(totalRevenue / 100000).toFixed(1)}L revenue`} changeType="up" />
       </div>
+
+      <Tabs value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as any)}>
+        <TabsList className="glass">
+          <TabsTrigger value="all">All <span className="ml-1.5 text-xs opacity-70">{projects.length}</span></TabsTrigger>
+          <TabsTrigger value="cash">Cash <span className="ml-1.5 text-xs opacity-70">{cashCount}</span></TabsTrigger>
+          <TabsTrigger value="loan">Loan <span className="ml-1.5 text-xs opacity-70">{loanCount}</span></TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -283,6 +297,10 @@ const AdminProjects = () => {
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer: <span className="font-medium text-foreground">{p.leads?.customer_name || '—'}</span></span>
                       {p.k_number && <span className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5" /> K Number: <span className="break-all font-medium text-foreground">{p.k_number}</span></span>}
+                    </div>
+
+                    <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+                      <ProjectTimeline status={p.status} paymentType={p.payment_type} compact />
                     </div>
                   </div>
 
