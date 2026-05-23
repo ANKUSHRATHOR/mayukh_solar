@@ -135,26 +135,33 @@ const AdminDashboard = () => {
   const s = stats!;
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in-up">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">Welcome back. Here's your business overview.</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-primary font-semibold">Mayukh Solar CRM</p>
+          <h1 className="text-3xl lg:text-4xl font-bold text-foreground mt-1">
+            Welcome back<span className="text-gradient">.</span>
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1.5 inline-flex items-center"><span className="pulse-dot" />&nbsp;Live overview of your business</p>
         </div>
-        <Button onClick={() => navigate('/staff/new')} className="gradient-primary text-primary-foreground font-semibold">
+        <Button onClick={() => navigate('/staff/new')} className="gradient-primary text-primary-foreground font-semibold shadow-glow hover:opacity-90">
           <UserPlus className="mr-2 h-4 w-4" /> Add Staff
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard onClick={() => navigate('/leads')} title="Total Leads This Month" value={String(s.totalLeadsThisMonth)} icon={Users} change={s.totalLeadsThisMonth > 0 ? `${s.totalLeadsThisMonth} new` : 'No leads yet'} changeType={s.totalLeadsThisMonth > 0 ? 'up' : 'neutral'} />
-        <StatCard onClick={() => navigate('/admin/projects')} title="Running Projects" value={String(s.runningProjects)} icon={Briefcase} change={s.runningProjects > 0 ? 'Active' : 'None'} changeType={s.runningProjects > 0 ? 'up' : 'neutral'} />
-        <StatCard onClick={() => navigate('/admin/projects')} title="Completed This Month" value={String(s.completedThisMonth)} icon={CheckCircle2} change={s.completedThisMonth > 0 ? 'This month' : 'None yet'} changeType={s.completedThisMonth > 0 ? 'up' : 'neutral'} />
-        <StatCard onClick={() => navigate('/leads/bin')} title="Cancelled Leads" value={String(s.cancelledLeads)} icon={XCircle} change={s.cancelledLeads > 0 ? `${s.cancelledLeads} cancelled` : 'All clear'} changeType={s.cancelledLeads > 0 ? 'down' : 'neutral'} />
-        <StatCard onClick={() => navigate('/admin/projects')} title="Pending Documents" value={String(s.pendingDocuments)} icon={FileText} change="Awaiting upload" changeType={s.pendingDocuments > 0 ? 'down' : 'neutral'} />
-        <StatCard onClick={() => navigate('/admin/projects')} title="Revenue This Month" value={`₹${s.revenueThisMonth > 0 ? (s.revenueThisMonth / 100000).toFixed(1) + 'L' : '0'}`} icon={IndianRupee} change={s.revenueThisMonth > 0 ? 'This month' : 'No revenue yet'} changeType={s.revenueThisMonth > 0 ? 'up' : 'neutral'} />
-        <StatCard onClick={() => navigate('/leads')} title="Overdue Follow-ups" value={String(s.overdueFollowUps)} icon={Clock} change={s.overdueFollowUps > 0 ? 'Needs attention' : 'All clear'} changeType={s.overdueFollowUps > 0 ? 'down' : 'neutral'} />
-        <StatCard onClick={() => navigate('/admin/projects')} title="Pending Loan Files" value={String(s.pendingLoanFiles)} icon={FolderOpen} change={s.pendingLoanFiles > 0 ? 'In process' : 'None'} changeType={s.pendingLoanFiles > 0 ? 'down' : 'neutral'} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard accent="primary" onClick={() => navigate('/leads')} title="Leads (Month)" value={String(s.totalLeadsThisMonth)} icon={Users} change={s.totalLeadsThisMonth > 0 ? `${s.totalLeadsThisMonth} new` : 'No leads yet'} changeType={s.totalLeadsThisMonth > 0 ? 'up' : 'neutral'} />
+        <StatCard accent="info" onClick={() => navigate('/admin/projects')} title="Running" value={String(s.runningProjects)} icon={Briefcase} change={s.runningProjects > 0 ? 'Active pipeline' : 'None'} changeType={s.runningProjects > 0 ? 'up' : 'neutral'} />
+        <StatCard accent="success" onClick={() => navigate('/admin/projects')} title="Completed" value={String(s.completedThisMonth)} icon={CheckCircle2} change={s.completedThisMonth > 0 ? 'This month' : 'None yet'} changeType={s.completedThisMonth > 0 ? 'up' : 'neutral'} />
+        <StatCard accent="destructive" onClick={() => navigate('/leads/bin')} title="Cancelled" value={String(s.cancelledLeads)} icon={XCircle} change={s.cancelledLeads > 0 ? `${s.cancelledLeads} in bin` : 'All clear'} changeType={s.cancelledLeads > 0 ? 'down' : 'neutral'} />
+        <StatCard accent="warning" onClick={() => navigate('/admin/projects')} title="Cash Projects" value={String(s.cashProjects)} icon={IndianRupee} change="Direct payment" changeType="neutral" />
+        <StatCard accent="info" onClick={() => navigate('/admin/projects')} title="Loan Projects" value={String(s.loanProjects)} icon={FolderOpen} change="Financed" changeType="neutral" />
+        <StatCard accent="primary" onClick={() => navigate('/tasks')} title="Pending Tasks" value={String(s.pendingTasks)} icon={Clock} change={s.pendingTasks > 0 ? 'Open work' : 'All done'} changeType={s.pendingTasks > 0 ? 'down' : 'up'} />
+        <StatCard accent="success" onClick={() => navigate('/admin/attendance')} title="Present Today" value={String(s.presentToday)} icon={CheckCircle2} change="Staff on duty" changeType="up" />
+        <StatCard accent="warning" onClick={() => navigate('/admin/projects')} title="Pending Docs" value={String(s.pendingDocuments)} icon={FileText} change="Awaiting upload" changeType={s.pendingDocuments > 0 ? 'down' : 'neutral'} />
+        <StatCard accent="success" onClick={() => navigate('/admin/projects')} title="Revenue (Month)" value={`₹${s.revenueThisMonth > 0 ? (s.revenueThisMonth / 100000).toFixed(1) + 'L' : '0'}`} icon={IndianRupee} change={s.revenueThisMonth > 0 ? 'This month' : 'No revenue yet'} changeType={s.revenueThisMonth > 0 ? 'up' : 'neutral'} />
+        <StatCard accent="destructive" onClick={() => navigate('/leads')} title="Overdue Follow-ups" value={String(s.overdueFollowUps)} icon={Clock} change={s.overdueFollowUps > 0 ? 'Needs attention' : 'All clear'} changeType={s.overdueFollowUps > 0 ? 'down' : 'neutral'} />
+        <StatCard accent="info" onClick={() => navigate('/admin/projects')} title="Loan Files" value={String(s.pendingLoanFiles)} icon={FolderOpen} change={s.pendingLoanFiles > 0 ? 'In process' : 'None'} changeType={s.pendingLoanFiles > 0 ? 'down' : 'neutral'} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
