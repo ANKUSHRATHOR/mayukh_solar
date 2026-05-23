@@ -57,8 +57,9 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
               </p>
             )}
           </div>
-          <div className={cn('relative p-2.5 rounded-xl bg-background/60 border border-border shrink-0', accentMap[accent].split(' ').pop())}>
+          <div className={cn('relative p-3 rounded-xl bg-background/70 border border-border/80 shrink-0 backdrop-blur', accentMap[accent].split(' ').pop())}>
             <Icon className="h-5 w-5" />
+            <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/5" />
           </div>
         </div>
       </div>
