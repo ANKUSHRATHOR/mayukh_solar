@@ -28,6 +28,10 @@ interface DashboardStats {
   revenueThisMonth: number;
   overdueFollowUps: number;
   pendingLoanFiles: number;
+  cashProjects: number;
+  loanProjects: number;
+  pendingTasks: number;
+  presentToday: number;
 }
 
 interface ActivityItem {
@@ -49,6 +53,7 @@ const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const today = new Date().toISOString().slice(0, 10);
 
     const [
       leadsMonthRes,
@@ -58,6 +63,8 @@ const AdminDashboard = () => {
       recentLeadsRes,
       recentProjectsRes,
       recentDocsRes,
+      tasksRes,
+      attendanceRes,
     ] = await Promise.all([
       supabase.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', monthStart).eq('is_in_bin', false),
       supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'cancelled').eq('is_in_bin', false),
@@ -66,6 +73,8 @@ const AdminDashboard = () => {
       supabase.from('leads').select('customer_name, created_at, status').order('created_at', { ascending: false }).limit(3),
       supabase.from('projects').select('project_code, status, updated_at').order('updated_at', { ascending: false }).limit(3),
       supabase.from('documents').select('document_type, uploaded_at, is_verified').order('uploaded_at', { ascending: false }).limit(2),
+      supabase.from('tasks').select('id', { count: 'exact', head: true }).in('status', ['pending', 'in_progress']),
+      supabase.from('attendance').select('id', { count: 'exact', head: true }).eq('date', today).in('status', ['present', 'late', 'half_day']),
     ]);
 
     const projects = projectsRes.data || [];
@@ -73,6 +82,8 @@ const AdminDashboard = () => {
     const running = projects.filter(p => p.status !== 'project_completed').length;
     const pendingDocs = projects.filter(p => p.status === 'pending_documents').length;
     const pendingLoan = projects.filter(p => p.status === 'loan_process').length;
+    const cashProjects = projects.filter(p => p.payment_type === 'cash').length;
+    const loanProjects = projects.filter(p => p.payment_type === 'loan').length;
     const revenue = projects.filter(p => p.status === 'project_completed' && p.completed_at && p.completed_at >= monthStart)
       .reduce((s, p) => s + Number(p.final_amount || 0), 0);
 
@@ -85,6 +96,10 @@ const AdminDashboard = () => {
       revenueThisMonth: revenue,
       overdueFollowUps: overdueRes.count || 0,
       pendingLoanFiles: pendingLoan,
+      cashProjects,
+      loanProjects,
+      pendingTasks: tasksRes.count || 0,
+      presentToday: attendanceRes.count || 0,
     });
 
     // Build activity feed from real data
