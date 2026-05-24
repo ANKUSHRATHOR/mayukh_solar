@@ -102,9 +102,9 @@ const QuotationsList = () => {
   const uniqueProjectsCount = dedupedByProject.length;
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-in-up">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Quotations</h1>
+          <h1 className="text-2xl font-bold text-display">Quotations</h1>
           <p className="text-sm text-muted-foreground mt-1">Search and review generated customer quotations</p>
         </div>
 
@@ -151,7 +151,7 @@ const QuotationsList = () => {
                 tabIndex={0}
                 onClick={() => openQuotation(q)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openQuotation(q); } }}
-                className="cursor-pointer overflow-hidden border-border bg-card shadow-card transition-shadow hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary"
+                className="cursor-pointer overflow-hidden bento transition-shadow hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-3">
