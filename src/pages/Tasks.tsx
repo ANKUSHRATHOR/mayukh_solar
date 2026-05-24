@@ -114,54 +114,69 @@ const Tasks = () => {
     } finally { setSubmitting(false); }
   };
 
+  const pendingCount = (tasks || []).filter((x: any) => x.status === 'pending').length;
+  const inProgressCount = (tasks || []).filter((x: any) => x.status === 'in_progress').length;
+  const doneCount = (tasks || []).filter((x: any) => x.status === 'completed').length;
+
   return (
-    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6 animate-in-up">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Tasks</h1>
+          <h1 className="text-2xl font-bold text-display">Tasks</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isAdminOrOp ? 'Assign and track extra work for sales persons.' : 'Your assigned tasks.'}
           </p>
         </div>
         {isAdminOrOp && (
-          <Button onClick={() => setCreateOpen(true)} className="gradient-primary text-primary-foreground">
+          <Button onClick={() => setCreateOpen(true)} className="btn-glow text-primary-foreground">
             <Plus className="h-4 w-4 mr-1" /> Assign task
           </Button>
         )}
       </div>
 
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Pending', value: pendingCount, color: 'text-warning' },
+          { label: 'In Progress', value: inProgressCount, color: 'text-info' },
+          { label: 'Completed', value: doneCount, color: 'text-success' },
+        ].map((s) => (
+          <div key={s.label} className="bento p-4">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{s.label}</p>
+            <p className={`text-2xl font-extrabold mt-1 ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
       {!tasks?.length ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">No tasks yet.</CardContent></Card>
+        <div className="bento p-8 text-center text-muted-foreground">No tasks yet.</div>
       ) : (
         <div className="space-y-3">
           {tasks.map((task: any) => (
-            <Card key={task.id} className="shadow-card border-border">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-foreground">{task.title}</p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(task.created_at), 'dd MMM HH:mm')}{task.due_date ? ` • Due ${format(new Date(task.due_date), 'dd MMM')}` : ''}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className={priorityColor[task.priority]}>{task.priority}</Badge>
-                    <Badge variant={task.status === 'completed' ? 'default' : 'outline'} className="capitalize">{task.status.replace('_', ' ')}</Badge>
-                  </div>
+            <div key={task.id} className="bento p-4 space-y-2 hover:shadow-elevated transition-shadow">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground">{task.title}</p>
+                  <p className="text-xs text-muted-foreground">{format(new Date(task.created_at), 'dd MMM HH:mm')}{task.due_date ? ` • Due ${format(new Date(task.due_date), 'dd MMM')}` : ''}</p>
                 </div>
-                {task.description && <p className="text-sm text-foreground/80">{task.description}</p>}
-                {task.staff_notes && <p className="text-xs text-muted-foreground">Notes: {task.staff_notes}</p>}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge className={priorityColor[task.priority]}>{task.priority}</Badge>
+                  <Badge variant={task.status === 'completed' ? 'default' : 'outline'} className="capitalize">{task.status.replace('_', ' ')}</Badge>
+                </div>
+              </div>
+              {task.description && <p className="text-sm text-foreground/80">{task.description}</p>}
+              {task.staff_notes && <p className="text-xs text-muted-foreground">Notes: {task.staff_notes}</p>}
 
-                {!isAdminOrOp && task.status !== 'completed' && (
-                  <div className="flex gap-2 pt-1">
-                    {task.status === 'pending' && (
-                      <Button size="sm" variant="outline" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
-                    )}
-                    <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => { setProofOpen(task); setProofNotes(task.staff_notes || ''); }}>
-                      <CheckCircle2 className="h-4 w-4 mr-1" /> Mark complete
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              {!isAdminOrOp && task.status !== 'completed' && (
+                <div className="flex gap-2 pt-1">
+                  {task.status === 'pending' && (
+                    <Button size="sm" variant="outline" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
+                  )}
+                  <Button size="sm" className="btn-glow text-primary-foreground" onClick={() => { setProofOpen(task); setProofNotes(task.staff_notes || ''); }}>
+                    <CheckCircle2 className="h-4 w-4 mr-1" /> Mark complete
+                  </Button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
