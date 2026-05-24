@@ -39,56 +39,52 @@ const StaffPerformance = () => {
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in-up">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Staff Performance</h1>
+        <h1 className="text-2xl font-bold text-display">Staff Performance</h1>
         <p className="text-sm text-muted-foreground mt-1">KPI summary across leads, projects and attendance.</p>
       </div>
 
-      <Card>
-        <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-          <div className="space-y-1.5"><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-          <Button variant="outline" onClick={exportCsv} disabled={!data?.length}><Download className="h-4 w-4 mr-1" /> Export CSV</Button>
-        </CardContent>
-      </Card>
+      <div className="bento p-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div className="space-y-1.5"><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+        <div className="space-y-1.5"><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+        <Button variant="outline" onClick={exportCsv} disabled={!data?.length}><Download className="h-4 w-4 mr-1" /> Export CSV</Button>
+      </div>
 
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Results</CardTitle></CardHeader>
-        <CardContent>
-          {isLoading ? <p className="text-sm text-muted-foreground">Loading...</p> : !data?.length ? <p className="text-sm text-muted-foreground">No data.</p> : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs text-muted-foreground border-b border-border">
-                  <tr>
-                    <th className="py-2">Staff</th><th>Role</th>
-                    <th className="text-right">Leads Created</th>
-                    <th className="text-right">Leads Assigned</th>
-                    <th className="text-right">Projects Done</th>
-                    <th className="text-right">Present</th>
-                    <th className="text-right">Absent</th>
-                    <th className="text-right">Attendance %</th>
+      <div className="bento p-5">
+        <h2 className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-3">Results</h2>
+        {isLoading ? <p className="text-sm text-muted-foreground">Loading...</p> : !data?.length ? <p className="text-sm text-muted-foreground">No data.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/60">
+                <tr>
+                  <th className="py-2">Staff</th><th>Role</th>
+                  <th className="text-right">Leads Created</th>
+                  <th className="text-right">Leads Assigned</th>
+                  <th className="text-right">Projects Done</th>
+                  <th className="text-right">Present</th>
+                  <th className="text-right">Absent</th>
+                  <th className="text-right">Attendance %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((r: any) => (
+                  <tr key={r.user_id} className="border-b border-border/30 hover:bg-accent/30 transition-colors">
+                    <td className="py-2.5 font-medium">{r.full_name}</td>
+                    <td><Badge variant="outline" className="text-xs capitalize">{r.role}</Badge></td>
+                    <td className="text-right">{r.leads_created}</td>
+                    <td className="text-right">{r.leads_assigned}</td>
+                    <td className="text-right">{r.projects_completed}</td>
+                    <td className="text-right text-success">{r.present_days}</td>
+                    <td className="text-right text-destructive">{r.absent_days}</td>
+                    <td className="text-right font-bold text-primary">{r.attendance_pct}%</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {data.map((r: any) => (
-                    <tr key={r.user_id} className="border-b border-border/40">
-                      <td className="py-2 font-medium">{r.full_name}</td>
-                      <td><Badge variant="outline" className="text-xs">{r.role}</Badge></td>
-                      <td className="text-right">{r.leads_created}</td>
-                      <td className="text-right">{r.leads_assigned}</td>
-                      <td className="text-right">{r.projects_completed}</td>
-                      <td className="text-right">{r.present_days}</td>
-                      <td className="text-right">{r.absent_days}</td>
-                      <td className="text-right font-semibold">{r.attendance_pct}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
