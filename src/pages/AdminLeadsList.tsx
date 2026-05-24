@@ -89,10 +89,10 @@ const AdminLeadsList = () => {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">All Leads</h1>
+          <h1 className="text-2xl font-bold text-display">All Leads</h1>
           <p className="text-muted-foreground text-sm mt-1">{leads.length} total leads</p>
         </div>
         <div className="flex gap-2">
@@ -109,7 +109,7 @@ const AdminLeadsList = () => {
             { header: 'Created By', value: (l: any) => staffName(l.created_by_user_id) },
             { header: 'Assigned To', value: (l: any) => assignedStaffName(l.assigned_to_user_id) || '' },
           ], filtered)} disabled={!leads.length}><Download className="mr-2 h-4 w-4" /> Export</Button>
-          <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
+          <Button onClick={() => navigate('/leads/new')} className="btn-glow font-semibold">
             <PhoneCall className="mr-2 h-4 w-4" /> Create Lead
           </Button>
         </div>
@@ -124,7 +124,7 @@ const AdminLeadsList = () => {
         <div className="flex gap-2 flex-wrap">
           {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final'].map(s => (
             <Button key={s} variant={filterStatus === s ? 'default' : 'outline'} size="sm" onClick={() => setFilterStatus(s)}
-              className={filterStatus === s ? 'gradient-primary text-primary-foreground' : ''}>
+              className={filterStatus === s ? 'btn-glow' : ''}>
               {s === 'all' ? 'All' : statusLabel(s)}
             </Button>
           ))}
@@ -141,7 +141,7 @@ const AdminLeadsList = () => {
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
               {filtered.map(lead => (
-                <div key={lead.id} className="rounded-lg border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-elevated">
+                <div key={lead.id} className="bento p-5 transition-shadow hover:shadow-elevated">
                   <div className="flex items-start justify-between gap-3 cursor-pointer" onClick={() => navigate(`/leads/${lead.id}`)}>
                     <div className="min-w-0">
                       <h2 className="truncate text-lg font-extrabold text-foreground">{lead.customer_name}</h2>

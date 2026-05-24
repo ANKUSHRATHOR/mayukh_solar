@@ -58,64 +58,60 @@ const MyAttendance = () => {
   const leadingBlanks = getDay(range.start);
 
   return (
-    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6 animate-in-up">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">My monthly attendance</h1>
+        <h1 className="text-2xl font-bold text-display">My monthly attendance</h1>
         <p className="text-sm text-muted-foreground mt-1">Calendar view of your punches</p>
       </div>
 
-      <Card className="border-border shadow-card">
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="space-y-1.5">
-            <Label>Month</Label>
-            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="bento p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="space-y-1.5">
+          <Label>Month</Label>
+          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {(['present', 'late', 'half_day', 'absent'] as const).map((k) => (
-          <Card key={k} className="border-border"><CardContent className="p-3">
-            <p className="text-xs text-muted-foreground uppercase">{k.replace('_', ' ')}</p>
-            <p className="text-2xl font-bold">{(summary as any)[k] || 0}</p>
-          </CardContent></Card>
+          <div key={k} className="bento p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.18em]">{k.replace('_', ' ')}</p>
+            <p className="text-2xl font-extrabold mt-1">{(summary as any)[k] || 0}</p>
+          </div>
         ))}
-        <Card className="border-border"><CardContent className="p-3">
-          <p className="text-xs text-muted-foreground uppercase">Attendance %</p>
-          <p className="text-2xl font-bold text-primary">{summary.pct}%</p>
-          <p className="text-xs text-muted-foreground">{summary.hours.toFixed(1)} hours total</p>
-        </CardContent></Card>
+        <div className="bento p-3">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-[0.18em]">Attendance %</p>
+          <p className="text-2xl font-extrabold text-gradient mt-1">{summary.pct}%</p>
+          <p className="text-[10px] text-muted-foreground">{summary.hours.toFixed(1)} hours total</p>
+        </div>
       </div>
 
-      <Card className="border-border shadow-card">
-        <CardHeader className="pb-3"><CardTitle className="text-base">Calendar</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-1 text-xs">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-              <div key={i} className="p-2 text-center font-semibold text-muted-foreground">{d}</div>
-            ))}
-            {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`b${i}`} />)}
-            {range.days.map((d) => {
-              const key = format(d, 'yyyy-MM-dd');
-              const r = byDate[key];
-              const cls = r ? statusBg[r.status] : 'bg-muted/40 text-muted-foreground border-border';
-              return (
-                <div key={key} className={`min-h-[60px] rounded-md border p-1.5 ${cls}`}>
-                  <div className="text-sm font-bold">{format(d, 'd')}</div>
-                  {r && (
-                    <>
-                      <div className="text-[10px] capitalize">{r.status.replace('_', ' ')}</div>
-                      {!!r.worked_minutes && (
-                        <div className="text-[10px]">{Math.floor(r.worked_minutes / 60)}h{r.worked_minutes % 60}m</div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="bento p-5">
+        <h2 className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-3">Calendar</h2>
+        <div className="grid grid-cols-7 gap-1.5 text-xs">
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+            <div key={i} className="p-2 text-center font-semibold text-muted-foreground">{d}</div>
+          ))}
+          {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`b${i}`} />)}
+          {range.days.map((d) => {
+            const key = format(d, 'yyyy-MM-dd');
+            const r = byDate[key];
+            const cls = r ? statusBg[r.status] : 'bg-muted/30 text-muted-foreground border-border/60';
+            return (
+              <div key={key} className={`min-h-[60px] rounded-lg border p-1.5 backdrop-blur transition-transform hover:scale-[1.02] ${cls}`}>
+                <div className="text-sm font-bold">{format(d, 'd')}</div>
+                {r && (
+                  <>
+                    <div className="text-[10px] capitalize">{r.status.replace('_', ' ')}</div>
+                    {!!r.worked_minutes && (
+                      <div className="text-[10px] opacity-80">{Math.floor(r.worked_minutes / 60)}h{r.worked_minutes % 60}m</div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 };
