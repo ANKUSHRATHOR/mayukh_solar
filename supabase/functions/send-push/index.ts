@@ -26,6 +26,30 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Require authentication for sending pushes.
+    // Accept either a valid user JWT, or the internal trigger secret (used by the DB trigger).
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const INTERNAL_SECRET = Deno.env.get("INTERNAL_PUSH_SECRET") ?? "";
+    let authorized = false;
+    if (bearer && INTERNAL_SECRET && bearer === INTERNAL_SECRET) {
+      authorized = true;
+    } else if (authHeader) {
+      const authClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: { user } } = await authClient.auth.getUser();
+      authorized = !!user;
+    }
+    if (!authorized) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body = await req.json();
     const { user_id, title, message, entity_type, entity_id } = body ?? {};
     if (!user_id || !title || !message) {

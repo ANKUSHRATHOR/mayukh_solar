@@ -33,14 +33,23 @@ Deno.serve(async (req) => {
     }
 
     const authHeader = req.headers.get("Authorization");
-    let userId: string | null = null;
-    if (authHeader) {
-      const sbAuth = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      const { data: { user } } = await sbAuth.auth.getUser();
-      userId = user?.id ?? null;
     }
+    const sbAuth = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user } } = await sbAuth.auth.getUser();
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userId: string = user.id;
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
