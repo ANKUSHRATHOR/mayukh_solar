@@ -229,9 +229,14 @@ const StaffManagement = () => {
           <h1 className="text-2xl font-bold text-foreground">Staff Management</h1>
           <p className="text-muted-foreground text-sm mt-1">{staffList.length} staff members</p>
         </div>
-        <Button onClick={() => navigate('/staff/new')} className="gradient-primary text-primary-foreground font-semibold">
-          <UserPlus className="mr-2 h-4 w-4" /> Add Staff
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/staff/reset-logs')}>
+            <History className="mr-2 h-4 w-4" /> Reset Logs
+          </Button>
+          <Button onClick={() => navigate('/staff/new')} className="gradient-primary text-primary-foreground font-semibold">
+            <UserPlus className="mr-2 h-4 w-4" /> Add Staff
+          </Button>
+        </div>
       </div>
 
       <div className="relative max-w-md">
