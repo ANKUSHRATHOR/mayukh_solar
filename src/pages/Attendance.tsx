@@ -196,128 +196,155 @@ const Attendance = () => {
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-3xl mx-auto space-y-6">
+    <div className="p-4 lg:p-8 max-w-3xl mx-auto space-y-6 animate-in-up">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">My Attendance</h1>
+          <h1 className="text-display text-2xl sm:text-3xl">My Attendance</h1>
           <p className="text-sm text-muted-foreground mt-1">{format(new Date(), 'EEEE, dd MMM yyyy')}</p>
         </div>
         <Link to="/my-attendance" className="text-sm text-primary underline shrink-0">Monthly view</Link>
       </div>
 
-      <Card className="border-border shadow-card">
-        <CardHeader className="pb-3"><CardTitle className="text-base">Today</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className={statusColor[todayAttendance?.status ?? 'absent']}>
+      {/* Status hero */}
+      <div className="bento p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Badge className={`${statusColor[todayAttendance?.status ?? 'absent']} text-sm px-3 py-1`}>
               {(todayAttendance?.status ?? 'absent').replace('_', ' ').toUpperCase()}
             </Badge>
-            {todayAttendance?.check_in_at && <span className="text-xs text-muted-foreground">In: {format(new Date(todayAttendance.check_in_at), 'HH:mm')}</span>}
-            {todayAttendance?.check_out_at && <span className="text-xs text-muted-foreground">Out: {format(new Date(todayAttendance.check_out_at), 'HH:mm')}</span>}
             {!!todayAttendance?.worked_minutes && (
-              <span className="text-xs text-muted-foreground">Worked: {Math.floor(todayAttendance.worked_minutes / 60)}h {todayAttendance.worked_minutes % 60}m</span>
+              <span className="text-sm text-muted-foreground">
+                Worked {Math.floor(todayAttendance.worked_minutes / 60)}h {todayAttendance.worked_minutes % 60}m
+              </span>
             )}
           </div>
-
-          {!activeKind ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {(Object.keys(kindMeta) as Kind[]).map((k) => {
-                const Meta = kindMeta[k];
-                const Icon = Meta.icon;
-                const primary = k === 'check_in';
-                return (
-                  <Button
-                    key={k}
-                    onClick={() => startPunch(k)}
-                    variant={primary ? 'default' : 'outline'}
-                    className={`h-14 w-full justify-center text-base font-semibold whitespace-normal text-center px-3 ${primary ? 'gradient-primary text-primary-foreground' : ''}`}
-                  >
-                    <Icon className="h-5 w-5 mr-2 shrink-0" />
-                    <span className="leading-tight">{Meta.label}</span>
-                  </Button>
-                );
-              })}
+          <div className="flex items-center gap-4 text-xs">
+            <div className="text-center">
+              <p className="text-muted-foreground">In</p>
+              <p className="font-semibold text-foreground text-sm">
+                {todayAttendance?.check_in_at ? format(new Date(todayAttendance.check_in_at), 'HH:mm') : '—'}
+              </p>
             </div>
-          ) : (
-            <div className="space-y-4 rounded-lg border border-border p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold capitalize">{activeKind.replace('_', ' ')}</p>
-                <Button variant="ghost" size="sm" onClick={cancelPunch} disabled={busy}>Cancel</Button>
+            <div className="h-8 w-px bg-border" />
+            <div className="text-center">
+              <p className="text-muted-foreground">Out</p>
+              <p className="font-semibold text-foreground text-sm">
+                {todayAttendance?.check_out_at ? format(new Date(todayAttendance.check_out_at), 'HH:mm') : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {!activeKind ? (
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {(Object.keys(kindMeta) as Kind[]).map((k) => {
+              const Meta = kindMeta[k];
+              const Icon = Meta.icon;
+              const primary = k === 'check_in';
+              return (
+                <button
+                  key={k}
+                  onClick={() => startPunch(k)}
+                  className={`group relative h-20 sm:h-24 rounded-xl border transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1.5 px-3 ${
+                    primary
+                      ? 'gradient-primary text-primary-foreground border-transparent shadow-elevated hover:shadow-glow'
+                      : 'border-border bg-card/60 hover:bg-card hover:border-primary/40 backdrop-blur'
+                  }`}
+                >
+                  <Icon className="h-6 w-6 shrink-0" />
+                  <span className="text-sm font-semibold leading-tight text-center">{Meta.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-5 space-y-4 rounded-xl border border-border bg-background/40 backdrop-blur p-4 sm:p-5">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold capitalize text-base">{activeKind.replace('_', ' ')}</p>
+              <Button variant="ghost" size="sm" onClick={cancelPunch} disabled={busy}>Cancel</Button>
+            </div>
+
+            {requiresLocation && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Live Location <span className="text-destructive">*</span>
+                </Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={captureLocation} disabled={locating || busy} className="h-9">
+                    <MapPin className="h-4 w-4 mr-1.5" /> {locating ? 'Getting...' : (coords ? 'Refresh' : 'Capture')}
+                  </Button>
+                  {coords ? (
+                    <span className="text-xs text-muted-foreground break-all">
+                      {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc)}m)
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Not captured yet</span>
+                  )}
+                </div>
               </div>
+            )}
 
-              {requiresLocation && (
-                <div className="space-y-2">
-                  <Label>Live Location <span className="text-destructive">*</span></Label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={captureLocation} disabled={locating || busy}>
-                      <MapPin className="h-4 w-4 mr-1" /> {locating ? 'Getting...' : (coords ? 'Refresh' : 'Get')}
-                    </Button>
-                    {coords ? (
-                      <span className="text-xs text-muted-foreground break-all">{coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc)}m)</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Not captured yet</span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {requiresPhoto && (
-                <div className="space-y-2">
-                  <Label>Bike Meter Photo <span className="text-destructive">*</span></Label>
-                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChosen} />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={busy}>
-                      <Camera className="h-4 w-4 mr-1" /> {imagePreview ? 'Retake' : 'Open camera'}
-                    </Button>
-                    {imgInfo && (
-                      <>
-                        <span className="text-xs text-muted-foreground">{imgInfo.kb} KB</span>
-                        {imgInfo.blur < 25 ? (
-                          <span className="text-xs text-warning flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Blurry</span>
-                        ) : (
-                          <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sharp</span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  {imagePreview && <img src={imagePreview} alt="Preview" className="mt-2 max-h-56 rounded-md border border-border object-contain" />}
-                </div>
-              )}
-
-              {requiresPhoto && (
-                <div className="space-y-2">
-                  <Label>Odometer (km) <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                  <Input type="number" inputMode="decimal" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="e.g. 12450" />
-                </div>
-              )}
-
-              {busy && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">{phase}</p>
-                  <Progress value={progress} className="h-2" />
-                </div>
-              )}
-
-              <Button
-                onClick={submitPunch}
-                disabled={busy || (requiresLocation && !coords) || (requiresPhoto && !imageFile)}
-                className="w-full h-12 gradient-primary text-primary-foreground text-base"
-              >
-                {busy ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />{phase || 'Saving…'}</> : 'Submit'}
-              </Button>
-
-              {isSales && activeKind === 'check_out' && (
-                <div className="pt-2 border-t border-border">
-                  <p className="text-xs text-muted-foreground mb-2">Going home from the field? Send a request to admin to punch out from current location.</p>
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => setReqOpen(true)}>
-                    <Send className="h-4 w-4 mr-1" /> Request outside punch-out
+            {requiresPhoto && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Bike Meter Photo <span className="text-destructive">*</span>
+                </Label>
+                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChosen} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={busy} className="h-9">
+                    <Camera className="h-4 w-4 mr-1.5" /> {imagePreview ? 'Retake' : 'Open camera'}
                   </Button>
+                  {imgInfo && (
+                    <>
+                      <span className="text-xs text-muted-foreground">{imgInfo.kb} KB</span>
+                      {imgInfo.blur < 25 ? (
+                        <span className="text-xs text-warning flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Blurry</span>
+                      ) : (
+                        <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Sharp</span>
+                      )}
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                {imagePreview && <img src={imagePreview} alt="Preview" className="mt-2 max-h-56 rounded-lg border border-border object-contain w-full" />}
+              </div>
+            )}
+
+            {requiresPhoto && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Odometer (km) <span className="text-muted-foreground/70 normal-case font-normal">optional</span>
+                </Label>
+                <Input type="number" inputMode="decimal" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="e.g. 12450" className="h-10" />
+              </div>
+            )}
+
+            {busy && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">{phase}</p>
+                <Progress value={progress} className="h-2" />
+              </div>
+            )}
+
+            <Button
+              onClick={submitPunch}
+              disabled={busy || (requiresLocation && !coords) || (requiresPhoto && !imageFile)}
+              className="w-full h-12 btn-glow text-base font-semibold"
+            >
+              {busy ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{phase || 'Saving…'}</> : 'Submit Punch'}
+            </Button>
+
+            {isSales && activeKind === 'check_out' && (
+              <div className="pt-3 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-2">Going home from the field? Send a request to admin to punch out from current location.</p>
+                <Button variant="outline" size="sm" className="w-full h-10" onClick={() => setReqOpen(true)}>
+                  <Send className="h-4 w-4 mr-1.5" /> Request outside punch-out
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
 
       {isSales && !!myRequests?.length && (
         <Card className="border-border shadow-card">
