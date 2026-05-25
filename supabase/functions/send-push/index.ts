@@ -27,12 +27,12 @@ Deno.serve(async (req) => {
 
   try {
     // Require authentication for sending pushes.
-    // Accept either a valid user JWT, or the service role key (used by the DB trigger).
+    // Accept either a valid user JWT, or the internal trigger secret (used by the DB trigger).
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "");
-    const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const INTERNAL_SECRET = Deno.env.get("INTERNAL_PUSH_SECRET") ?? "";
     let authorized = false;
-    if (bearer && bearer === SERVICE_ROLE) {
+    if (bearer && INTERNAL_SECRET && bearer === INTERNAL_SECRET) {
       authorized = true;
     } else if (authHeader) {
       const authClient = createClient(
