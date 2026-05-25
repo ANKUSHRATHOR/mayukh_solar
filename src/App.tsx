@@ -68,6 +68,14 @@ const App = () => (
               }
             />
             <Route
+              path="/staff/reset-logs"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <PasswordResetLogs />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/leads"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
