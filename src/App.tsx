@@ -34,6 +34,7 @@ import FieldVisit from "./pages/FieldVisit.tsx";
 import Tasks from "./pages/Tasks.tsx";
 import ProjectHomeLocation from "./pages/ProjectHomeLocation.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import PasswordResetLogs from "./pages/PasswordResetLogs.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
 const queryClient = new QueryClient();
