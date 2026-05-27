@@ -37,62 +37,143 @@ interface NavItem {
   path: string;
 }
 
-const adminNav: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'All Leads', icon: PhoneCall, path: '/leads' },
-  { label: 'All Projects', icon: Briefcase, path: '/admin/projects' },
-  { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
-  { label: 'Staff Management', icon: Users, path: '/staff' },
-  { label: 'Tasks', icon: CheckSquare, path: '/tasks' },
-  { label: 'Performance', icon: ShieldCheck, path: '/admin/performance' },
-  { label: 'Attendance', icon: CalendarCheck, path: '/admin/attendance' },
-  { label: 'Salary', icon: Wallet, path: '/admin/salary' },
-  { label: 'Quotations', icon: FileText, path: '/quotations' },
-  { label: 'Import Quote PDF', icon: FileText, path: '/admin/quotation-import' },
-  { label: 'Activity Logs', icon: ShieldCheck, path: '/activity-logs' },
-  { label: 'Admin Settings', icon: Settings, path: '/admin/settings' },
-  { label: 'Settings', icon: Settings, path: '/settings' },
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const adminNav: NavSection[] = [
+  {
+    title: 'Overview',
+    items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }],
+  },
+  {
+    title: 'Sales & Leads',
+    items: [
+      { label: 'All Leads', icon: PhoneCall, path: '/leads' },
+      { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { label: 'All Projects', icon: Briefcase, path: '/admin/projects' },
+      { label: 'Tasks', icon: CheckSquare, path: '/tasks' },
+      { label: 'Quotations', icon: FileText, path: '/quotations' },
+      { label: 'Import Quote PDF', icon: FileText, path: '/admin/quotation-import' },
+    ],
+  },
+  {
+    title: 'People',
+    items: [
+      { label: 'Staff Management', icon: Users, path: '/staff' },
+      { label: 'Performance', icon: ShieldCheck, path: '/admin/performance' },
+      { label: 'Attendance', icon: CalendarCheck, path: '/admin/attendance' },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [{ label: 'Salary', icon: Wallet, path: '/admin/salary' }],
+  },
+  {
+    title: 'System',
+    items: [
+      { label: 'Activity Logs', icon: ShieldCheck, path: '/activity-logs' },
+      { label: 'Admin Settings', icon: Settings, path: '/admin/settings' },
+      { label: 'Settings', icon: Settings, path: '/settings' },
+    ],
+  },
 ];
 
-const telecallerNav: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
-  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+const telecallerNav: NavSection[] = [
+  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
+  {
+    title: 'Leads',
+    items: [
+      { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
+      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
+    ],
+  },
+  {
+    title: 'Attendance',
+    items: [
+      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+    ],
+  },
 ];
 
-const salesNav: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'My Leads', icon: Briefcase, path: '/' },
-  { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
-  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+const salesNav: NavSection[] = [
+  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
+  {
+    title: 'Field Work',
+    items: [
+      { label: 'My Leads', icon: Briefcase, path: '/' },
+      { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
+      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
+    ],
+  },
+  {
+    title: 'Attendance',
+    items: [
+      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+    ],
+  },
 ];
 
-const operatorNav: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Projects', icon: ClipboardCheck, path: '/' },
-  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+const operatorNav: NavSection[] = [
+  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
+  {
+    title: 'Operations',
+    items: [
+      { label: 'Projects', icon: ClipboardCheck, path: '/' },
+      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
+    ],
+  },
+  {
+    title: 'Attendance',
+    items: [
+      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+    ],
+  },
 ];
 
-const welderNav: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Installations', icon: Wrench, path: '/' },
-  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+const welderNav: NavSection[] = [
+  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
+  {
+    title: 'Field Work',
+    items: [
+      { label: 'Installations', icon: Wrench, path: '/' },
+      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
+    ],
+  },
+  {
+    title: 'Attendance',
+    items: [
+      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+    ],
+  },
 ];
 
-const electricianNav: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Wiring Jobs', icon: Zap, path: '/' },
-  { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-  { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-  { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+const electricianNav: NavSection[] = [
+  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
+  {
+    title: 'Field Work',
+    items: [
+      { label: 'Wiring Jobs', icon: Zap, path: '/' },
+      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
+    ],
+  },
+  {
+    title: 'Attendance',
+    items: [
+      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+    ],
+  },
 ];
 
 const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
@@ -101,7 +182,15 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems = role === 'admin' ? adminNav : role === 'telecaller' ? telecallerNav : role === 'sales_person' ? salesNav : role === 'operator' ? operatorNav : role === 'welder' ? welderNav : role === 'electrician' ? electricianNav : [];
+  const navSections: NavSection[] =
+    role === 'admin' ? adminNav :
+    role === 'telecaller' ? telecallerNav :
+    role === 'sales_person' ? salesNav :
+    role === 'operator' ? operatorNav :
+    role === 'welder' ? welderNav :
+    role === 'electrician' ? electricianNav : [];
+
+
 
   const roleLabel = role ? role.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '';
 
@@ -150,26 +239,37 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3 lg:p-2">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <button
-              key={item.path}
-              onClick={() => handleNavigate(item.path)}
-              className={cn(
-                'w-full flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium transition-all lg:py-2.5',
-                isActive
-                  ? 'bg-gradient-to-r from-primary/20 to-primary/5 text-primary border border-primary/30 shadow-[0_4px_14px_-6px_hsl(22_96%_55%/0.5)]'
-                  : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-              )}
-            >
-              <item.icon className={cn('h-5 w-5 shrink-0', isActive && 'text-primary')} />
-              <span className={cn(collapsed && 'lg:hidden')}>{item.label}</span>
-            </button>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto p-3 lg:p-2 space-y-5">
+        {navSections.map((section) => (
+          <div key={section.title} className="space-y-1">
+            <p className={cn(
+              'px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/45',
+              collapsed && 'lg:hidden'
+            )}>
+              {section.title}
+            </p>
+            {section.items.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <button
+                  key={`${section.title}-${item.label}-${item.path}`}
+                  onClick={() => handleNavigate(item.path)}
+                  className={cn(
+                    'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all',
+                    isActive
+                      ? 'bg-gradient-to-r from-primary/20 to-primary/5 text-primary border border-primary/30 shadow-[0_4px_14px_-6px_hsl(22_96%_55%/0.5)]'
+                      : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                  )}
+                >
+                  <item.icon className={cn('h-5 w-5 shrink-0', isActive && 'text-primary')} />
+                  <span className={cn(collapsed && 'lg:hidden')}>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
+
 
       {/* User section */}
       <div className="border-t border-sidebar-border p-3">
