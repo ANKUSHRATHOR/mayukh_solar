@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Phone, Lock, ArrowRight, Sun, Mail, KeyRound, ShieldCheck } from 'lucide-react';
 import logo from '@/assets/mayukh-solar-logo.png';
+import SolarScene from '@/components/three/SolarScene';
+
 
 type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'forgot_password';
 
@@ -140,7 +141,7 @@ const Login = () => {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-background p-4">
+    <main className="relative min-h-dvh flex items-center justify-center p-4 overflow-hidden bg-[hsl(222_28%_9%)]">
       <Helmet>
         <title>Sign In | Mayukh Solar Staff Portal</title>
         <meta name="description" content="Secure staff sign-in for Mayukh Solar CRM. Access your leads, projects, quotations, and field workflow." />
@@ -149,20 +150,40 @@ const Login = () => {
         <meta property="og:description" content="Secure staff sign-in for Mayukh Solar CRM." />
         <meta property="og:url" content="https://mayukh-solar.lovable.app/login" />
       </Helmet>
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full gradient-primary opacity-10 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full gradient-primary opacity-5 blur-3xl" />
+
+      {/* Live 3D Solar Wallpaper */}
+      <div className="fixed inset-0 z-0">
+        <SolarScene />
+      </div>
+      {/* Atmospheric gradient veils */}
+      <div className="fixed inset-0 z-[1] pointer-events-none">
+        <div className="absolute inset-0 bg-[radial-gradient(1200px_600px_at_80%_-10%,hsl(22_96%_55%/0.28),transparent_60%),radial-gradient(900px_500px_at_-10%_110%,hsl(280_70%_55%/0.18),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,hsl(222_30%_8%/0.4),hsl(222_30%_8%/0.1)_40%,hsl(222_30%_8%/0.55))]" />
       </div>
 
-      <Card className="w-full max-w-md shadow-elevated border-0 relative z-10">
-        <CardContent className="p-8">
+      <div className="relative z-10 w-full max-w-md animate-in-up">
+        {/* Floating glass card */}
+        <div className="relative rounded-3xl glow-border">
+          <div
+            className="rounded-3xl border border-white/10 p-8 shadow-elevated"
+            style={{
+              background:
+                'linear-gradient(180deg, hsl(0 0% 100% / 0.06), hsl(0 0% 100% / 0.01) 40%), linear-gradient(160deg, hsl(222 24% 16% / 0.72), hsl(222 28% 10% / 0.78))',
+              backdropFilter: 'blur(22px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(22px) saturate(160%)',
+            }}
+          >
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <img src={logo} alt="Mayukh Solar" width={80} height={80} className="drop-shadow-md" />
+              <div className="relative">
+                <div className="absolute inset-0 rounded-full bg-primary/40 blur-2xl animate-glow-pulse" />
+                <img src={logo} alt="Mayukh Solar" width={84} height={84} className="relative drop-shadow-[0_8px_24px_hsl(22_96%_55%/0.45)]" />
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Mayukh Solar — Staff Portal</h1>
-            <p className="text-sm text-muted-foreground mt-1">V R Enterprises CRM</p>
+            <h1 className="text-2xl font-bold text-display tracking-tight">Mayukh Solar — Staff Portal</h1>
+            <p className="text-xs text-muted-foreground mt-1.5 tracking-[0.18em] uppercase">V R Enterprises CRM</p>
           </div>
+
 
           <div className="space-y-4">
             {/* Mobile Input (shown for mobile-based modes) */}
@@ -417,9 +438,11 @@ const Login = () => {
             Only authorized staff can access this app.<br />
             Contact your admin for access.
           </p>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </div>
     </main>
+
   );
 };
 
