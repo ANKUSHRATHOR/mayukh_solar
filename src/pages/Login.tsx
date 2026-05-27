@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Phone, Lock, ArrowRight, Sun, Mail, KeyRound, ShieldCheck } from 'lucide-react';
 import logo from '@/assets/mayukh-solar-logo.png';
+import SolarScene from '@/components/three/SolarScene';
+
 
 type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'forgot_password';
 
