@@ -437,9 +437,11 @@ const Login = () => {
             Only authorized staff can access this app.<br />
             Contact your admin for access.
           </p>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </div>
     </main>
+
   );
 };
 
