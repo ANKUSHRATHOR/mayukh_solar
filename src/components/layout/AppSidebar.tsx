@@ -122,18 +122,17 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       />
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex h-dvh w-[82vw] max-w-sm flex-col overflow-hidden border-r border-primary/20 bg-primary text-primary-foreground shadow-elevated transition-transform duration-300 ease-in-out lg:static lg:z-auto lg:h-screen lg:bg-sidebar lg:text-sidebar-foreground lg:shadow-none',
+          'fixed inset-y-0 left-0 z-50 flex h-dvh w-[82vw] max-w-sm flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-elevated transition-transform duration-300 ease-in-out lg:static lg:z-auto lg:h-screen lg:shadow-none',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
           collapsed ? 'lg:w-16' : 'lg:w-64'
         )}
       >
       {/* Header */}
-      <div className="flex min-h-28 items-center gap-4 border-b border-border bg-card p-5 text-card-foreground lg:min-h-0 lg:border-sidebar-border lg:bg-sidebar lg:p-4 lg:text-sidebar-foreground">
-        <img src={logo} alt="Mayukh Solar" width={64} height={64} className="h-16 w-16 shrink-0 rounded-full bg-background p-1 shadow-card lg:h-9 lg:w-9 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none" />
+      <div className="flex min-h-20 items-center gap-3 border-b border-sidebar-border bg-sidebar p-4 text-sidebar-foreground">
+        <img src={logo} alt="Mayukh Solar" width={44} height={44} className="h-11 w-11 shrink-0 rounded-xl bg-background/60 p-1 ring-1 ring-primary/30 lg:h-9 lg:w-9" />
         <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
-          <p className="truncate text-2xl font-bold leading-tight text-foreground lg:text-sm lg:text-sidebar-primary-foreground">Mayukh Solar</p>
-          <p className="mt-1 truncate text-sm text-muted-foreground lg:mt-0 lg:text-xs lg:text-sidebar-foreground/60">{roleLabel}</p>
-          {staff && <p className="mt-1 truncate text-xs text-muted-foreground lg:hidden">{staff.full_name}</p>}
+          <p className="truncate text-base font-bold leading-tight text-display lg:text-sm">Mayukh Solar</p>
+          <p className="mt-0.5 truncate text-[11px] uppercase tracking-[0.14em] text-sidebar-foreground/60">{roleLabel}</p>
         </div>
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -143,7 +142,7 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
         </button>
         <button
           onClick={onMobileClose}
-          className="ml-auto inline-flex rounded p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground shrink-0 lg:hidden"
+          className="ml-auto inline-flex rounded-lg p-2 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground shrink-0 lg:hidden"
           aria-label="Close menu"
         >
           <X className="h-5 w-5" />
@@ -151,7 +150,7 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-4 lg:p-2">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3 lg:p-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
@@ -159,13 +158,13 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
               key={item.path}
               onClick={() => handleNavigate(item.path)}
               className={cn(
-                'w-full flex items-center gap-5 rounded-md px-2 py-4 text-left text-lg font-semibold transition-all lg:gap-3 lg:px-3 lg:py-2.5 lg:text-sm lg:font-medium',
+                'w-full flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium transition-all lg:py-2.5',
                 isActive
-                  ? 'bg-primary-foreground/15 text-primary-foreground lg:bg-sidebar-primary lg:text-sidebar-primary-foreground'
-                  : 'text-primary-foreground/90 hover:bg-primary-foreground/10 hover:text-primary-foreground lg:text-sidebar-foreground/70 lg:hover:text-sidebar-foreground lg:hover:bg-sidebar-accent'
+                  ? 'bg-gradient-to-r from-primary/20 to-primary/5 text-primary border border-primary/30 shadow-[0_4px_14px_-6px_hsl(22_96%_55%/0.5)]'
+                  : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground'
               )}
             >
-              <item.icon className="h-7 w-7 shrink-0 lg:h-5 lg:w-5" />
+              <item.icon className={cn('h-5 w-5 shrink-0', isActive && 'text-primary')} />
               <span className={cn(collapsed && 'lg:hidden')}>{item.label}</span>
             </button>
           );
@@ -173,18 +172,18 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       </nav>
 
       {/* User section */}
-      <div className="border-t border-primary-foreground/20 p-4 lg:border-sidebar-border lg:p-3">
+      <div className="border-t border-sidebar-border p-3">
         {staff && (
-          <div className={cn('mb-3 px-2', collapsed && 'lg:hidden')}>
-            <p className="truncate text-sm font-semibold text-primary-foreground lg:text-sidebar-foreground">{staff.full_name}</p>
-            <p className="truncate text-xs text-primary-foreground/70 lg:text-sidebar-foreground/50">{staff.mobile}</p>
+          <div className={cn('mb-2 px-2', collapsed && 'lg:hidden')}>
+            <p className="truncate text-sm font-semibold text-sidebar-foreground">{staff.full_name}</p>
+            <p className="truncate text-xs text-sidebar-foreground/60">{staff.mobile}</p>
           </div>
         )}
         <Button
           onClick={signOut}
           variant="ghost"
           className={cn(
-            'w-full justify-start text-primary-foreground/90 hover:bg-primary-foreground/10 hover:text-primary-foreground lg:text-sidebar-foreground/70 lg:hover:text-destructive lg:hover:bg-sidebar-accent',
+            'w-full text-sidebar-foreground/75 hover:bg-destructive/10 hover:text-destructive',
             collapsed ? 'lg:justify-center lg:px-0' : 'justify-start'
           )}
           size="sm"
@@ -193,6 +192,7 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
           <span className={cn('ml-2', collapsed && 'lg:hidden')}>Sign Out</span>
         </Button>
       </div>
+
       </aside>
     </>
   );
