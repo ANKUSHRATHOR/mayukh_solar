@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  Briefcase, Users, Clock, CheckCircle2,
-  Search, MapPin, Calendar as CalendarIcon
+  Briefcase, Users, Clock,
+  Search, MapPin, Calendar as CalendarIcon, Bike
 } from 'lucide-react';
 
 const statusColor: Record<string, string> = {
@@ -31,6 +31,8 @@ const SalesPersonDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [todayKm, setTodayKm] = useState<number>(0);
+  const [monthKm, setMonthKm] = useState<number>(0);
 
   const fetchLeads = async () => {
     if (!user) return;
@@ -44,7 +46,21 @@ const SalesPersonDashboard = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchLeads(); }, [user]);
+  const fetchBikeKm = async () => {
+    if (!user) return;
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = today.getMonth() + 1;
+    const dateStr = today.toISOString().slice(0, 10);
+    const [{ data: dayData }, { data: monthData }] = await Promise.all([
+      supabase.rpc('bike_km_for_day', { _user: user.id, _date: dateStr }),
+      supabase.rpc('bike_km_summary', { _user: user.id, _year: yyyy, _month: mm }),
+    ]);
+    setTodayKm(Number(dayData ?? 0));
+    setMonthKm(Number((monthData as any)?.[0]?.total_km ?? 0));
+  };
+
+  useEffect(() => { fetchLeads(); fetchBikeKm(); }, [user]);
 
   const stats = {
     total: leads.length,
@@ -72,6 +88,24 @@ const SalesPersonDashboard = () => {
         <StatCard onClick={() => setFilterStatus('follow_up')} title="Follow-ups" value={stats.followUps} icon={CalendarIcon} />
         <StatCard onClick={() => setFilterStatus('follow_up')} title="Overdue" value={stats.overdue} icon={Clock} changeType={stats.overdue > 0 ? 'down' : 'neutral'} change={stats.overdue > 0 ? 'Action needed!' : 'All clear'} />
       </div>
+
+      <Card className="shadow-card border-border">
+        <CardContent className="p-4 flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shrink-0">
+            <Bike className="h-6 w-6" />
+          </div>
+          <div className="flex-1 grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Today's Distance</p>
+              <p className="text-2xl font-bold text-foreground">{todayKm.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">This Month</p>
+              <p className="text-2xl font-bold text-foreground">{monthKm.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

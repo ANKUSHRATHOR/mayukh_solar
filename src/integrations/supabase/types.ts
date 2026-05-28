@@ -1233,6 +1233,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      bike_km_for_day: {
+        Args: { _date: string; _user: string }
+        Returns: number
+      }
+      bike_km_for_month: {
+        Args: { _month: number; _user: string; _year: number }
+        Returns: {
+          day: string
+          km: number
+        }[]
+      }
+      bike_km_summary: {
+        Args: { _month: number; _user: string; _year: number }
+        Returns: {
+          active_days: number
+          total_km: number
+        }[]
+      }
       check_duplicate_lead: {
         Args: { _mobile: string }
         Returns: {
