@@ -1,97 +1,109 @@
-# Implementation Plan
 
-This is a large multi-module change. I'll ship it in cohesive phases. Each phase = one migration + matching frontend updates.
+# Master Enhancements Plan
 
-## Phase 1 — Quotation: roles, type popup (Bank vs Consumer), bank selection
-
-**DB (migration)**
-- New table `vendor_bank_accounts` (bank_name, holder_name, account_no, ifsc, branch, upi_image_url, is_default, is_active). Admin RLS + read for staff.
-- Extend `quotations` with: `quotation_type` ('bank' | 'consumer'), `bank_account_id`, `payment_schedule jsonb`.
-- Update RLS on `quotations` so **operators** can also INSERT.
-
-**Edge function `generate-quotation`**
-- Accept `{ projectId, quotationType: 'bank'|'consumer', bankAccountId? }`.
-- If `bank`: schedule = [{stage:'100% Advance', amount:total}].
-- If `consumer`: 30/60/10 schedule.
-- Pull selected bank account; render in PDF (replaces default vendor bank block).
-- Save `quotation_type`, `bank_account_id`, `payment_schedule` on insert.
-
-**Frontend**
-- `QuotationButton`: open Dialog → choose Bank/Consumer → if Bank, pick from banks dropdown → generate.
-- Gate the button to roles: `admin | operator | sales_person`.
-- `QuotationsList`: keep Open/Download/Share buttons; ensure Share uses Web Share API (sales).
-- Admin Settings → new "Bank Accounts" tab (CRUD + set default).
-
-## Phase 2 — Field Visit (sales) + Consumer Home Location
-
-**DB**
-- New `field_visits` table: project_id (nullable), lead_id (nullable), staff_user_id, latitude, longitude, accuracy_m, bike_meter_image_path, notes, visit_outcome enum (interested, unavailable, docs_pending, site_issue, payment_discussion, bank_followup, other), created_at. Storage uses existing `attendance-media` bucket.
-- RLS: sales insert/select own; admin/operator full.
-- Extend `projects` with `home_latitude`, `home_longitude`, `home_location_saved_by`, `home_location_saved_at`.
-
-**Frontend**
-- New `FieldVisit.tsx` page (sales) — capture location + bike meter photo + notes + outcome.
-- In project detail (sales): "Save Consumer Home Location" button → captures current GPS.
-- Admin/Operator project view: show map link (Google Maps) + "Navigate" button.
-
-## Phase 3 — Special Punch-Out Request (sales)
-
-**DB**
-- New `punch_out_requests` table: staff_user_id, latitude, longitude, reason, status enum ('pending','approved','rejected'), reviewed_by, reviewed_at, created_at.
-- RLS: sales insert/select own; admin full.
-- RPC `request_special_punch_out(_lat,_lng,_reason)` → inserts row + notification to all admins.
-- RPC `approve_punch_out_request(_id)` / `reject_punch_out_request(_id,_reason)` — admin only; on approve, allows next punch_attendance to bypass geofence (set short-lived flag in row).
-- Modify `punch_attendance`: for sales, check for an approved unused request in last 30 min; if present, skip geofence and mark request consumed.
-
-**Frontend**
-- In Attendance page (sales): "Request Outside Punch-Out" button when outside geofence.
-- Admin: new panel in AdminAttendance to approve/reject pending requests.
-
-## Phase 4 — Task / Job Assignment Module
-
-**DB**
-- New `tasks` table: title, description, priority enum ('low','medium','high','urgent'), due_date, status enum ('pending','in_progress','completed'), assigned_to_user_id, assigned_by_user_id, project_id (nullable), lead_id (nullable), proof_image_path, notes, completed_at.
-- RLS: admin/operator insert+update; assignee select+update (own status/proof/notes).
-
-**Frontend**
-- `Tasks.tsx` (sales view — assigned to me).
-- `TaskAssignment.tsx` (admin/operator — create + list).
-- Sidebar entry for both.
-
-## Phase 5 — Password Reset & Recovery
-
-**DB**
-- Extend `staff` with `temp_password_plain` (text, admin-only via RLS — masked), `temp_password_issued_at`, `temp_password_issued_by`.
-- Add `password_reset_logs` table.
-- RLS on `staff.temp_password_plain`: only admin can SELECT.
-
-**Edge function `reset-staff-password`** (admin)
-- Generate strong 10-char temp password.
-- Use service role `admin.updateUserById` to set password.
-- Set `must_change_password=true`, store temp password + log.
-- Return temp password to admin in response.
-
-**Frontend**
-- StaffManagement → "Reset Password" button → shows generated temp password modal (copy button).
-- "View Last Temp Password" (admin) on staff row.
-- Reset log history page.
-
-## Phase 6 — Attendance Punch UI Fix
-
-**Frontend only**
-- Rebuild Attendance.tsx punch card: responsive grid, properly sized buttons, no text overflow, larger touch targets on mobile, loading states, single-submit guard.
+Large scope — I'll break into 6 phases. Each phase is shippable on its own. Confirm and I'll execute phase-by-phase (or pick which to start).
 
 ---
 
-## Technical notes
+## Phase A — Attendance: Late + OT engine
 
-- All status changes via DB triggers (per memory rule).
-- All schedules/totals respect existing 8.9% GST extraction.
-- Notifications use existing `notifications` table + DB triggers.
-- All new file uploads use `attendance-media` (private) bucket with signed URLs.
-- Storage paths: `field-visits/{user_id}/...`, `tasks/{user_id}/...`.
-- Will fix `src/integrations/supabase/types.ts` is regenerated automatically — no manual edits.
+**DB (migration):**
+- Add settings table `attendance_policy` (singleton): `late_after TIME default '10:05'`, `standard_minutes int default 480`.
+- Update `compute_attendance_status` trigger / function:
+  - If `check_in_at::time > late_after` → status = `late` (unless already half_day/absent rules).
+  - `worked_minutes` already exists; add generated/derived `overtime_minutes = GREATEST(worked_minutes - 480, 0)` on punch-out.
+- Backfill existing rows.
 
-## Delivery order in this session
+**UI:**
+- `MyAttendance` + `AdminAttendance`: show **Worked**, **OT hrs**, **Late count**, **Summary** tiles.
+- Color OT bar in calendar cell.
 
-Given the scope, I'll deliver Phases 1–6 in order, each as a migration then code. After Phase 1 you'll see Bank vs Consumer working; subsequent phases build on top. I'll keep you updated phase by phase.
+---
+
+## Phase B — Category-wise Staff Management
+
+Refactor `StaffManagement.tsx` into tabs (shadcn `Tabs`):
+- Admin · Sales · Telecaller · Operator · Installation (welder + electrician grouped).
+- Per tab: search, filter (active/inactive), card grid (mobile) + table (desktop).
+- Each row links to a new `StaffDetail` page with: profile, attendance summary, KM total, assigned projects/leads, quotations created, task status, **password panel (admin only)**.
+
+---
+
+## Phase C — Sales Bike KM auto-calc
+
+**DB:**
+- New table `bike_readings` (`staff_user_id, date, morning_km, evening_km, distance_km generated, created_at`).
+- Unique `(staff_user_id, date)`.
+- Trigger: on punch-in event with `bike_meter_reading` → upsert morning. On punch-out / field visit end → upsert evening, compute distance.
+- View: `bike_km_monthly` (staff, year, month, total_km).
+
+**UI:**
+- Sales dashboard widget: today's morning, current/evening input, computed distance, month total.
+- Admin staff detail: monthly KM chart.
+
+---
+
+## Phase D — Notifications fix
+
+- Verify `notifications` realtime publication enabled; add `ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;` if missing.
+- Add DB triggers for: lead assignment, project assignment, status change, task assign, password reset → insert notification rows.
+- Web push: ensure `push-sw.js` registered on login; call `send-push` edge function from a DB webhook OR from a new trigger-invoked function on `notifications` insert.
+- Fix badge live update (already uses channel — verify filter syntax).
+- Add unread/read toggle + "mark one read" on click.
+
+---
+
+## Phase E — Operator workflow + Email login + Admin password vault
+
+**Operator:**
+- Allow operator to create quotations (RLS already permits) — surface "Generate Quotation" button on `OperatorProjectDetail`.
+- Allow operator to reassign sales/telecaller/welder/electrician on project (new RLS update policy for operator on assignment columns only via SECURITY DEFINER RPC `operator_reassign_project`).
+- Log every reassignment into `project_assignments` (already exists).
+
+**Email login:**
+- Already email/password. Add "Forgot password" link on Login → `resetPasswordForEmail` → new `/reset-password` page.
+- Staff create form: collect email (required), generate secure password, store hash in `auth.users` (via existing `create-staff` edge fn) AND store **encrypted plaintext** in new `staff_credentials` table (admin-only RLS, pgsodium or simple `vault.secrets` reference).
+  - Simpler: column `temp_password text` on `staff` with RLS only `has_role(admin)`. Cleared on first successful password change.
+- Password reset history → already have `password_reset_logs`. Expose in staff detail.
+
+**Admin password visibility:**
+- `StaffDetail` admin tab → masked field with "Reveal" button; logs an audit entry on reveal.
+
+---
+
+## Phase F — Material Dispatch + Stage Locks + UI polish
+
+**Material dispatch:**
+- New table `material_dispatches` (`project_id, items jsonb, image_url, dispatched_by, dispatched_at, notes`).
+- `items` = array `{name, qty, unit}` with quick-add chips: Panels/Inverter/Structure/Wire/Earthing/Accessories.
+- Storage bucket `material-dispatch` (private, admin/operator + assigned sales read).
+- New page `MaterialDispatch.tsx` linked from project detail.
+
+**Stage locks:**
+- Add `project_stage_requirements` mapping: stage → required artifact (`documents`, `quotation`, `material_dispatch`, `home_location`, `serial_numbers`).
+- DB function `can_advance_project(project_id, target_status) returns boolean` enforced in status-transition trigger.
+- UI checklist on project header: ✅/🔒 per requirement with deep-links.
+
+**UI polish:**
+- Standardize: `Card`, status badges, button sizes, spacing scale, mobile bottom-padding.
+- Sweep tables → responsive (cards on `<sm`).
+
+---
+
+## Suggested execution order
+1. **Phase D (Notifications)** — quick win, unblocks visibility.
+2. **Phase A (Attendance OT)**.
+3. **Phase C (Bike KM)**.
+4. **Phase B (Staff tabs + detail)**.
+5. **Phase E (Operator + email + password vault)**.
+6. **Phase F (Material + locks + UI sweep)**.
+
+---
+
+## Confirm
+Reply with:
+- **"Go"** → I start Phase D and proceed sequentially.
+- **"Start with X"** → jump to a specific phase.
+- Any tweaks (e.g. don't store plaintext passwords — recommended for security; I'll use a one-time reveal token instead if you prefer).
+
+> ⚠️ Security note: Storing plaintext passwords (even admin-only) is risky. Industry-safer pattern = admin can **trigger a one-click reset** that sets a new temp password and shows it once. I recommend that over a permanent vault. Let me know.
