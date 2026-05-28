@@ -18,7 +18,7 @@ const esc = (v: unknown) =>
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
+  try {
     const body = await req.json();
     const quotationId: string | undefined = body?.quotationId;
     const mode: "view" | "generate" = quotationId ? "view" : (body?.mode === "view" ? "view" : "generate");
