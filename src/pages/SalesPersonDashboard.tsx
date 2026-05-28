@@ -31,6 +31,8 @@ const SalesPersonDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [todayKm, setTodayKm] = useState<number>(0);
+  const [monthKm, setMonthKm] = useState<number>(0);
 
   const fetchLeads = async () => {
     if (!user) return;
@@ -44,7 +46,21 @@ const SalesPersonDashboard = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchLeads(); }, [user]);
+  const fetchBikeKm = async () => {
+    if (!user) return;
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = today.getMonth() + 1;
+    const dateStr = today.toISOString().slice(0, 10);
+    const [{ data: dayData }, { data: monthData }] = await Promise.all([
+      supabase.rpc('bike_km_for_day', { _user: user.id, _date: dateStr }),
+      supabase.rpc('bike_km_summary', { _user: user.id, _year: yyyy, _month: mm }),
+    ]);
+    setTodayKm(Number(dayData ?? 0));
+    setMonthKm(Number((monthData as any)?.[0]?.total_km ?? 0));
+  };
+
+  useEffect(() => { fetchLeads(); fetchBikeKm(); }, [user]);
 
   const stats = {
     total: leads.length,
