@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  Briefcase, Users, Clock, CheckCircle2,
-  Search, MapPin, Calendar as CalendarIcon
+  Briefcase, Users, Clock,
+  Search, MapPin, Calendar as CalendarIcon, Bike
 } from 'lucide-react';
 
 const statusColor: Record<string, string> = {
