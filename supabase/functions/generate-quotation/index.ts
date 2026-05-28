@@ -19,18 +19,20 @@ const esc = (v: unknown) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  try {
     const body = await req.json();
-    const projectId: string | undefined = body?.projectId;
-    const quotationType: "bank" | "consumer" = body?.quotationType === "bank" ? "bank" : "consumer";
-    const bankAccountId: string | null = body?.bankAccountId || null;
+    const quotationId: string | undefined = body?.quotationId;
+    const mode: "view" | "generate" = quotationId ? "view" : (body?.mode === "view" ? "view" : "generate");
+    let projectId: string | undefined = body?.projectId;
+    let quotationType: "bank" | "consumer" = body?.quotationType === "bank" ? "bank" : "consumer";
+    let bankAccountId: string | null = body?.bankAccountId || null;
 
-    if (!projectId) {
-      return new Response(JSON.stringify({ error: "projectId required" }), {
+    if (!projectId && !quotationId) {
+      return new Response(JSON.stringify({ error: "projectId or quotationId required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
