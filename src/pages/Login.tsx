@@ -424,6 +424,8 @@ const Login = () => {
                   ← Back to login options
                 </button>
               </div>
+            )}
+
 
             {/* Mode: Email + Password */}
             {mode === 'email_password' && (
