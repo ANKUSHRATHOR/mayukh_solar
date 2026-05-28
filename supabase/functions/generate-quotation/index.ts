@@ -19,18 +19,20 @@ const esc = (v: unknown) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  try {
     const body = await req.json();
-    const projectId: string | undefined = body?.projectId;
-    const quotationType: "bank" | "consumer" = body?.quotationType === "bank" ? "bank" : "consumer";
-    const bankAccountId: string | null = body?.bankAccountId || null;
+    const quotationId: string | undefined = body?.quotationId;
+    const mode: "view" | "generate" = quotationId ? "view" : (body?.mode === "view" ? "view" : "generate");
+    let projectId: string | undefined = body?.projectId;
+    let quotationType: "bank" | "consumer" = body?.quotationType === "bank" ? "bank" : "consumer";
+    let bankAccountId: string | null = body?.bankAccountId || null;
 
-    if (!projectId) {
-      return new Response(JSON.stringify({ error: "projectId required" }), {
+    if (!projectId && !quotationId) {
+      return new Response(JSON.stringify({ error: "projectId or quotationId required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -52,6 +54,22 @@ Deno.serve(async (req) => {
     const userId: string = user.id;
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // VIEW MODE: load existing quotation, reuse its stored snapshot, do NOT insert.
+    let existingQuotation: any = null;
+    if (quotationId) {
+      const { data: qRow, error: qErr } = await supabase
+        .from("quotations").select("*").eq("id", quotationId).maybeSingle();
+      if (qErr || !qRow) {
+        return new Response(JSON.stringify({ error: "Quotation not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      existingQuotation = qRow;
+      projectId = qRow.project_id;
+      quotationType = (qRow.quotation_type === "bank" ? "bank" : "consumer");
+      bankAccountId = qRow.bank_account_id || null;
+    }
 
     const [{ data: project, error: pErr }, { data: vendor }, { data: terms }, { data: bank }] =
       await Promise.all([
@@ -79,16 +97,20 @@ Deno.serve(async (req) => {
     }
 
     const lead = project.leads;
-    const baseAmount = Number(project.final_amount);
-    const discount = Number(project.discount || 0);
-    const subtotal = baseAmount - discount;
+    // For view mode, use stored total; for generate, compute from project.
+    const storedTotal = existingQuotation ? Number(existingQuotation.total_amount) : null;
+    const baseAmount = storedTotal ?? Number(project.final_amount);
+    const discount = existingQuotation ? 0 : Number(project.discount || 0);
+    const subtotal = existingQuotation ? baseAmount : (baseAmount - discount);
     const gstAmount = Math.round((subtotal * 8.9) / 108.9);
     const netCost = subtotal - gstAmount;
     const total = subtotal;
 
-    // Payment schedule based on quotationType
+    // Payment schedule: reuse stored when viewing, otherwise compute fresh.
     let schedule: Array<{ label: string; stage: string; amount: number }>;
-    if (quotationType === "bank") {
+    if (existingQuotation?.payment_schedule && Array.isArray(existingQuotation.payment_schedule) && existingQuotation.payment_schedule.length > 0) {
+      schedule = existingQuotation.payment_schedule as any;
+    } else if (quotationType === "bank") {
       schedule = [{ label: "100% Advance", stage: "At Order Confirmation (Bank Disbursement)", amount: total }];
     } else {
       const inst1 = Math.round(total * 0.3);
@@ -101,33 +123,43 @@ Deno.serve(async (req) => {
       ];
     }
 
-    const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    const dateSource = existingQuotation ? new Date(existingQuotation.created_at) : new Date();
+    const today = dateSource.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     const structureLabel: Record<string, string> = {
       rcc_roof: "RCC Roof",
       tin_shed_roof: "Tin Shed Roof",
       ground_mount: "Ground Mount",
     };
 
-    const { data: qtNumData } = await supabase.rpc("generate_quotation_number");
-    const quotationNumber = qtNumData || `MS-QT-${new Date().getFullYear()}-0001`;
+    let quotationNumber: string;
+    if (existingQuotation) {
+      quotationNumber = existingQuotation.quotation_number;
+    } else {
+      const { data: qtNumData } = await supabase.rpc("generate_quotation_number");
+      quotationNumber = qtNumData || `MS-QT-${new Date().getFullYear()}-0001`;
+    }
 
     const customerAddress = [lead?.address, lead?.village_city, lead?.district, lead?.state].filter(Boolean).join(", ");
 
-    const { error: insertErr } = await supabase.from("quotations").insert({
-      quotation_number: quotationNumber,
-      project_id: projectId,
-      project_code: project.project_code,
-      customer_name: lead?.customer_name || "Unknown",
-      customer_mobile: lead?.mobile || null,
-      customer_address: customerAddress || null,
-      capacity_kw: project.capacity_kw,
-      total_amount: total,
-      created_by_user_id: userId || project.created_by_user_id,
-      quotation_type: quotationType,
-      bank_account_id: bank?.id || null,
-      payment_schedule: schedule,
-    });
-    if (insertErr) console.error("Failed to save quotation record:", insertErr);
+    // INSERT only in generate mode — viewing must never create a new row.
+    if (!existingQuotation) {
+      const { error: insertErr } = await supabase.from("quotations").insert({
+        quotation_number: quotationNumber,
+        project_id: projectId,
+        project_code: project.project_code,
+        customer_name: lead?.customer_name || "Unknown",
+        customer_mobile: lead?.mobile || null,
+        customer_address: customerAddress || null,
+        capacity_kw: project.capacity_kw,
+        total_amount: total,
+        created_by_user_id: userId || project.created_by_user_id,
+        quotation_type: quotationType,
+        bank_account_id: bank?.id || null,
+        payment_schedule: schedule,
+      });
+      if (insertErr) console.error("Failed to save quotation record:", insertErr);
+    }
+
 
     const v = vendor || {
       firm_name: "V R ENTERPRISES", gstin: "", mobile: "", email: "", address: "",

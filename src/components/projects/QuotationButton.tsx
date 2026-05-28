@@ -96,7 +96,7 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
   const openViewer = async (q: any) => {
     setViewerQ(q); setViewerHtml(''); setViewerLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-quotation', { body: { projectId: q.project_id } });
+      const { data, error } = await supabase.functions.invoke('generate-quotation', { body: { quotationId: q.id } });
       if (error) throw error;
       setViewerHtml(data?.html || '');
     } catch (e: any) {

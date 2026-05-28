@@ -22,7 +22,7 @@ const QuotationsList = () => {
   const openQuotation = async (q: any) => {
     setOpenQ(q); setHtml(''); setLoadingHtml(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-quotation', { body: { projectId: q.project_id } });
+      const { data, error } = await supabase.functions.invoke('generate-quotation', { body: { quotationId: q.id } });
       if (error) throw error;
       if (!data?.html) throw new Error('No quotation generated');
       setHtml(data.html);
