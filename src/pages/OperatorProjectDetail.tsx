@@ -354,10 +354,12 @@ const OperatorProjectDetail = () => {
             {project.loan_bank && <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>}
           </div>
           <div className="flex flex-wrap gap-2 pt-2">
+            <QuotationButton projectId={project.id} size="sm" />
             <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${project.id}/material-dispatch`)}>
               <Package className="mr-2 h-4 w-4" /> Material Dispatch
             </Button>
           </div>
+
         </CardContent>
       </Card>
 
