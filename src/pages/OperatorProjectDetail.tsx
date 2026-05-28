@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import StageChecklist from '@/components/projects/StageChecklist';
+import QuotationButton from '@/components/projects/QuotationButton';
+
 import type { Database } from '@/integrations/supabase/types';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
