@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2, KeyRound, History } from 'lucide-react';
+import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2, KeyRound, History, Users, Phone, Briefcase, Wrench, Settings2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -216,11 +217,107 @@ const StaffManagement = () => {
     }
   };
 
-  const filtered = staffList.filter((s) =>
+  const matchesSearch = (s: StaffWithRole) =>
     s.full_name.toLowerCase().includes(search.toLowerCase()) ||
     s.mobile.includes(search) ||
-    (s.role && roleName(s.role).toLowerCase().includes(search.toLowerCase()))
-  );
+    (s.email?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
+    (s.role && roleName(s.role).toLowerCase().includes(search.toLowerCase()));
+
+  const categories = useMemo(() => ([
+    { key: 'all', label: 'All', icon: Users, roles: null as AppRole[] | null },
+    { key: 'admin', label: 'Admin', icon: Shield, roles: ['admin'] as AppRole[] },
+    { key: 'sales_person', label: 'Sales', icon: Briefcase, roles: ['sales_person'] as AppRole[] },
+    { key: 'telecaller', label: 'Telecaller', icon: Phone, roles: ['telecaller'] as AppRole[] },
+    { key: 'operator', label: 'Operator', icon: Settings2, roles: ['operator'] as AppRole[] },
+    { key: 'installation', label: 'Installation', icon: Wrench, roles: ['welder', 'electrician'] as AppRole[] },
+  ]), []);
+
+  const [tab, setTab] = useState<string>('all');
+
+  const visible = staffList.filter((s) => {
+    if (!matchesSearch(s)) return false;
+    const cat = categories.find((c) => c.key === tab);
+    if (!cat || cat.roles === null) return true;
+    return s.role ? cat.roles.includes(s.role) : false;
+  });
+
+  const countFor = (key: string) => {
+    const cat = categories.find((c) => c.key === key);
+    if (!cat || cat.roles === null) return staffList.length;
+    return staffList.filter((s) => s.role && cat.roles!.includes(s.role)).length;
+  };
+
+  const renderList = () => {
+    if (loading) {
+      return <div className="text-center py-12 text-muted-foreground">Loading staff...</div>;
+    }
+    if (visible.length === 0) {
+      return (
+        <Card className="shadow-card border-border">
+          <CardContent className="py-12 text-center">
+            <Shield className="mx-auto h-12 w-12 text-muted-foreground/40 mb-4" />
+            <p className="text-muted-foreground">
+              {search ? 'No staff found matching your search.' : 'No staff members in this category yet.'}
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+    return (
+      <div className="grid gap-3">
+        {visible.map((s) => (
+          <Card key={s.id} className="shadow-card border-border hover:shadow-elevated transition-shadow">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0">
+                {s.full_name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-sm text-foreground">{s.full_name}</p>
+                  {s.role && (
+                    <Badge className={`text-xs ${roleColors[s.role]}`}>
+                      {roleName(s.role)}
+                    </Badge>
+                  )}
+                  <Badge variant={s.is_active ? 'default' : 'secondary'} className="text-xs">
+                    {s.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {s.mobile} {s.last_login ? `• Last login: ${new Date(s.last_login).toLocaleDateString()}` : '• Never logged in'}
+                </p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="shrink-0">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => openEdit(s)}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setResetStaff(s); setTempPassword(''); }}>
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    Reset Password
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => toggleActive(s)}>
+                    <Power className="mr-2 h-4 w-4" />
+                    {s.is_active ? 'Deactivate' : 'Activate'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setDeleteStaff(s)} className="text-destructive focus:text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
@@ -242,78 +339,33 @@ const StaffManagement = () => {
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by name, mobile, or role..."
+          placeholder="Search by name, mobile, email, or role..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
         />
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading staff...</div>
-      ) : filtered.length === 0 ? (
-        <Card className="shadow-card border-border">
-          <CardContent className="py-12 text-center">
-            <Shield className="mx-auto h-12 w-12 text-muted-foreground/40 mb-4" />
-            <p className="text-muted-foreground">
-              {search ? 'No staff found matching your search.' : 'No staff members yet. Add your first staff member.'}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-3">
-          {filtered.map((s) => (
-            <Card key={s.id} className="shadow-card border-border hover:shadow-elevated transition-shadow">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0">
-                  {s.full_name.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm text-foreground">{s.full_name}</p>
-                    {s.role && (
-                      <Badge className={`text-xs ${roleColors[s.role]}`}>
-                        {roleName(s.role)}
-                      </Badge>
-                    )}
-                    <Badge variant={s.is_active ? 'default' : 'secondary'} className="text-xs">
-                      {s.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {s.mobile} {s.last_login ? `• Last login: ${new Date(s.last_login).toLocaleDateString()}` : '• Never logged in'}
-                  </p>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="shrink-0">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => openEdit(s)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { setResetStaff(s); setTempPassword(''); }}>
-                      <KeyRound className="mr-2 h-4 w-4" />
-                      Reset Password
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => toggleActive(s)}>
-                      <Power className="mr-2 h-4 w-4" />
-                      {s.is_active ? 'Deactivate' : 'Activate'}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setDeleteStaff(s)} className="text-destructive focus:text-destructive">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList className="flex w-full flex-wrap justify-start gap-1 h-auto p-1">
+          {categories.map((c) => {
+            const Icon = c.icon;
+            return (
+              <TabsTrigger key={c.key} value={c.key} className="data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground gap-2">
+                <Icon className="h-3.5 w-3.5" />
+                <span>{c.label}</span>
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">{countFor(c.key)}</Badge>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+        {categories.map((c) => (
+          <TabsContent key={c.key} value={c.key} className="mt-4">
+            {renderList()}
+          </TabsContent>
+        ))}
+      </Tabs>
+
 
       {/* Edit Dialog */}
       <Dialog open={!!editStaff} onOpenChange={(open) => !open && setEditStaff(null)}>
