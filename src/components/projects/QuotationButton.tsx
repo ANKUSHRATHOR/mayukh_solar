@@ -53,6 +53,14 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
     if (!open) return;
     loadHistory();
     (async () => {
+      const { data: proj } = await supabase
+        .from('projects')
+        .select('payment_type')
+        .eq('id', projectId)
+        .maybeSingle();
+      if ((proj as any)?.payment_type === 'loan') setQType('bank');
+      else if ((proj as any)?.payment_type === 'cash') setQType('consumer');
+
       const { data } = await supabase
         .from('vendor_bank_accounts' as any)
         .select('id, bank_name, holder_name, account_no, ifsc, is_default')
@@ -64,6 +72,7 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
       if (def && !bankId) setBankId(def.id);
     })();
   }, [open]);
+
 
   useEffect(() => {
     if (!open) { setTab('history'); setViewerQ(null); setViewerHtml(''); }
