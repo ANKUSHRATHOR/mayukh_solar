@@ -19,6 +19,7 @@ import {
   Calendar, Search, Award, PartyPopper, Download, Share2
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import StageChecklist from '@/components/projects/StageChecklist';
 import type { Database } from '@/integrations/supabase/types';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
@@ -350,9 +351,18 @@ const OperatorProjectDetail = () => {
             <div><p className="text-muted-foreground text-xs">Payment</p><p className="font-medium">{project.payment_type === 'loan' ? '🏦 Loan' : '💵 Cash'}</p></div>
             <div><p className="text-muted-foreground text-xs">Amount</p><p className="font-medium">₹{Number(project.final_amount).toLocaleString('en-IN')}</p></div>
             {project.loan_bank && <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>}
+            {project.loan_bank && <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>}
+          </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${project.id}/material-dispatch`)}>
+              <Package className="mr-2 h-4 w-4" /> Material Dispatch
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      <StageChecklist projectId={project.id} isOperator />
+
 
       {/* All Project Documents — always visible to operator */}
       <Card className="shadow-card">
