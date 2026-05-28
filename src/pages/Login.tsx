@@ -10,7 +10,7 @@ import logo from '@/assets/mayukh-solar-logo.png';
 import SolarScene from '@/components/three/SolarScene';
 
 
-type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'forgot_password';
+type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'email_password' | 'forgot_password';
 
 const Login = () => {
   const [mobile, setMobile] = useState('');
