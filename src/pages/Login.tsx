@@ -277,8 +277,7 @@ const Login = () => {
                 </div>
               </div>
             )}
-              </div>
-            )}
+
 
             {/* Mode: Mobile OTP */}
             {mode === 'otp' && otpSent && (
