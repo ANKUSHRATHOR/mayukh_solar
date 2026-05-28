@@ -319,6 +319,53 @@ const StaffManagement = () => {
     );
   };
 
+  return (
+    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Staff Management</h1>
+          <p className="text-muted-foreground text-sm mt-1">{staffList.length} staff members</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/staff/reset-logs')}>
+            <History className="mr-2 h-4 w-4" /> Reset Logs
+          </Button>
+          <Button onClick={() => navigate('/staff/new')} className="gradient-primary text-primary-foreground font-semibold">
+            <UserPlus className="mr-2 h-4 w-4" /> Add Staff
+          </Button>
+        </div>
+      </div>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by name, mobile, email, or role..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList className="flex w-full flex-wrap justify-start gap-1 h-auto p-1">
+          {categories.map((c) => {
+            const Icon = c.icon;
+            return (
+              <TabsTrigger key={c.key} value={c.key} className="data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground gap-2">
+                <Icon className="h-3.5 w-3.5" />
+                <span>{c.label}</span>
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">{countFor(c.key)}</Badge>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+        {categories.map((c) => (
+          <TabsContent key={c.key} value={c.key} className="mt-4">
+            {renderList()}
+          </TabsContent>
+        ))}
+      </Tabs>
+
 
       {/* Edit Dialog */}
       <Dialog open={!!editStaff} onOpenChange={(open) => !open && setEditStaff(null)}>
