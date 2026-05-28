@@ -10,7 +10,7 @@ import logo from '@/assets/mayukh-solar-logo.png';
 import SolarScene from '@/components/three/SolarScene';
 
 
-type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'forgot_password';
+type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'email_password' | 'forgot_password';
 
 const Login = () => {
   const [mobile, setMobile] = useState('');
@@ -100,6 +100,27 @@ const Login = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: mobileEmail, password });
+      if (error) throw error;
+      navigate('/');
+    } catch (err: any) {
+      toast({ title: 'Login Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailPasswordLogin = async () => {
+    if (!validateEmail(email)) {
+      toast({ title: 'Invalid email', description: 'Enter a valid email address', variant: 'destructive' });
+      return;
+    }
+    if (!password) {
+      toast({ title: 'Password required', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       navigate('/');
     } catch (err: any) {
@@ -203,7 +224,8 @@ const Login = () => {
             )}
 
             {/* Email Input (shown for email OTP mode) */}
-            {mode === 'email_otp' && (
+            {/* Email Input (shown for email OTP & email-password modes) */}
+            {(mode === 'email_otp' || mode === 'email_password') && (
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -212,7 +234,7 @@ const Login = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="pl-10 h-12 text-base"
-                  disabled={otpSent}
+                  disabled={mode === 'email_otp' && otpSent}
                 />
               </div>
             )}
@@ -237,15 +259,25 @@ const Login = () => {
                     <Lock className="mr-2 h-4 w-4" /> Password
                   </Button>
                 </div>
-                <Button
-                  onClick={() => setMode('email_otp')}
-                  variant="outline"
-                  className="w-full h-11 font-semibold"
-                >
-                  <Mail className="mr-2 h-4 w-4" /> Login with Email OTP
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => setMode('email_otp')}
+                    variant="outline"
+                    className="flex-1 h-11 font-semibold"
+                  >
+                    <Mail className="mr-2 h-4 w-4" /> Email OTP
+                  </Button>
+                  <Button
+                    onClick={() => setMode('email_password')}
+                    variant="outline"
+                    className="flex-1 h-11 font-semibold"
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" /> Email Login
+                  </Button>
+                </div>
               </div>
             )}
+
 
             {/* Mode: Mobile OTP */}
             {mode === 'otp' && otpSent && (
@@ -393,6 +425,35 @@ const Login = () => {
                 </button>
               </div>
             )}
+
+
+            {/* Mode: Email + Password */}
+            {mode === 'email_password' && (
+              <div className="space-y-4">
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="pl-10 h-12"
+                    onKeyDown={e => e.key === 'Enter' && handleEmailPasswordLogin()}
+                  />
+                </div>
+                <Button
+                  onClick={handleEmailPasswordLogin}
+                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
+                  disabled={loading || !validateEmail(email) || !password}
+                >
+                  {loading ? 'Signing in...' : 'Sign In'} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
+                  ← Back to login options
+                </button>
+              </div>
+            )}
+
 
             {/* Mode: Password */}
             {mode === 'password' && (
