@@ -337,9 +337,20 @@ const OperatorProjectDetail = () => {
       {/* Project Info */}
       <Card className="shadow-card">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <CardTitle className="text-xl">{project.project_code}</CardTitle>
-            <Badge className="gradient-primary text-primary-foreground">{statusLabels[project.status as ProjectStatus]}</Badge>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge
+                className={
+                  project.payment_type === 'loan'
+                    ? 'bg-blue-600 text-white hover:bg-blue-600'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-600'
+                }
+              >
+                {project.payment_type === 'loan' ? '🏦 LOAN FILE' : '💵 CASH FILE'}
+              </Badge>
+              <Badge className="gradient-primary text-primary-foreground">{statusLabels[project.status as ProjectStatus]}</Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -350,11 +361,18 @@ const OperatorProjectDetail = () => {
             <div><p className="text-muted-foreground text-xs">Capacity</p><p className="font-medium">{project.capacity_kw} kW</p></div>
             <div><p className="text-muted-foreground text-xs">Panels</p><p className="font-medium">{project.panel_qty}x {project.panel_watt}W {project.panel_brand}</p></div>
             <div><p className="text-muted-foreground text-xs">Inverter</p><p className="font-medium">{project.inverter_brand} ({project.inverter_capacity} kW)</p></div>
-            <div><p className="text-muted-foreground text-xs">Payment</p><p className="font-medium">{project.payment_type === 'loan' ? '🏦 Loan' : '💵 Cash'}</p></div>
+            <div>
+              <p className="text-muted-foreground text-xs">Payment Type</p>
+              <p className={`font-semibold ${project.payment_type === 'loan' ? 'text-blue-600' : 'text-emerald-600'}`}>
+                {project.payment_type === 'loan' ? 'LOAN' : 'CASH'}
+              </p>
+            </div>
             <div><p className="text-muted-foreground text-xs">Amount</p><p className="font-medium">₹{Number(project.final_amount).toLocaleString('en-IN')}</p></div>
-            {project.loan_bank && <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>}
-            {project.loan_bank && <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>}
+            {project.payment_type === 'loan' && project.loan_bank && (
+              <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>
+            )}
           </div>
+
           <div className="flex flex-wrap gap-2 pt-2">
             <QuotationButton projectId={project.id} size="sm" />
             <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${project.id}/material-dispatch`)}>
