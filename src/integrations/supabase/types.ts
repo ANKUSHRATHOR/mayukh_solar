@@ -391,6 +391,42 @@ export type Database = {
         }
         Relationships: []
       }
+      material_dispatches: {
+        Row: {
+          created_at: string
+          dispatched_at: string
+          dispatched_by: string
+          id: string
+          image_url: string | null
+          items: Json
+          notes: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dispatched_at?: string
+          dispatched_by: string
+          id?: string
+          image_url?: string | null
+          items?: Json
+          notes?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dispatched_at?: string
+          dispatched_by?: string
+          id?: string
+          image_url?: string | null
+          items?: Json
+          notes?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           in_app_enabled: boolean
@@ -1251,6 +1287,13 @@ export type Database = {
           total_km: number
         }[]
       }
+      can_advance_project: {
+        Args: {
+          _project_id: string
+          _target: Database["public"]["Enums"]["project_status"]
+        }
+        Returns: boolean
+      }
       check_duplicate_lead: {
         Args: { _mobile: string }
         Returns: {
@@ -1358,6 +1401,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      project_stage_requirements: {
+        Args: { _project_id: string }
+        Returns: Json
       }
       punch_attendance: {
         Args: {

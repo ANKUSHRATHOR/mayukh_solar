@@ -16,6 +16,7 @@ import LeadDetail from "./pages/LeadDetail.tsx";
 import ProjectFinalizationForm from "./pages/ProjectFinalizationForm.tsx";
 import ProjectDocuments from "./pages/ProjectDocuments.tsx";
 import OperatorProjectDetail from "./pages/OperatorProjectDetail.tsx";
+import MaterialDispatch from "./pages/MaterialDispatch.tsx";
 import WelderDashboard from "./pages/WelderDashboard.tsx";
 import ElectricianDashboard from "./pages/ElectricianDashboard.tsx";
 import AdminProjects from "./pages/AdminProjects.tsx";
@@ -136,6 +137,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin', 'operator']}>
                   <OperatorProjectDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/projects/:projectId/material-dispatch"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'operator', 'sales_person']}>
+                  <MaterialDispatch />
                 </ProtectedRoute>
               }
             />
