@@ -424,7 +424,34 @@ const Login = () => {
                   ← Back to login options
                 </button>
               </div>
+
+            {/* Mode: Email + Password */}
+            {mode === 'email_password' && (
+              <div className="space-y-4">
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="pl-10 h-12"
+                    onKeyDown={e => e.key === 'Enter' && handleEmailPasswordLogin()}
+                  />
+                </div>
+                <Button
+                  onClick={handleEmailPasswordLogin}
+                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
+                  disabled={loading || !validateEmail(email) || !password}
+                >
+                  {loading ? 'Signing in...' : 'Sign In'} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
+                  ← Back to login options
+                </button>
+              </div>
             )}
+
 
             {/* Mode: Password */}
             {mode === 'password' && (
