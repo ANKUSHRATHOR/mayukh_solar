@@ -109,6 +109,27 @@ const Login = () => {
     }
   };
 
+  const handleEmailPasswordLogin = async () => {
+    if (!validateEmail(email)) {
+      toast({ title: 'Invalid email', description: 'Enter a valid email address', variant: 'destructive' });
+      return;
+    }
+    if (!password) {
+      toast({ title: 'Password required', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      navigate('/');
+    } catch (err: any) {
+      toast({ title: 'Login Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleResetPassword = async () => {
     if (newPassword.length < 8) {
       toast({ title: 'Weak password', description: 'Password must be at least 8 characters', variant: 'destructive' });
