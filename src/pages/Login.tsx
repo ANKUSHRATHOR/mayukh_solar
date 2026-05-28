@@ -224,7 +224,8 @@ const Login = () => {
             )}
 
             {/* Email Input (shown for email OTP mode) */}
-            {mode === 'email_otp' && (
+            {/* Email Input (shown for email OTP & email-password modes) */}
+            {(mode === 'email_otp' || mode === 'email_password') && (
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -233,7 +234,7 @@ const Login = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="pl-10 h-12 text-base"
-                  disabled={otpSent}
+                  disabled={mode === 'email_otp' && otpSent}
                 />
               </div>
             )}
