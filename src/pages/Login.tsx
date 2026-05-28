@@ -259,13 +259,24 @@ const Login = () => {
                     <Lock className="mr-2 h-4 w-4" /> Password
                   </Button>
                 </div>
-                <Button
-                  onClick={() => setMode('email_otp')}
-                  variant="outline"
-                  className="w-full h-11 font-semibold"
-                >
-                  <Mail className="mr-2 h-4 w-4" /> Login with Email OTP
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => setMode('email_otp')}
+                    variant="outline"
+                    className="flex-1 h-11 font-semibold"
+                  >
+                    <Mail className="mr-2 h-4 w-4" /> Email OTP
+                  </Button>
+                  <Button
+                    onClick={() => setMode('email_password')}
+                    variant="outline"
+                    className="flex-1 h-11 font-semibold"
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" /> Email Login
+                  </Button>
+                </div>
+              </div>
+            )}
               </div>
             )}
 
