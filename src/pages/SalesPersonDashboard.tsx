@@ -89,6 +89,24 @@ const SalesPersonDashboard = () => {
         <StatCard onClick={() => setFilterStatus('follow_up')} title="Overdue" value={stats.overdue} icon={Clock} changeType={stats.overdue > 0 ? 'down' : 'neutral'} change={stats.overdue > 0 ? 'Action needed!' : 'All clear'} />
       </div>
 
+      <Card className="shadow-card border-border">
+        <CardContent className="p-4 flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shrink-0">
+            <Bike className="h-6 w-6" />
+          </div>
+          <div className="flex-1 grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Today's Distance</p>
+              <p className="text-2xl font-bold text-foreground">{todayKm.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">This Month</p>
+              <p className="text-2xl font-bold text-foreground">{monthKm.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-md">
