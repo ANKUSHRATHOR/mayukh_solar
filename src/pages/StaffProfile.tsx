@@ -51,7 +51,7 @@ const StaffProfile = () => {
     }
     setSendingOtp(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email: currentEmail });
+      const { error } = await supabase.auth.signInWithOtp({ email: currentEmail, options: { shouldCreateUser: false } });
       if (error) throw error;
       toast({ title: 'OTP sent', description: `Check ${currentEmail} for the verification code.` });
     } catch (e: any) {
