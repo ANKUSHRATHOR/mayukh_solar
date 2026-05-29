@@ -95,15 +95,20 @@ const SettingsPage = () => {
     if (!staff) return;
     setLoading(true);
     try {
-      const updates: any = {};
-      if (editName && editName !== staff.full_name) updates.full_name = editName;
-      if (editEmail !== (staff.email || '')) updates.email = editEmail || null;
-      if (Object.keys(updates).length === 0) {
-        setEditingProfile(false);
-        return;
+      // Update email via edge function (also syncs auth.users so OTP-by-email works)
+      const newEmail = (editEmail || '').trim();
+      if (newEmail !== (staff.email || '')) {
+        if (newEmail) {
+          const { data, error } = await supabase.functions.invoke('update-staff-email', { body: { email: newEmail } });
+          if (error) throw new Error(error.message);
+          if ((data as any)?.error) throw new Error((data as any).error);
+        }
       }
-      const { error } = await supabase.from('staff').update(updates).eq('user_id', staff.user_id);
-      if (error) throw error;
+      // Update name via direct table update (allowed by RLS)
+      if (editName && editName !== staff.full_name) {
+        const { error } = await supabase.from('staff').update({ full_name: editName }).eq('user_id', staff.user_id);
+        if (error) throw error;
+      }
       toast({ title: 'Profile updated' });
       refreshProfile();
       setEditingProfile(false);
@@ -113,6 +118,7 @@ const SettingsPage = () => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="p-6 lg:p-8 max-w-2xl mx-auto space-y-6">

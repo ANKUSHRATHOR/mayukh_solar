@@ -102,7 +102,7 @@ const FieldVisit = () => {
 
     setBusy(true);
     try {
-      const path = `field-visits/${staff.user_id}/${Date.now()}-${crypto.randomUUID()}.jpg`;
+      const path = `${staff.user_id}/field-visits/${Date.now()}-${crypto.randomUUID()}.jpg`;
       const { error: upErr } = await supabase.storage.from('attendance-media')
         .upload(path, imageFile, { contentType: 'image/jpeg', upsert: false });
       if (upErr) throw upErr;
