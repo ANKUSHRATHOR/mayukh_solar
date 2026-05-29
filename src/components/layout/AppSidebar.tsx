@@ -19,6 +19,7 @@ import {
   Wallet,
   MapPin,
   CheckSquare,
+  UserCircle,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -80,6 +81,7 @@ const adminNav: NavSection[] = [
     items: [
       { label: 'Activity Logs', icon: ShieldCheck, path: '/activity-logs' },
       { label: 'Admin Settings', icon: Settings, path: '/admin/settings' },
+      { label: 'My Profile', icon: UserCircle, path: '/profile' },
       { label: 'Settings', icon: Settings, path: '/settings' },
     ],
   },
@@ -101,6 +103,7 @@ const telecallerNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const salesNav: NavSection[] = [
@@ -120,6 +123,7 @@ const salesNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const operatorNav: NavSection[] = [
@@ -138,6 +142,7 @@ const operatorNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const welderNav: NavSection[] = [
@@ -156,6 +161,7 @@ const welderNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const electricianNav: NavSection[] = [
@@ -174,6 +180,7 @@ const electricianNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
