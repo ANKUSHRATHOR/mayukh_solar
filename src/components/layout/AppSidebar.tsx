@@ -19,6 +19,7 @@ import {
   Wallet,
   MapPin,
   CheckSquare,
+  UserCircle,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
