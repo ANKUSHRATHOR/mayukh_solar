@@ -103,6 +103,7 @@ const telecallerNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const salesNav: NavSection[] = [
@@ -122,6 +123,7 @@ const salesNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const operatorNav: NavSection[] = [
@@ -140,6 +142,7 @@ const operatorNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const welderNav: NavSection[] = [
@@ -158,6 +161,7 @@ const welderNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const electricianNav: NavSection[] = [
@@ -176,6 +180,7 @@ const electricianNav: NavSection[] = [
       { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
     ],
   },
+  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
 const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
