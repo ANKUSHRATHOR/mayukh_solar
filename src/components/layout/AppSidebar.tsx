@@ -81,6 +81,7 @@ const adminNav: NavSection[] = [
     items: [
       { label: 'Activity Logs', icon: ShieldCheck, path: '/activity-logs' },
       { label: 'Admin Settings', icon: Settings, path: '/admin/settings' },
+      { label: 'My Profile', icon: UserCircle, path: '/profile' },
       { label: 'Settings', icon: Settings, path: '/settings' },
     ],
   },
