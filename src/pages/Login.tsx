@@ -57,7 +57,7 @@ const Login = () => {
       const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
       if (error) throw error;
       setOtpSent(true);
-      toast({ title: 'OTP Sent', description: `A verification code has been sent to ${email}` });
+      toast({ title: 'Login link sent', description: `Check ${email} and open the sign-in link from the same device.` });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -265,7 +265,7 @@ const Login = () => {
                     variant="outline"
                     className="flex-1 h-11 font-semibold"
                   >
-                    <Mail className="mr-2 h-4 w-4" /> Email OTP
+                    <Mail className="mr-2 h-4 w-4" /> Email Link
                   </Button>
                   <Button
                     onClick={() => setMode('email_password')}
@@ -390,12 +390,15 @@ const Login = () => {
             {/* Mode: Email OTP */}
             {mode === 'email_otp' && !otpSent && (
               <div className="space-y-4">
+                <p className="text-sm text-muted-foreground text-center">
+                  We will send a secure login link to your registered email.
+                </p>
                 <Button
                   onClick={handleSendEmailOtp}
                   className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
                   disabled={loading || !validateEmail(email)}
                 >
-                  {loading ? 'Sending...' : 'Send Email OTP'} <ArrowRight className="ml-2 h-4 w-4" />
+                  {loading ? 'Sending...' : 'Send Login Link'} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
                 <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
                   ← Back to login options
@@ -405,20 +408,16 @@ const Login = () => {
 
             {mode === 'email_otp' && otpSent && (
               <div className="space-y-4">
-                <Input
-                  type="text"
-                  placeholder="Enter 6-digit OTP"
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="h-12 text-center text-xl tracking-[0.5em] font-mono"
-                  maxLength={6}
-                />
+                <p className="text-sm text-muted-foreground text-center">
+                  Open the email link on this device to complete sign in.
+                </p>
                 <Button
-                  onClick={handleVerifyOtp}
-                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
-                  disabled={loading || otp.length !== 6}
+                  onClick={handleSendEmailOtp}
+                  variant="outline"
+                  className="w-full h-12 font-semibold"
+                  disabled={loading}
                 >
-                  Verify & Login <ArrowRight className="ml-2 h-4 w-4" />
+                  {loading ? 'Sending...' : 'Resend Login Link'} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
                 <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
                   ← Back to login options
