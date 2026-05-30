@@ -22,6 +22,7 @@ interface AuthContextType {
   role: AppRole | null;
   staff: StaffProfile | null;
   loading: boolean;
+  profileResolved: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -51,10 +52,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [role, setRole] = useState<AppRole | null>(null);
   const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileResolved, setProfileResolved] = useState(false);
   const lastUserId = useRef<string | null>(null);
 
   const fetchProfile = async (userId: string) => {
     try {
+      setProfileResolved(false);
       const { data: roleData } = await supabase.rpc('get_user_role', { _user_id: userId });
       setRole(roleData as AppRole);
       const { data: staffData } = await supabase
@@ -62,9 +65,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select('id, user_id, full_name, mobile, email, is_active, must_change_password, last_login')
         .eq('user_id', userId)
         .maybeSingle();
-      if (staffData) setStaff(staffData);
+      setStaff(staffData ?? null);
     } catch (err) {
       console.error('Error fetching profile:', err);
+      setRole(null);
+      setStaff(null);
+    } finally {
+      setProfileResolved(true);
     }
   };
 
@@ -77,6 +84,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (session?.user) {
         const uid = session.user.id;
+        setRole(null);
+        setStaff(null);
         setTimeout(() => fetchProfile(uid), 0);
         if (event === 'SIGNED_IN' && lastUserId.current !== uid) {
           lastUserId.current = uid;
@@ -89,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setRole(null);
         setStaff(null);
+        setProfileResolved(true);
       }
       setLoading(false);
     });
@@ -98,7 +108,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
       if (session?.user) {
         lastUserId.current = session.user.id;
+        setRole(null);
+        setStaff(null);
         fetchProfile(session.user.id);
+      } else {
+        setProfileResolved(true);
       }
       setLoading(false);
     });
@@ -110,11 +124,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try { await logEvent('logout'); } catch { /* noop */ }
     await supabase.auth.signOut();
     lastUserId.current = null;
-    setSession(null); setUser(null); setRole(null); setStaff(null);
+    setSession(null); setUser(null); setRole(null); setStaff(null); setProfileResolved(true);
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, role, staff, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, role, staff, loading, profileResolved, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

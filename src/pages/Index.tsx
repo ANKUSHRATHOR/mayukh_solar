@@ -6,13 +6,14 @@ import SalesPersonDashboard from './SalesPersonDashboard';
 import OperatorDashboard from './OperatorDashboard';
 import WelderDashboard from './WelderDashboard';
 import ElectricianDashboard from './ElectricianDashboard';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const Index = () => {
-  const { user, role, staff, loading } = useAuth();
+  const { user, role, staff, loading, profileResolved } = useAuth();
 
-  if (loading) {
+  if (loading || (user && !profileResolved)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -26,6 +27,22 @@ const Index = () => {
 
   if (staff?.must_change_password) {
     return <Navigate to="/set-password" replace />;
+  }
+
+  if (!staff || !role) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-lg">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Account setup incomplete</AlertTitle>
+            <AlertDescription>
+              Your login succeeded, but this account is not connected to a staff profile yet. Sign in with your mobile account or ask an admin to link this email first.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    );
   }
 
   const renderDashboard = () => {
