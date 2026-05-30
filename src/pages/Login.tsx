@@ -54,7 +54,7 @@ const Login = () => {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email });
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
       if (error) throw error;
       setOtpSent(true);
       toast({ title: 'OTP Sent', description: `A verification code has been sent to ${email}` });
