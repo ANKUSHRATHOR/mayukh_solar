@@ -37,6 +37,7 @@ import ProjectHomeLocation from "./pages/ProjectHomeLocation.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import PasswordResetLogs from "./pages/PasswordResetLogs.tsx";
 import StaffProfile from "./pages/StaffProfile.tsx";
+import KNumberLookup from "./pages/KNumberLookup.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
 const queryClient = new QueryClient();
@@ -220,6 +221,7 @@ const App = () => (
             <Route path="/tasks" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><Tasks /></ProtectedRoute>} />
             <Route path="/projects/:projectId/home-location" element={<ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}><ProjectHomeLocation /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><StaffProfile /></ProtectedRoute>} />
+            <Route path="/k-lookup" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator']}><KNumberLookup /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
