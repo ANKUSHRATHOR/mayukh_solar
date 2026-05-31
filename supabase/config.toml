@@ -1,13 +1,4 @@
 project_id = "yuaehplccjzsahckdhvc"
 
-[functions.send-push]
+[functions.consumer-lookup]
 verify_jwt = false
-
-[functions.create-staff]
-verify_jwt = true
-
-[functions.update-staff]
-verify_jwt = true
-
-[functions.generate-quotation]
-verify_jwt = true
