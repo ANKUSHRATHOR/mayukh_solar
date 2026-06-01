@@ -109,6 +109,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Sales persons may only access projects they are assigned to.
+    if (!isAdmin && !isOperator && isSales && project.assigned_sales_person_id !== userId) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const lead = project.leads;
     // For view mode, use stored total; for generate, compute from project.
     const storedTotal = existingQuotation ? Number(existingQuotation.total_amount) : null;
