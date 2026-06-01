@@ -27,7 +27,9 @@ Deno.serve(async (req) => {
 
   try {
     // Require authentication for sending pushes.
-    // Accept either a valid user JWT, or the internal trigger secret (used by the DB trigger).
+    // Accept either the internal trigger secret (DB trigger / admin tooling),
+    // or an authenticated admin/operator JWT. Other authenticated roles are NOT
+    // permitted to send arbitrary cross-user notifications.
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.replace(/^Bearer\s+/i, "");
     const INTERNAL_SECRET = Deno.env.get("INTERNAL_PUSH_SECRET") ?? "";
@@ -41,7 +43,17 @@ Deno.serve(async (req) => {
         { global: { headers: { Authorization: authHeader } } },
       );
       const { data: { user } } = await authClient.auth.getUser();
-      authorized = !!user;
+      if (user) {
+        const adminClient = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        const [{ data: isAdmin }, { data: isOperator }] = await Promise.all([
+          adminClient.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+          adminClient.rpc("has_role", { _user_id: user.id, _role: "operator" }),
+        ]);
+        authorized = !!(isAdmin || isOperator);
+      }
     }
     if (!authorized) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
