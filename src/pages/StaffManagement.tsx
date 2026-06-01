@@ -452,13 +452,13 @@ const StaffManagement = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             {tempPassword ? (
-              <AlertDialogAction onClick={() => { setResetStaff(null); setTempPassword(''); }}>Done</AlertDialogAction>
+              <Button onClick={() => { setResetStaff(null); setTempPassword(''); }}>Done</Button>
             ) : (
               <>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleResetPassword} disabled={resetLoading}>
+                <Button onClick={handleResetPassword} disabled={resetLoading}>
                   {resetLoading ? 'Resetting...' : 'Reset Password'}
-                </AlertDialogAction>
+                </Button>
               </>
             )}
           </AlertDialogFooter>
