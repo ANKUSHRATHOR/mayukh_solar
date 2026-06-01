@@ -69,7 +69,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    const tempPin = Math.floor(100000 + Math.random() * 900000).toString();
+    const _pinArr = new Uint32Array(6);
+    crypto.getRandomValues(_pinArr);
+    const tempPin = Array.from(_pinArr).map((v) => v % 10).join("");
     const mobileEmail = `${mobile}@mayukhsolar.app`;
 
     // Check if user already exists
