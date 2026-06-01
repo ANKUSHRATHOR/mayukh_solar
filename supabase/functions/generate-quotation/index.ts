@@ -55,6 +55,19 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+    // Role check: only admin, operator, or sales_person may generate/view quotations.
+    const [{ data: isAdmin }, { data: isOperator }, { data: isSales }] = await Promise.all([
+      supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+      supabase.rpc("has_role", { _user_id: userId, _role: "operator" }),
+      supabase.rpc("has_role", { _user_id: userId, _role: "sales_person" }),
+    ]);
+    if (!isAdmin && !isOperator && !isSales) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // VIEW MODE: load existing quotation, reuse its stored snapshot, do NOT insert.
     let existingQuotation: any = null;
     if (quotationId) {
