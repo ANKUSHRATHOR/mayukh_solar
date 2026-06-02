@@ -173,6 +173,12 @@ const Attendance = () => {
 
     setBusy(true);
     try {
+      await Promise.all([
+        qc.cancelQueries({ queryKey: ['attendance-today', staff.user_id] }),
+        qc.cancelQueries({ queryKey: ['attendance-recent', staff.user_id] }),
+        qc.cancelQueries({ queryKey: ['attendance-events-today', staff.user_id] }),
+      ]);
+
       const savedKind = activeKind;
       const capturedAt = new Date().toISOString();
       let imagePath: string | null = null;
