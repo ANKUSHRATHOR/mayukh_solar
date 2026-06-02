@@ -260,8 +260,8 @@ const Attendance = () => {
       <div className="bento p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Badge className={`${statusColor[todayAttendance?.status ?? 'absent']} text-sm px-3 py-1`}>
-              {(todayAttendance?.status ?? 'absent').replace('_', ' ').toUpperCase()}
+            <Badge className={`${statusColor[displayStatus] ?? statusColor.absent} text-sm px-3 py-1`}>
+              {displayStatus.replace('_', ' ').toUpperCase()}
             </Badge>
             {!!todayAttendance?.worked_minutes && (
               <span className="text-sm text-muted-foreground">
@@ -273,22 +273,28 @@ const Attendance = () => {
             <div className="text-center">
               <p className="text-muted-foreground">In</p>
               <p className="font-semibold text-foreground text-sm">
-                {todayAttendance?.check_in_at ? format(new Date(todayAttendance.check_in_at), 'HH:mm') : '—'}
+                {displayCheckInAt ? format(new Date(displayCheckInAt), 'HH:mm') : '—'}
               </p>
             </div>
             <div className="h-8 w-px bg-border" />
             <div className="text-center">
               <p className="text-muted-foreground">Out</p>
               <p className="font-semibold text-foreground text-sm">
-                {todayAttendance?.check_out_at ? format(new Date(todayAttendance.check_out_at), 'HH:mm') : '—'}
+                {displayCheckOutAt ? format(new Date(displayCheckOutAt), 'HH:mm') : '—'}
               </p>
             </div>
           </div>
         </div>
 
+        {lastSuccess && (
+          <div className="mt-4 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-foreground">
+            {kindMeta[lastSuccess.kind].label} recorded at {format(new Date(lastSuccess.at), 'HH:mm')}.
+          </div>
+        )}
+
         {!activeKind ? (
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {(Object.keys(kindMeta) as Kind[]).map((k) => {
+            {availableKinds.length ? availableKinds.map((k) => {
               const Meta = kindMeta[k];
               const Icon = Meta.icon;
               const primary = k === 'check_in';
@@ -306,7 +312,11 @@ const Attendance = () => {
                   <span className="text-sm font-semibold leading-tight text-center">{Meta.label}</span>
                 </button>
               );
-            })}
+            }) : (
+              <div className="sm:col-span-3 rounded-xl border border-border bg-card/50 p-4 text-sm text-muted-foreground">
+                Today&apos;s attendance is already completed.
+              </div>
+            )}
           </div>
         ) : (
           <div className="mt-5 space-y-4 rounded-xl border border-border bg-background/40 backdrop-blur p-4 sm:p-5">
