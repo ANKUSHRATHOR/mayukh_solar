@@ -50,6 +50,7 @@ const Attendance = () => {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState<string>('');
+  const [lastSuccess, setLastSuccess] = useState<{ kind: Kind; at: string } | null>(null);
 
   // Outside punch-out request
   const [reqOpen, setReqOpen] = useState(false);
@@ -105,6 +106,27 @@ const Attendance = () => {
     },
   });
 
+  const successfulTodayEvents = (todayEvents || []).filter((event: any) => !event.is_rejected);
+  const checkInEvent = [...successfulTodayEvents]
+    .filter((event: any) => event.kind === 'check_in')
+    .sort((a: any, b: any) => new Date(a.captured_at).getTime() - new Date(b.captured_at).getTime())[0];
+  const checkOutEvent = [...successfulTodayEvents]
+    .filter((event: any) => event.kind === 'check_out')
+    .sort((a: any, b: any) => new Date(b.captured_at).getTime() - new Date(a.captured_at).getTime())[0];
+  const fieldVisitEvent = successfulTodayEvents.find((event: any) => event.kind === 'field_visit');
+
+  const displayStatus = todayAttendance?.status ?? (checkInEvent ? 'present' : 'absent');
+  const displayCheckInAt = todayAttendance?.check_in_at ?? checkInEvent?.captured_at ?? null;
+  const displayCheckOutAt = todayAttendance?.check_out_at ?? checkOutEvent?.captured_at ?? null;
+  const availableKinds: Kind[] = !checkInEvent
+    ? ['check_in']
+    : checkOutEvent
+      ? []
+      : [
+          ...(isSales && !fieldVisitEvent ? (['field_visit'] as Kind[]) : []),
+          'check_out',
+        ];
+
   const captureLocation = () => {
     if (!navigator.geolocation) { toast({ title: 'Location not supported', variant: 'destructive' }); return; }
     setLocating(true);
@@ -151,6 +173,8 @@ const Attendance = () => {
 
     setBusy(true);
     try {
+      const savedKind = activeKind;
+      const capturedAt = new Date().toISOString();
       let imagePath: string | null = null;
       if (imageFile) {
         setPhase('Uploading image...'); setProgress(10);
@@ -162,17 +186,44 @@ const Attendance = () => {
       }
       setPhase('Saving punch...'); setProgress(85);
       const { error } = await supabase.rpc('punch_attendance' as any, {
-        _kind: activeKind, _lat: coords?.lat ?? null, _lng: coords?.lng ?? null,
+        _kind: savedKind, _lat: coords?.lat ?? null, _lng: coords?.lng ?? null,
         _accuracy: coords?.acc ?? null, _image_path: imagePath,
         _reading: reading ? Number(reading) : null,
       });
       if (error) throw error;
+
+      qc.setQueryData(['attendance-events-today', staff.user_id], (current: any[] | undefined) => {
+        const existing = (current || []).filter((event: any) => !(event.kind === savedKind && !event.is_rejected));
+        return [{
+          id: `optimistic-${savedKind}-${capturedAt}`,
+          staff_user_id: staff.user_id,
+          kind: savedKind,
+          captured_at: capturedAt,
+          latitude: coords?.lat ?? null,
+          longitude: coords?.lng ?? null,
+          accuracy_m: coords?.acc ?? null,
+          bike_meter_image_path: imagePath,
+          bike_meter_reading: reading ? Number(reading) : null,
+          is_rejected: false,
+        }, ...existing];
+      });
+
+      qc.setQueryData(['attendance-today', staff.user_id], (current: any) => ({
+        ...(current || { staff_user_id: staff.user_id, date: today, worked_minutes: 0 }),
+        check_in_at: savedKind === 'check_in' ? capturedAt : current?.check_in_at ?? null,
+        check_out_at: savedKind === 'check_out' ? capturedAt : current?.check_out_at ?? null,
+        status: current?.status ?? 'present',
+      }));
+
+      setLastSuccess({ kind: savedKind, at: capturedAt });
       setProgress(100);
-      toast({ title: 'Recorded', description: `${activeKind.replace('_', ' ')} saved` });
+      toast({ title: 'Recorded', description: `${savedKind.replace('_', ' ')} saved at ${format(new Date(capturedAt), 'HH:mm')}` });
       cancelPunch();
-      qc.invalidateQueries({ queryKey: ['attendance-today', staff.user_id] });
-      qc.invalidateQueries({ queryKey: ['attendance-recent', staff.user_id] });
-      qc.invalidateQueries({ queryKey: ['attendance-events-today', staff.user_id] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['attendance-today', staff.user_id] }),
+        qc.invalidateQueries({ queryKey: ['attendance-recent', staff.user_id] }),
+        qc.invalidateQueries({ queryKey: ['attendance-events-today', staff.user_id] }),
+      ]);
     } catch (e: any) {
       toast({ title: 'Failed', description: e.message || 'Unknown error', variant: 'destructive' });
     } finally { setBusy(false); setPhase(''); setProgress(0); }
