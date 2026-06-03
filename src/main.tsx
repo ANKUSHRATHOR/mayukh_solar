@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
+import { hasActiveRefreshLock } from "./lib/refreshLock";
 
 declare const __APP_VERSION__: string;
 
@@ -39,6 +40,7 @@ const cleanupPreviewServiceWorkers = async () => {
 
 const checkForPublishedUpdate = async () => {
   if (isInIframe || isPreviewHost) return;
+  if (hasActiveRefreshLock()) return;
   // Don't auto-refresh while a download/preview is in progress
   if ((window as any).__mayukhDownloading) return;
   // Only auto-refresh once per session

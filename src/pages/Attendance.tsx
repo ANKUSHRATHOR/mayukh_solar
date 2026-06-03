@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { compressImage, estimateBlur } from '@/lib/capture';
+import { acquireRefreshLock } from '@/lib/refreshLock';
 import { Link } from 'react-router-dom';
 
 type Kind = 'check_in' | 'field_visit' | 'check_out';
@@ -39,6 +40,7 @@ const Attendance = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const releaseRefreshLockRef = useRef<(() => void) | null>(null);
 
   const [activeKind, setActiveKind] = useState<Kind | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -154,6 +156,8 @@ const Attendance = () => {
   };
 
   const startPunch = (kind: Kind) => {
+    releaseRefreshLockRef.current?.();
+    releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${kind}`);
     setActiveKind(kind);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
@@ -161,10 +165,19 @@ const Attendance = () => {
   };
 
   const cancelPunch = () => {
+    releaseRefreshLockRef.current?.();
+    releaseRefreshLockRef.current = null;
     setActiveKind(null);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
   };
+
+  useEffect(() => {
+    return () => {
+      releaseRefreshLockRef.current?.();
+      releaseRefreshLockRef.current = null;
+    };
+  }, []);
 
   const submitPunch = async () => {
     if (busy || !activeKind || !staff?.user_id) return;
