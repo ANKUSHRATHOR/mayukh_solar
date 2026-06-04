@@ -263,6 +263,9 @@ const Attendance = () => {
     setActiveKind(null);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
+    if (staff?.user_id) {
+      localStorage.removeItem(getDraftKey(staff.user_id, today));
+    }
   };
 
   useEffect(() => {
@@ -327,6 +330,14 @@ const Attendance = () => {
         status: current?.status ?? 'present',
       }));
 
+      const nextLocalPunches = {
+        ...localPunches,
+        [savedKind]: capturedAt,
+      } satisfies LocalPunchMap;
+      setLocalPunches(nextLocalPunches);
+      writeStoredJson(getLocalPunchKey(staff.user_id, today), nextLocalPunches);
+      localStorage.removeItem(getDraftKey(staff.user_id, today));
+
       setLastSuccess({ kind: savedKind, at: capturedAt });
       setProgress(100);
       toast({ title: 'Recorded', description: `${savedKind.replace('_', ' ')} saved at ${format(new Date(capturedAt), 'HH:mm')}` });
@@ -337,6 +348,25 @@ const Attendance = () => {
         qc.invalidateQueries({ queryKey: ['attendance-events-today', staff.user_id] }),
       ]);
     } catch (e: any) {
+      if (String(e?.message || '').includes('Duplicate punch')) {
+        toast({ title: 'Already recorded', description: 'This punch was already saved. Refreshing today\'s status now.' });
+        const fallbackAt = new Date().toISOString();
+        if (activeKind) {
+          const nextLocalPunches = {
+            ...localPunches,
+            [activeKind]: localPunches[activeKind] ?? fallbackAt,
+          } satisfies LocalPunchMap;
+          setLocalPunches(nextLocalPunches);
+          writeStoredJson(getLocalPunchKey(staff.user_id, today), nextLocalPunches);
+        }
+        cancelPunch();
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ['attendance-today', staff.user_id] }),
+          qc.invalidateQueries({ queryKey: ['attendance-recent', staff.user_id] }),
+          qc.invalidateQueries({ queryKey: ['attendance-events-today', staff.user_id] }),
+        ]);
+        return;
+      }
       toast({ title: 'Failed', description: e.message || 'Unknown error', variant: 'destructive' });
     } finally { setBusy(false); setPhase(''); setProgress(0); }
   };
@@ -406,22 +436,28 @@ const Attendance = () => {
 
         {!activeKind ? (
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {availableKinds.length ? availableKinds.map((k) => {
+            {visibleKinds.length ? visibleKinds.map((k) => {
               const Meta = kindMeta[k];
               const Icon = Meta.icon;
-              const primary = k === 'check_in';
+              const state = kindAvailability[k];
+              const primary = k === 'check_in' && !state.disabled;
               return (
                 <button
                   key={k}
-                  onClick={() => startPunch(k)}
-                  className={`group relative h-20 sm:h-24 rounded-xl border transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1.5 px-3 ${
+                  type="button"
+                  onClick={() => !state.disabled && startPunch(k)}
+                  disabled={state.disabled}
+                  className={`group relative h-24 sm:h-28 rounded-xl border transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1 px-3 text-center ${
                     primary
                       ? 'gradient-primary text-primary-foreground border-transparent shadow-elevated hover:shadow-glow'
-                      : 'border-border bg-card/60 hover:bg-card hover:border-primary/40 backdrop-blur'
+                      : state.disabled
+                        ? 'border-border/80 bg-muted/30 text-muted-foreground'
+                        : 'border-border bg-card/60 hover:bg-card hover:border-primary/40 backdrop-blur'
                   }`}
                 >
                   <Icon className="h-6 w-6 shrink-0" />
                   <span className="text-sm font-semibold leading-tight text-center">{Meta.label}</span>
+                  <span className="text-[11px] leading-tight opacity-80">{state.helper}</span>
                 </button>
               );
             }) : (
