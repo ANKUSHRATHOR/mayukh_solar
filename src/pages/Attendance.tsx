@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,12 +35,37 @@ const kindMeta: Record<Kind, { label: string; icon: any }> = {
   check_out: { label: 'Check Out', icon: LogOutIcon },
 };
 
+type PunchDraft = {
+  kind: Kind;
+  coords: { lat: number; lng: number; acc: number } | null;
+  reading: string;
+};
+
+type LocalPunchMap = Partial<Record<Kind, string>>;
+
+const getDraftKey = (userId: string, date: string) => `attendance-draft:${userId}:${date}`;
+const getLocalPunchKey = (userId: string, date: string) => `attendance-local-punches:${userId}:${date}`;
+
+const readStoredJson = <T,>(key: string): T | null => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredJson = (key: string, value: unknown) => {
+  localStorage.setItem(key, JSON.stringify(value));
+};
+
 const Attendance = () => {
   const { staff, role } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const releaseRefreshLockRef = useRef<(() => void) | null>(null);
+  const restoredDraftNoticeRef = useRef(false);
 
   const [activeKind, setActiveKind] = useState<Kind | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -53,6 +78,7 @@ const Attendance = () => {
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState<string>('');
   const [lastSuccess, setLastSuccess] = useState<{ kind: Kind; at: string } | null>(null);
+  const [localPunches, setLocalPunches] = useState<LocalPunchMap>({});
 
   // Outside punch-out request
   const [reqOpen, setReqOpen] = useState(false);
@@ -108,6 +134,49 @@ const Attendance = () => {
     },
   });
 
+  useEffect(() => {
+    if (!staff?.user_id) {
+      setLocalPunches({});
+      return;
+    }
+
+    const savedPunches = readStoredJson<LocalPunchMap>(getLocalPunchKey(staff.user_id, today)) || {};
+    setLocalPunches(savedPunches);
+
+    const savedDraft = readStoredJson<PunchDraft>(getDraftKey(staff.user_id, today));
+    if (!savedDraft?.kind) return;
+
+    releaseRefreshLockRef.current?.();
+    releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${savedDraft.kind}`);
+    setActiveKind(savedDraft.kind);
+    setCoords(savedDraft.coords ?? null);
+    setReading(savedDraft.reading ?? '');
+
+    if (!restoredDraftNoticeRef.current) {
+      restoredDraftNoticeRef.current = true;
+      toast({
+        title: 'Punch restored',
+        description: 'Your in-progress punch was reopened. Please capture the bike photo again and submit.',
+      });
+    }
+  }, [staff?.user_id, today, toast]);
+
+  useEffect(() => {
+    if (!staff?.user_id) return;
+
+    const draftKey = getDraftKey(staff.user_id, today);
+    if (!activeKind) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+
+    writeStoredJson(draftKey, {
+      kind: activeKind,
+      coords,
+      reading,
+    } satisfies PunchDraft);
+  }, [activeKind, coords, reading, staff?.user_id, today]);
+
   const successfulTodayEvents = (todayEvents || []).filter((event: any) => !event.is_rejected);
   const checkInEvent = [...successfulTodayEvents]
     .filter((event: any) => event.kind === 'check_in')
@@ -117,17 +186,41 @@ const Attendance = () => {
     .sort((a: any, b: any) => new Date(b.captured_at).getTime() - new Date(a.captured_at).getTime())[0];
   const fieldVisitEvent = successfulTodayEvents.find((event: any) => event.kind === 'field_visit');
 
-  const displayStatus = todayAttendance?.status ?? (checkInEvent ? 'present' : 'absent');
-  const displayCheckInAt = todayAttendance?.check_in_at ?? checkInEvent?.captured_at ?? null;
-  const displayCheckOutAt = todayAttendance?.check_out_at ?? checkOutEvent?.captured_at ?? null;
-  const availableKinds: Kind[] = !checkInEvent
-    ? ['check_in']
-    : checkOutEvent
-      ? []
-      : [
-          ...(isSales && !fieldVisitEvent ? (['field_visit'] as Kind[]) : []),
-          'check_out',
-        ];
+  const displayCheckInAt = todayAttendance?.check_in_at ?? checkInEvent?.captured_at ?? localPunches.check_in ?? null;
+  const displayCheckOutAt = todayAttendance?.check_out_at ?? checkOutEvent?.captured_at ?? localPunches.check_out ?? null;
+  const hasFieldVisit = Boolean(fieldVisitEvent || localPunches.field_visit);
+  const hasCheckIn = Boolean(displayCheckInAt);
+  const hasCheckOut = Boolean(displayCheckOutAt);
+  const displayStatus = todayAttendance?.status ?? (hasCheckIn ? 'present' : 'absent');
+
+  const visibleKinds = useMemo<Kind[]>(() => (
+    isSales ? ['check_in', 'field_visit', 'check_out'] : ['check_in', 'check_out']
+  ), [isSales]);
+
+  const kindAvailability = useMemo<Record<Kind, { disabled: boolean; helper: string }>>(() => ({
+    check_in: {
+      disabled: hasCheckIn,
+      helper: hasCheckIn ? 'Already recorded for today' : 'Start your attendance',
+    },
+    field_visit: {
+      disabled: !hasCheckIn || hasCheckOut || hasFieldVisit,
+      helper: !hasCheckIn
+        ? 'Available after check in'
+        : hasCheckOut
+          ? 'Closed after check out'
+          : hasFieldVisit
+            ? 'Already recorded today'
+            : 'Record your field movement',
+    },
+    check_out: {
+      disabled: !hasCheckIn || hasCheckOut,
+      helper: !hasCheckIn
+        ? 'Available after check in'
+        : hasCheckOut
+          ? 'Already recorded for today'
+          : 'Finish today\'s attendance',
+    },
+  }), [hasCheckIn, hasCheckOut, hasFieldVisit]);
 
   const captureLocation = () => {
     if (!navigator.geolocation) { toast({ title: 'Location not supported', variant: 'destructive' }); return; }
