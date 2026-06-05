@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import StatCard from '@/components/dashboard/StatCard';
-import { Wrench, CheckCircle2, Clock, Search, MapPin } from 'lucide-react';
+import { Wrench, CheckCircle2, Clock, Search, MapPin, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WelderProject {
@@ -37,6 +37,15 @@ interface LeadInfo {
   district: string;
 }
 
+interface StageRequirements {
+  documents_uploaded: boolean;
+  documents_verified: boolean;
+  quotation_created: boolean;
+  home_location_saved: boolean;
+  serial_numbers_entered: boolean;
+  material_dispatched: boolean;
+}
+
 const structureLabels: Record<string, string> = {
   rcc_roof: 'RCC Roof',
   tin_shed_roof: 'Tin Shed Roof',
@@ -51,6 +60,17 @@ const WelderDashboard = () => {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'pending' | 'done'>('pending');
   const [marking, setMarking] = useState<string | null>(null);
+  const [requirements, setRequirements] = useState<Record<string, StageRequirements>>({});
+
+  const getInstallBlockingReason = (req?: StageRequirements | null) => {
+    if (!req) return 'Project checklist is still syncing.';
+    const missing: string[] = [];
+    if (!req.material_dispatched) missing.push('material dispatch');
+    if (!req.home_location_saved) missing.push('home location');
+
+    if (missing.length === 0) return '';
+    return `Waiting for ${missing.join(' and ')} before installation can be completed.`;
+  };
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -62,6 +82,7 @@ const WelderDashboard = () => {
 
     const rows = (data || []) as WelderProject[];
     setProjects(rows);
+    setRequirements({});
 
     if (rows.length > 0) {
       const leadIds = [...new Set(rows.map(r => r.lead_id))];
@@ -72,6 +93,22 @@ const WelderDashboard = () => {
       const map: Record<string, LeadInfo> = {};
       (leadData || []).forEach((l: any) => { map[l.id] = l; });
       setLeads(map);
+
+      const requirementEntries = await Promise.all(
+        rows.map(async (row) => {
+          const { data: requirementData } = await (supabase as any).rpc('project_stage_requirements', { _project_id: row.id });
+          return [row.id, requirementData as StageRequirements | null] as const;
+        }),
+      );
+
+      setRequirements(
+        requirementEntries.reduce<Record<string, StageRequirements>>((acc, [projectId, req]) => {
+          if (req) acc[projectId] = req;
+          return acc;
+        }, {}),
+      );
+    } else {
+      setLeads({});
     }
     setLoading(false);
   }, []);
@@ -79,6 +116,13 @@ const WelderDashboard = () => {
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   const markInstallationDone = async (projectId: string) => {
+    const req = requirements[projectId];
+    const blockingReason = getInstallBlockingReason(req);
+    if (blockingReason) {
+      toast.error(blockingReason);
+      return;
+    }
+
     setMarking(projectId);
     const { error } = await supabase
       .from('projects')
@@ -86,7 +130,7 @@ const WelderDashboard = () => {
       .eq('id', projectId);
 
     if (error) {
-      toast.error('Failed to update: ' + error.message);
+      toast.error(error.message.includes('required artifacts are missing') ? blockingReason || 'Project checklist is incomplete.' : 'Failed to update: ' + error.message);
     } else {
       toast.success('Installation marked as done!');
       fetchProjects();
@@ -146,6 +190,9 @@ const WelderDashboard = () => {
             <div className="space-y-3">
               {displayed.map(project => {
                 const lead = leads[project.lead_id];
+                const projectRequirements = requirements[project.id];
+                const blockingReason = getInstallBlockingReason(projectRequirements);
+                const canCompleteInstallation = !blockingReason;
                 return (
                   <Card key={project.id} className="shadow-card">
                     <CardContent className="p-4 space-y-3">
@@ -181,14 +228,26 @@ const WelderDashboard = () => {
                         <p className="text-sm text-muted-foreground bg-muted/50 rounded p-2">📝 {project.special_notes}</p>
                       )}
 
+                      {project.status === 'installation_pending' && !canCompleteInstallation && (
+                        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-muted-foreground">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
+                            <div className="space-y-1">
+                              <p className="font-medium text-foreground">Checklist pending</p>
+                              <p>{blockingReason}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {project.status === 'installation_pending' && (
                         <Button
                           onClick={() => markInstallationDone(project.id)}
-                          disabled={marking === project.id}
+                          disabled={marking === project.id || !canCompleteInstallation}
                           className="w-full"
                         >
                           <CheckCircle2 className="h-4 w-4 mr-2" />
-                          {marking === project.id ? 'Updating...' : 'Mark Installation Done'}
+                          {marking === project.id ? 'Updating...' : canCompleteInstallation ? 'Mark Installation Done' : 'Waiting for Checklist'}
                         </Button>
                       )}
                     </CardContent>
