@@ -53,7 +53,7 @@ const structureLabels: Record<string, string> = {
 };
 
 const WelderDashboard = () => {
-  const { user } = useAuth();
+  useAuth();
   const [projects, setProjects] = useState<WelderProject[]>([]);
   const [leads, setLeads] = useState<Record<string, LeadInfo>>({});
   const [loading, setLoading] = useState(true);
