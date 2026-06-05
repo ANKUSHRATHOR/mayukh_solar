@@ -91,7 +91,11 @@ Deno.serve(async (req) => {
           .select("*, leads(customer_name, mobile, address, village_city, district, state)")
           .eq("id", projectId)
           .single(),
-        supabase.from("vendor_profiles").select("*").eq("is_default", true).maybeSingle(),
+        supabase
+          .from("vendor_profiles")
+          .select("firm_name, gstin, mobile, email, address")
+          .eq("is_default", true)
+          .maybeSingle(),
         supabase
           .from("quotation_terms_templates")
           .select("title, body, section_order")
@@ -195,15 +199,8 @@ Deno.serve(async (req) => {
           .join("")
       : `<div class="tc-block"><div class="tc-body">Standard terms apply.</div></div>`;
 
-    // Bank block: prefer selected vendor_bank_account; fall back to vendor_profile bank fields
-    const b: any = bank || {
-      bank_name: (vendor as any)?.bank_name,
-      holder_name: null,
-      account_no: (vendor as any)?.account_no,
-      ifsc: (vendor as any)?.ifsc,
-      branch_name: null,
-      upi_image_url: null,
-    };
+    // Bank block: only use dedicated bank account records.
+    const b: any = bank || null;
 
     const bankBlockHtml = (b.bank_name || b.account_no)
       ? `<div class="section">
