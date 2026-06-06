@@ -522,61 +522,97 @@ const AdminLeadsList = () => {
       <Card className="shadow-card border-border">
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <CardTitle className="text-base">Professional Lead Table</CardTitle>
+            <CardTitle className="text-base">Lead Pipeline</CardTitle>
             <p className="text-sm text-muted-foreground">{filteredRows.length} lead(s) visible • realtime sync enabled</p>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent>
           {loading ? (
             <p className="text-muted-foreground text-sm py-12 text-center">Loading lead pipeline...</p>
           ) : filteredRows.length === 0 ? (
             <p className="text-muted-foreground text-sm py-12 text-center">No leads match the current filters.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Lead ID</TableHead>
-                  <TableHead>Consumer Name</TableHead>
-                  <TableHead>Mobile Number</TableHead>
-                  <TableHead>Created By</TableHead>
-                  <TableHead>Assigned To</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Note</TableHead>
-                  <TableHead>Latest Update</TableHead>
-                  <TableHead>Last Activity</TableHead>
-                  <TableHead>Next Follow-up</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRows.map((lead) => (
-                  <TableRow key={lead.id} className="cursor-pointer" onClick={() => navigate(`/leads/${lead.id}`)}>
-                    <TableCell className="font-medium">{lead.leadCode}</TableCell>
-                    <TableCell><div className="min-w-[180px]"><p className="font-medium text-foreground">{lead.consumerName}</p><p className="text-xs text-muted-foreground">{lead.projectType ? statusLabel(lead.projectType) : 'Lead'}</p></div></TableCell>
-                    <TableCell>{lead.mobile}</TableCell>
-                    <TableCell>{lead.createdByName}</TableCell>
-                    <TableCell><div className="min-w-[150px]"><p className="font-medium text-foreground">{lead.assignedToName}</p><p className="text-xs text-muted-foreground">Operator: {lead.operatorName}</p></div></TableCell>
-                    <TableCell><Badge className={statusColor[lead.status] || statusColor.new}>{statusLabel(lead.status)}</Badge></TableCell>
-                    <TableCell><div className="min-w-[220px] max-w-[280px]"><p className="line-clamp-2 text-sm text-foreground">{lead.lastNote}</p></div></TableCell>
-                    <TableCell><div className="min-w-[170px]"><p className="text-sm font-medium text-foreground">{lead.latestUpdate}</p><p className="text-xs text-muted-foreground mt-1">By {lead.latestUpdatedBy}</p></div></TableCell>
-                    <TableCell>{formatDateTime(lead.lastActivityAt)}</TableCell>
-                    <TableCell>{formatDate(lead.nextFollowUpDate)}</TableCell>
-                    <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
-                      {assigningId === lead.id ? (
-                        <Select onValueChange={(value) => assignLead(lead.id, value)}>
-                          <SelectTrigger className="ml-auto w-[170px] h-9 text-xs"><SelectValue placeholder="Assign to..." /></SelectTrigger>
-                          <SelectContent>
-                            {salesStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Button variant="outline" size="sm" onClick={() => setAssigningId(lead.id)}><AssignIcon className="mr-2 h-4 w-4" /> Assign</Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {filteredRows.map((lead) => (
+                <div
+                  key={lead.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/leads/${lead.id}`)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/leads/${lead.id}`); }}
+                  className="group relative rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-elevated hover:border-primary/40 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-mono">#{lead.leadCode}</p>
+                      <p className="font-semibold text-foreground truncate mt-0.5">{lead.consumerName}</p>
+                      <a
+                        href={`tel:${lead.mobile}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5"
+                      >
+                        <PhoneCall className="h-3 w-3" /> {lead.mobile}
+                      </a>
+                    </div>
+                    <Badge className={`shrink-0 ${statusColor[lead.status] || statusColor.new}`}>{statusLabel(lead.status)}</Badge>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Created by</p>
+                      <p className="font-medium text-foreground truncate">{lead.createdByName}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Assigned</p>
+                      <p className="font-medium text-foreground truncate">{lead.assignedToName}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Type</p>
+                      <p className="font-medium text-foreground">{lead.projectType ? statusLabel(lead.projectType) : 'Lead'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Operator</p>
+                      <p className="font-medium text-foreground truncate">{lead.operatorName}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-md bg-muted/40 p-2.5 text-xs">
+                    <p className="text-muted-foreground">Latest note</p>
+                    <p className="text-foreground line-clamp-2 mt-0.5">{lead.lastNote}</p>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <CalIcon className="h-3 w-3" />
+                      Updated {formatDateTime(lead.lastActivityAt)}
+                    </span>
+                    {lead.nextFollowUpDate && (
+                      <span className="rounded-full bg-warning/10 text-warning-foreground border border-warning/30 px-2 py-0.5">
+                        Follow-up {formatDate(lead.nextFollowUpDate)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                    {assigningId === lead.id ? (
+                      <Select onValueChange={(value) => assignLead(lead.id, value)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Assign sales..." /></SelectTrigger>
+                        <SelectContent>
+                          {salesStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setAssigningId(lead.id)}>
+                        <AssignIcon className="mr-1.5 h-3.5 w-3.5" /> Assign
+                      </Button>
+                    )}
+                    <span className="inline-flex items-center text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                      Open <ChevronRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
