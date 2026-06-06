@@ -66,6 +66,7 @@ const Attendance = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const releaseRefreshLockRef = useRef<(() => void) | null>(null);
   const restoredDraftNoticeRef = useRef(false);
+  const submitLockRef = useRef(false);
 
   const [activeKind, setActiveKind] = useState<Kind | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -93,6 +94,9 @@ const Attendance = () => {
   const { data: todayAttendance } = useQuery({
     queryKey: ['attendance-today', staff?.user_id],
     enabled: !!staff?.user_id,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const { data } = await supabase.from('attendance' as any)
         .select('*').eq('staff_user_id', staff!.user_id).eq('date', today).maybeSingle();
@@ -103,6 +107,9 @@ const Attendance = () => {
   const { data: recent } = useQuery({
     queryKey: ['attendance-recent', staff?.user_id],
     enabled: !!staff?.user_id,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const { data } = await supabase.from('attendance' as any)
         .select('*').eq('staff_user_id', staff!.user_id)
@@ -114,6 +121,9 @@ const Attendance = () => {
   const { data: todayEvents } = useQuery({
     queryKey: ['attendance-events-today', staff?.user_id],
     enabled: !!staff?.user_id,
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const start = new Date(); start.setHours(0, 0, 0, 0);
       const { data } = await supabase.from('attendance_events' as any)
@@ -126,6 +136,9 @@ const Attendance = () => {
   const { data: myRequests } = useQuery({
     queryKey: ['my-punchout-reqs', staff?.user_id],
     enabled: !!staff?.user_id && isSales,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const { data } = await supabase.from('punch_out_requests' as any)
         .select('*').eq('staff_user_id', staff!.user_id)
@@ -176,6 +189,14 @@ const Attendance = () => {
       reading,
     } satisfies PunchDraft);
   }, [activeKind, coords, reading, staff?.user_id, today]);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   const successfulTodayEvents = (todayEvents || []).filter((event: any) => !event.is_rejected);
   const checkInEvent = [...successfulTodayEvents]
