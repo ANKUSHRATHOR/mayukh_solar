@@ -478,12 +478,12 @@ const StaffManagement = () => {
             <AlertDialogDescription>
               {tempPassword ? (
                 <span className="space-y-2 block">
-                  <span className="block">Temporary password for <strong>{resetStaff?.full_name}</strong>:</span>
-                  <span className="block bg-muted p-3 rounded-md font-mono text-lg text-foreground text-center select-all">{tempPassword}</span>
-                  <span className="block text-xs">Share this with the staff member. They will be asked to set a new password on next login.</span>
+                  <span className="block">Temporary 6-digit PIN for <strong>{resetStaff?.full_name}</strong>:</span>
+                  <span className="block bg-muted p-3 rounded-md font-mono text-2xl tracking-widest text-foreground text-center select-all">{tempPassword}</span>
+                  <span className="block text-xs">Share this PIN with the staff member. They will be forced to set a new password on next login. All their data (leads, projects, attendance, notes) is preserved.</span>
                 </span>
               ) : (
-                <>Reset password for <strong>{resetStaff?.full_name}</strong>? A temporary password will be generated.</>
+                <>Reset password for <strong>{resetStaff?.full_name}</strong>? A secure 6-digit PIN will be generated. All their data is kept intact.</>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
