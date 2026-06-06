@@ -266,6 +266,10 @@ const Attendance = () => {
       setImagePreview(URL.createObjectURL(compressed));
       setImgInfo({ kb: Math.round(compressed.size / 1024), blur: Math.round(blur) });
       if (blur < 25) toast({ title: 'Image looks blurry', description: 'Retake for a clearer shot if possible.', variant: 'destructive' });
+      if (requiresLocation && !coords) {
+        toast({ title: 'Now capture location', description: 'Photo is ready. Capture your live location to finish attendance.' });
+        captureLocation();
+      }
     } finally { setBusy(false); setProgress(0); setPhase(''); }
   };
 
@@ -276,7 +280,6 @@ const Attendance = () => {
     setActiveKind(kind);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
-    if (requiresLocation) captureLocation();
   };
 
   const cancelPunch = () => {
