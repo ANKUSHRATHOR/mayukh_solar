@@ -1,19 +1,57 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Search, MapPin, PhoneCall, UserPlus as AssignIcon, User, Zap, Download
-} from 'lucide-react';
+import StatCard from '@/components/dashboard/StatCard';
+import { ArrowUpDown, Download, Filter, PhoneCall, Search, UserPlus as AssignIcon, Users } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 import type { Database } from '@/integrations/supabase/types';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
+type PaymentType = Database['public']['Enums']['payment_type'];
+type ProjectStatus = Database['public']['Enums']['project_status'];
+
+type StaffMember = {
+  full_name: string;
+  is_active: boolean;
+  role?: string;
+  user_id: string;
+};
+
+type LeadRow = {
+  assignedToName: string;
+  assignedToUserId: string | null;
+  consumerName: string;
+  createdAt: string;
+  createdByName: string;
+  createdByUserId: string;
+  hasQuotation: boolean;
+  id: string;
+  lastActivityAt: string;
+  lastNote: string;
+  latestUpdate: string;
+  latestUpdatedBy: string;
+  leadCode: string;
+  mobile: string;
+  nextFollowUpDate: string | null;
+  operatorName: string;
+  operatorUserId: string | null;
+  projectStatus: ProjectStatus | null;
+  projectType: PaymentType | null;
+  status: LeadStatus;
+};
+
+type StatusFilter = 'all' | LeadStatus | 'documents_pending' | 'quotation_sent' | 'site_visit';
+type DateFilter = 'all' | 'today' | 'this_week' | 'this_month' | 'custom';
+type SortKey = 'latest_activity_desc' | 'created_desc' | 'follow_up_asc' | 'consumer_asc' | 'status_asc';
 
 const statusColor: Record<string, string> = {
   new: 'bg-info text-info-foreground',
@@ -25,161 +63,520 @@ const statusColor: Record<string, string> = {
   final: 'bg-primary text-primary-foreground',
 };
 
-const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const formatDate = (value: string | null) => value
+  ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  : '—';
+
+const formatDateTime = (value: string | null) => value
+  ? new Date(value).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  : '—';
+
+const startOfToday = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const startOfWeek = () => {
+  const date = startOfToday();
+  const day = date.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  date.setDate(date.getDate() - diff);
+  return date;
+};
+
+const startOfMonth = () => {
+  const date = startOfToday();
+  date.setDate(1);
+  return date;
+};
 
 const AdminLeadsList = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [leads, setLeads] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<any[]>([]);
-  const [allStaff, setAllStaff] = useState<any[]>([]);
+  const requestIdRef = useRef(0);
+
+  const [leadRows, setLeadRows] = useState<LeadRow[]>([]);
+  const [staffDirectory, setStaffDirectory] = useState<Record<string, StaffMember>>({});
+  const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
+  const [operatorStaff, setOperatorStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
+  const [filterCreator, setFilterCreator] = useState('all');
+  const [filterAssigned, setFilterAssigned] = useState('all');
+  const [filterOperator, setFilterOperator] = useState('all');
+  const [filterProjectType, setFilterProjectType] = useState<'all' | PaymentType>('all');
+  const [filterDate, setFilterDate] = useState<DateFilter>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [sortBy, setSortBy] = useState<SortKey>('latest_activity_desc');
   const [assigningId, setAssigningId] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    setLoading(true);
-    const [leadsRes, staffRes, rolesRes] = await Promise.all([
-      supabase.from('leads').select('*').eq('is_in_bin', false).order('created_at', { ascending: false }),
-      supabase.from('staff').select('*'),
-      supabase.from('user_roles').select('*'),
-    ]);
+  const fetchData = useCallback(async (background = false) => {
+    const requestId = ++requestIdRef.current;
+    if (!background) setLoading(true);
 
-    setLeads(leadsRes.data || []);
-    setAllStaff(staffRes.data || []);
+    try {
+      const [leadsRes, staffRes, rolesRes, projectsRes, quotationsRes] = await Promise.all([
+        supabase.from('leads').select('*').eq('is_in_bin', false).order('updated_at', { ascending: false }),
+        supabase.from('staff').select('user_id, full_name, is_active'),
+        supabase.from('user_roles').select('user_id, role'),
+        supabase.from('projects').select('id, lead_id, assigned_operator_id, payment_type, status, updated_at').not('lead_id', 'is', null),
+        supabase.from('quotations').select('project_id, created_at').not('project_id', 'is', null),
+      ]);
 
-    // Build sales person list
-    const salesRoles = (rolesRes.data || []).filter(r => r.role === 'sales_person');
-    const salesUserIds = new Set(salesRoles.map(r => r.user_id));
-    const salesStaff = (staffRes.data || []).filter(s => salesUserIds.has(s.user_id) && s.is_active);
-    setStaffList(salesStaff);
-    setLoading(false);
-  };
+      if (leadsRes.error) throw leadsRes.error;
+      if (staffRes.error) throw staffRes.error;
+      if (rolesRes.error) throw rolesRes.error;
+      if (projectsRes.error) throw projectsRes.error;
+      if (quotationsRes.error) throw quotationsRes.error;
 
-  useEffect(() => { fetchData(); }, []);
+      const leadIds = (leadsRes.data || []).map((lead) => lead.id);
+      const siteVisitsRes = leadIds.length
+        ? await supabase.from('site_visits').select('lead_id, staff_id, visit_date, visit_notes, status_updated_to').in('lead_id', leadIds).order('visit_date', { ascending: false })
+        : { data: [], error: null };
+
+      if (siteVisitsRes.error) throw siteVisitsRes.error;
+      if (requestId !== requestIdRef.current) return;
+
+      const rolesByUser = new Map((rolesRes.data || []).map((item) => [item.user_id, item.role]));
+      const staffMap = Object.fromEntries(
+        (staffRes.data || []).map((item) => [item.user_id, { ...item, role: rolesByUser.get(item.user_id) }]),
+      ) as Record<string, StaffMember>;
+
+      const latestVisitByLead = new Map<string, (typeof siteVisitsRes.data)[number]>();
+      for (const visit of siteVisitsRes.data || []) {
+        if (!latestVisitByLead.has(visit.lead_id)) latestVisitByLead.set(visit.lead_id, visit);
+      }
+
+      const latestProjectByLead = new Map<string, (typeof projectsRes.data)[number]>();
+      for (const project of projectsRes.data || []) {
+        const current = latestProjectByLead.get(project.lead_id!);
+        if (!current || new Date(project.updated_at || 0).getTime() > new Date(current.updated_at || 0).getTime()) {
+          latestProjectByLead.set(project.lead_id!, project);
+        }
+      }
+
+      const quotationProjects = new Set((quotationsRes.data || []).map((quotation) => quotation.project_id));
+
+      setStaffDirectory(staffMap);
+      setSalesStaff(Object.values(staffMap).filter((item) => item.role === 'sales_person' && item.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name)));
+      setOperatorStaff(Object.values(staffMap).filter((item) => item.role === 'operator' && item.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name)));
+      setLeadRows((leadsRes.data || []).map((lead) => {
+        const latestVisit = latestVisitByLead.get(lead.id);
+        const project = latestProjectByLead.get(lead.id);
+        const hasQuotation = project?.id ? quotationProjects.has(project.id) : false;
+
+        return {
+          assignedToName: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.full_name || 'Not assigned' : 'Not assigned',
+          assignedToUserId: lead.assigned_to_user_id,
+          consumerName: lead.customer_name,
+          createdAt: lead.created_at,
+          createdByName: staffMap[lead.created_by_user_id]?.full_name || 'Unknown user',
+          createdByUserId: lead.created_by_user_id,
+          hasQuotation,
+          id: lead.id,
+          lastActivityAt: latestVisit?.visit_date || project?.updated_at || lead.updated_at || lead.created_at,
+          lastNote: latestVisit?.visit_notes?.trim() || lead.notes?.trim() || '—',
+          latestUpdate: latestVisit?.status_updated_to
+            ? statusLabel(latestVisit.status_updated_to)
+            : project?.status === 'pending_documents'
+              ? 'Documents Pending'
+              : hasQuotation
+                ? 'Quotation Sent'
+                : statusLabel(lead.status),
+          latestUpdatedBy: latestVisit?.staff_id ? staffMap[latestVisit.staff_id]?.full_name || 'Staff member' : 'System',
+          leadCode: lead.id.slice(0, 8).toUpperCase(),
+          mobile: lead.mobile,
+          nextFollowUpDate: lead.follow_up_date,
+          operatorName: project?.assigned_operator_id ? staffMap[project.assigned_operator_id]?.full_name || 'Unassigned' : 'Unassigned',
+          operatorUserId: project?.assigned_operator_id || null,
+          projectStatus: project?.status || null,
+          projectType: project?.payment_type || null,
+          status: lead.status,
+        };
+      }));
+    } catch (error: any) {
+      toast({ title: 'Unable to load leads', description: error.message || 'Please try again.', variant: 'destructive' });
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-leads-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => void fetchData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_visits' }, () => void fetchData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => void fetchData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quotations' }, () => void fetchData(true))
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [fetchData]);
+
+  const allStaff = useMemo(() => Object.values(staffDirectory).sort((a, b) => a.full_name.localeCompare(b.full_name)), [staffDirectory]);
+
+  const filteredRows = useMemo(() => {
+    const fromDate = customFrom ? new Date(`${customFrom}T00:00:00`) : null;
+    const toDate = customTo ? new Date(`${customTo}T23:59:59`) : null;
+
+    return leadRows.filter((lead) => {
+      const q = search.trim().toLowerCase();
+      const haystack = [lead.leadCode, lead.consumerName, lead.mobile, lead.createdByName, lead.assignedToName, lead.operatorName, lead.lastNote, lead.latestUpdate].join(' ').toLowerCase();
+      const activityDate = new Date(lead.lastActivityAt);
+
+      const statusMatch = filterStatus === 'all'
+        || (filterStatus === 'documents_pending' && lead.projectStatus === 'pending_documents')
+        || (filterStatus === 'quotation_sent' && lead.hasQuotation)
+        || (filterStatus === 'site_visit' && lead.status === 'visited')
+        || lead.status === filterStatus;
+
+      const dateMatch = filterDate === 'all'
+        || (filterDate === 'today' && activityDate >= startOfToday())
+        || (filterDate === 'this_week' && activityDate >= startOfWeek())
+        || (filterDate === 'this_month' && activityDate >= startOfMonth())
+        || (filterDate === 'custom' && (!fromDate || activityDate >= fromDate) && (!toDate || activityDate <= toDate));
+
+      return (!q || haystack.includes(q))
+        && statusMatch
+        && (filterCreator === 'all' || lead.createdByUserId === filterCreator)
+        && (filterAssigned === 'all' || lead.assignedToUserId === filterAssigned)
+        && (filterOperator === 'all' || lead.operatorUserId === filterOperator)
+        && (filterProjectType === 'all' || lead.projectType === filterProjectType)
+        && dateMatch;
+    }).sort((a, b) => {
+      switch (sortBy) {
+        case 'created_desc':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'follow_up_asc':
+          return (a.nextFollowUpDate ? new Date(a.nextFollowUpDate).getTime() : Number.POSITIVE_INFINITY)
+            - (b.nextFollowUpDate ? new Date(b.nextFollowUpDate).getTime() : Number.POSITIVE_INFINITY);
+        case 'consumer_asc':
+          return a.consumerName.localeCompare(b.consumerName);
+        case 'status_asc':
+          return statusLabel(a.status).localeCompare(statusLabel(b.status));
+        case 'latest_activity_desc':
+        default:
+          return new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
+      }
+    });
+  }, [customFrom, customTo, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, leadRows, search, sortBy]);
+
+  const analytics = useMemo(() => ({
+    total: filteredRows.length,
+    interested: filteredRows.filter((lead) => lead.status === 'interested').length,
+    followUp: filteredRows.filter((lead) => lead.status === 'follow_up').length,
+    notInterested: filteredRows.filter((lead) => lead.status === 'not_interested').length,
+    finalized: filteredRows.filter((lead) => lead.status === 'final').length,
+    converted: filteredRows.filter((lead) => lead.status === 'final' || !!lead.projectType).length,
+  }), [filteredRows]);
+
+  const staffAnalytics = useMemo(() => {
+    const metrics = new Map<string, { name: string; created: number; assigned: number; converted: number; followUps: number }>();
+    const ensure = (userId: string | null, name: string) => {
+      if (!userId) return null;
+      if (!metrics.has(userId)) metrics.set(userId, { name, created: 0, assigned: 0, converted: 0, followUps: 0 });
+      return metrics.get(userId)!;
+    };
+
+    filteredRows.forEach((lead) => {
+      const creator = ensure(lead.createdByUserId, lead.createdByName);
+      if (creator) {
+        creator.created += 1;
+        if (lead.status === 'final' || lead.projectType) creator.converted += 1;
+      }
+      const assignee = ensure(lead.assignedToUserId, lead.assignedToName);
+      if (assignee) {
+        assignee.assigned += 1;
+        if (lead.status === 'follow_up') assignee.followUps += 1;
+      }
+    });
+
+    return Array.from(metrics.values()).map((metric) => ({
+      ...metric,
+      ratio: metric.created ? Math.round((metric.converted / metric.created) * 100) : 0,
+    })).sort((a, b) => (b.created + b.assigned) - (a.created + a.assigned)).slice(0, 8);
+  }, [filteredRows]);
+
+  const activeFilterCount = [
+    filterStatus !== 'all',
+    filterCreator !== 'all',
+    filterAssigned !== 'all',
+    filterOperator !== 'all',
+    filterProjectType !== 'all',
+    filterDate !== 'all',
+  ].filter(Boolean).length;
 
   const assignLead = async (leadId: string, userId: string) => {
     try {
       const { error } = await supabase.from('leads').update({ assigned_to_user_id: userId }).eq('id', leadId);
       if (error) throw error;
-      toast({ title: 'Lead assigned!' });
+      setLeadRows((current) => current.map((lead) => lead.id === leadId ? { ...lead, assignedToUserId: userId, assignedToName: staffDirectory[userId]?.full_name || 'Assigned' } : lead));
       setAssigningId(null);
-      fetchData();
+      toast({ title: 'Lead assigned' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
   };
 
-  const filtered = leads.filter(l => {
-    const matchSearch = !search || l.customer_name.toLowerCase().includes(search.toLowerCase()) || l.mobile.includes(search) || l.village_city.toLowerCase().includes(search.toLowerCase()) || l.district.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'all' || l.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
-
-  const assignedStaffName = (userId: string | null) => {
-    if (!userId) return null;
-    const s = staffList.find(st => st.user_id === userId);
-    return s ? s.full_name : null;
+  const resetFilters = () => {
+    setFilterStatus('all');
+    setFilterCreator('all');
+    setFilterAssigned('all');
+    setFilterOperator('all');
+    setFilterProjectType('all');
+    setFilterDate('all');
+    setCustomFrom('');
+    setCustomTo('');
+    setSortBy('latest_activity_desc');
   };
 
-  const staffName = (userId: string | null) => {
-    if (!userId) return 'Unknown user';
-    return allStaff.find(st => st.user_id === userId)?.full_name || 'Unknown user';
+  const exportRows = () => {
+    downloadCsv('leads-crm-export.csv', [
+      { header: 'Lead ID', value: (row: LeadRow) => row.leadCode },
+      { header: 'Consumer Name', value: (row: LeadRow) => row.consumerName },
+      { header: 'Mobile Number', value: (row: LeadRow) => row.mobile },
+      { header: 'Created By', value: (row: LeadRow) => row.createdByName },
+      { header: 'Assigned To', value: (row: LeadRow) => row.assignedToName },
+      { header: 'Assigned Operator', value: (row: LeadRow) => row.operatorName },
+      { header: 'Status', value: (row: LeadRow) => statusLabel(row.status) },
+      { header: 'Last Note', value: (row: LeadRow) => row.lastNote },
+      { header: 'Latest Update', value: (row: LeadRow) => row.latestUpdate },
+      { header: 'Last Activity Date', value: (row: LeadRow) => formatDateTime(row.lastActivityAt) },
+      { header: 'Updated By', value: (row: LeadRow) => row.latestUpdatedBy },
+      { header: 'Next Follow-up Date', value: (row: LeadRow) => formatDate(row.nextFollowUpDate) },
+      { header: 'Project Type', value: (row: LeadRow) => row.projectType ? statusLabel(row.projectType) : '—' },
+    ], filteredRows);
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in-up">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-display">All Leads</h1>
-          <p className="text-muted-foreground text-sm mt-1">{leads.length} total leads</p>
+          <p className="text-muted-foreground text-sm mt-1">Professional CRM table with latest activity, follow-ups, analytics, and live sync.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => downloadCsv('leads.csv', [
-            { header: 'Created', value: (l: any) => new Date(l.created_at).toLocaleString() },
-            { header: 'Customer', value: (l: any) => l.customer_name },
-            { header: 'Mobile', value: (l: any) => l.mobile },
-            { header: 'City', value: (l: any) => l.village_city },
-            { header: 'District', value: (l: any) => l.district },
-            { header: 'State', value: (l: any) => l.state },
-            { header: 'kW Interest', value: (l: any) => l.kw_interest ?? '' },
-            { header: 'Status', value: (l: any) => l.status },
-            { header: 'Source', value: (l: any) => l.source },
-            { header: 'Created By', value: (l: any) => staffName(l.created_by_user_id) },
-            { header: 'Assigned To', value: (l: any) => assignedStaffName(l.assigned_to_user_id) || '' },
-          ], filtered)} disabled={!leads.length}><Download className="mr-2 h-4 w-4" /> Export</Button>
-          <Button onClick={() => navigate('/leads/new')} className="btn-glow font-semibold">
-            <PhoneCall className="mr-2 h-4 w-4" /> Create Lead
-          </Button>
+          <Button variant="outline" onClick={exportRows} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Export CSV/Excel</Button>
+          <Button onClick={() => navigate('/leads/new')} className="btn-glow font-semibold"><PhoneCall className="mr-2 h-4 w-4" /> Create Lead</Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search name, mobile, city, district..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final'].map(s => (
-            <Button key={s} variant={filterStatus === s ? 'default' : 'outline'} size="sm" onClick={() => setFilterStatus(s)}
-              className={filterStatus === s ? 'btn-glow' : ''}>
-              {s === 'all' ? 'All' : statusLabel(s)}
-            </Button>
-          ))}
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+        <StatCard title="Total Leads" value={analytics.total} icon={Users} accent="primary" change="Filtered" changeType="neutral" />
+        <StatCard title="Interested" value={analytics.interested} icon={Users} accent="success" change="Warm" changeType="up" />
+        <StatCard title="Follow-up" value={analytics.followUp} icon={Users} accent="warning" change="Pending" changeType={analytics.followUp ? 'down' : 'neutral'} />
+        <StatCard title="Not Interested" value={analytics.notInterested} icon={Users} accent="destructive" change="Lost" changeType={analytics.notInterested ? 'down' : 'neutral'} />
+        <StatCard title="Finalized" value={analytics.finalized} icon={Users} accent="success" change="Closed" changeType={analytics.finalized ? 'up' : 'neutral'} />
+        <StatCard title="Converted" value={analytics.converted} icon={Users} accent="info" change="Projects" changeType={analytics.converted ? 'up' : 'neutral'} />
       </div>
 
-      {/* Leads */}
-      <Card className="border-0 bg-transparent shadow-none">
-        <CardContent className="p-0">
-          {loading ? (
-            <p className="text-muted-foreground text-sm py-12 text-center">Loading...</p>
-          ) : filtered.length === 0 ? (
-            <p className="text-muted-foreground text-sm py-12 text-center">No leads found.</p>
-          ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {filtered.map(lead => (
-                <div key={lead.id} className="bento p-5 transition-shadow hover:shadow-elevated">
-                  <div className="flex items-start justify-between gap-3 cursor-pointer" onClick={() => navigate(`/leads/${lead.id}`)}>
-                    <div className="min-w-0">
-                      <h2 className="truncate text-lg font-extrabold text-foreground">{lead.customer_name}</h2>
-                      <p className="text-sm text-muted-foreground">{lead.source ? statusLabel(lead.source) : 'Lead'}</p>
-                    </div>
-                    <Badge className={`shrink-0 rounded-full px-3 py-1 text-xs ${statusColor[lead.status] || ''}`}>
-                      {statusLabel(lead.status)}
-                    </Badge>
-                  </div>
-
-                  <div className="mt-4 grid gap-2 text-sm text-muted-foreground">
-                    <p className="flex items-center gap-2"><PhoneCall className="h-4 w-4" /> {lead.mobile}</p>
-                    <p className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {lead.village_city}, {lead.district}</p>
-                    <p className="flex items-center gap-2"><User className="h-4 w-4" /> Created By: <span className="font-semibold text-foreground">{staffName(lead.created_by_user_id)}</span></p>
-                    <p className="flex items-center gap-2"><User className="h-4 w-4" /> Assigned To: <span className="font-semibold text-foreground">{assignedStaffName(lead.assigned_to_user_id) || 'Not assigned'}</span></p>
-                    {lead.kw_interest && <p className="flex items-center gap-2 text-primary"><Zap className="h-4 w-4" /> {lead.kw_interest} kW Interest</p>}
-                  </div>
-
-                  {/* Assign dropdown */}
-                  {assigningId === lead.id ? (
-                    <Select onValueChange={v => assignLead(lead.id, v)}>
-                      <SelectTrigger className="mt-4 h-9 w-full text-xs">
-                        <SelectValue placeholder="Assign to..." />
-                      </SelectTrigger>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4">
+        <Card className="shadow-card border-border">
+          <CardContent className="p-4 flex flex-col lg:flex-row gap-3 lg:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search lead, mobile, staff, note, update, lead ID..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline"><Filter className="mr-2 h-4 w-4" /> Filters {activeFilterCount ? `(${activeFilterCount})` : ''}</Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-[360px] space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as StatusFilter)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {staffList.map(s => (
-                          <SelectItem key={s.user_id} value={s.user_id} className="text-xs">{s.full_name}</SelectItem>
-                        ))}
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="new">New Lead</SelectItem>
+                        <SelectItem value="follow_up">Follow-up</SelectItem>
+                        <SelectItem value="interested">Interested</SelectItem>
+                        <SelectItem value="not_interested">Not Interested</SelectItem>
+                        <SelectItem value="site_visit">Site Visit</SelectItem>
+                        <SelectItem value="documents_pending">Documents Pending</SelectItem>
+                        <SelectItem value="quotation_sent">Quotation Sent</SelectItem>
+                        <SelectItem value="final">Finalized</SelectItem>
                       </SelectContent>
                     </Select>
-                  ) : (
-                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setAssigningId(lead.id)} title="Assign to Sales Person">
-                      <AssignIcon className="mr-2 h-4 w-4" /> Assign Staff
-                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Lead Creator</Label>
+                    <Select value={filterCreator} onValueChange={setFilterCreator}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Creators</SelectItem>
+                        {allStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Assigned Sales Person</Label>
+                    <Select value={filterAssigned} onValueChange={setFilterAssigned}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Sales Persons</SelectItem>
+                        {salesStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Assigned Operator</Label>
+                    <Select value={filterOperator} onValueChange={setFilterOperator}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Operators</SelectItem>
+                        {operatorStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Project Type</Label>
+                      <Select value={filterProjectType} onValueChange={(value) => setFilterProjectType(value as 'all' | PaymentType)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Types</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="loan">Loan</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Date</Label>
+                      <Select value={filterDate} onValueChange={(value) => setFilterDate(value as DateFilter)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Dates</SelectItem>
+                          <SelectItem value="today">Today</SelectItem>
+                          <SelectItem value="this_week">This Week</SelectItem>
+                          <SelectItem value="this_month">This Month</SelectItem>
+                          <SelectItem value="custom">Custom Range</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {filterDate === 'custom' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5"><Label>From</Label><Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} /></div>
+                      <div className="space-y-1.5"><Label>To</Label><Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} /></div>
+                    </div>
                   )}
-                </div>
-              ))}
+                  <div className="flex justify-between pt-2">
+                    <Button variant="ghost" onClick={resetFilters}>Reset</Button>
+                    <Button variant="outline" onClick={() => void fetchData(true)}>Refresh</Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortKey)}>
+                <SelectTrigger className="w-[210px]"><ArrowUpDown className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="latest_activity_desc">Latest activity</SelectItem>
+                  <SelectItem value="created_desc">Newest created</SelectItem>
+                  <SelectItem value="follow_up_asc">Next follow-up</SelectItem>
+                  <SelectItem value="consumer_asc">Consumer name</SelectItem>
+                  <SelectItem value="status_asc">Status</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card border-border">
+          <CardHeader className="pb-3"><CardTitle className="text-base">Staff-wise Analytics</CardTitle></CardHeader>
+          <CardContent>
+            {!staffAnalytics.length ? <p className="text-sm text-muted-foreground">No staff activity in this filter.</p> : (
+              <div className="space-y-3">
+                {staffAnalytics.map((item) => (
+                  <div key={item.name} className="rounded-lg border border-border px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium text-foreground truncate">{item.name}</p>
+                      <Badge variant="outline">{item.ratio}%</Badge>
+                    </div>
+                    <div className="mt-2 grid grid-cols-4 gap-2 text-xs text-muted-foreground">
+                      <div><span className="block font-medium text-foreground">{item.created}</span>Created</div>
+                      <div><span className="block font-medium text-foreground">{item.assigned}</span>Assigned</div>
+                      <div><span className="block font-medium text-foreground">{item.converted}</span>Converted</div>
+                      <div><span className="block font-medium text-foreground">{item.followUps}</span>Follow-up</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-card border-border">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <CardTitle className="text-base">Professional Lead Table</CardTitle>
+            <p className="text-sm text-muted-foreground">{filteredRows.length} lead(s) visible • realtime sync enabled</p>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <p className="text-muted-foreground text-sm py-12 text-center">Loading lead pipeline...</p>
+          ) : filteredRows.length === 0 ? (
+            <p className="text-muted-foreground text-sm py-12 text-center">No leads match the current filters.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Lead ID</TableHead>
+                  <TableHead>Consumer Name</TableHead>
+                  <TableHead>Mobile Number</TableHead>
+                  <TableHead>Created By</TableHead>
+                  <TableHead>Assigned To</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Note</TableHead>
+                  <TableHead>Latest Update</TableHead>
+                  <TableHead>Last Activity</TableHead>
+                  <TableHead>Next Follow-up</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRows.map((lead) => (
+                  <TableRow key={lead.id} className="cursor-pointer" onClick={() => navigate(`/leads/${lead.id}`)}>
+                    <TableCell className="font-medium">{lead.leadCode}</TableCell>
+                    <TableCell><div className="min-w-[180px]"><p className="font-medium text-foreground">{lead.consumerName}</p><p className="text-xs text-muted-foreground">{lead.projectType ? statusLabel(lead.projectType) : 'Lead'}</p></div></TableCell>
+                    <TableCell>{lead.mobile}</TableCell>
+                    <TableCell>{lead.createdByName}</TableCell>
+                    <TableCell><div className="min-w-[150px]"><p className="font-medium text-foreground">{lead.assignedToName}</p><p className="text-xs text-muted-foreground">Operator: {lead.operatorName}</p></div></TableCell>
+                    <TableCell><Badge className={statusColor[lead.status] || statusColor.new}>{statusLabel(lead.status)}</Badge></TableCell>
+                    <TableCell><div className="min-w-[220px] max-w-[280px]"><p className="line-clamp-2 text-sm text-foreground">{lead.lastNote}</p></div></TableCell>
+                    <TableCell><div className="min-w-[170px]"><p className="text-sm font-medium text-foreground">{lead.latestUpdate}</p><p className="text-xs text-muted-foreground mt-1">By {lead.latestUpdatedBy}</p></div></TableCell>
+                    <TableCell>{formatDateTime(lead.lastActivityAt)}</TableCell>
+                    <TableCell>{formatDate(lead.nextFollowUpDate)}</TableCell>
+                    <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                      {assigningId === lead.id ? (
+                        <Select onValueChange={(value) => assignLead(lead.id, value)}>
+                          <SelectTrigger className="ml-auto w-[170px] h-9 text-xs"><SelectValue placeholder="Assign to..." /></SelectTrigger>
+                          <SelectContent>
+                            {salesStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => setAssigningId(lead.id)}><AssignIcon className="mr-2 h-4 w-4" /> Assign</Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

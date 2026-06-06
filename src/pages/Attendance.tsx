@@ -66,6 +66,7 @@ const Attendance = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const releaseRefreshLockRef = useRef<(() => void) | null>(null);
   const restoredDraftNoticeRef = useRef(false);
+  const submitLockRef = useRef(false);
 
   const [activeKind, setActiveKind] = useState<Kind | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -79,6 +80,7 @@ const Attendance = () => {
   const [phase, setPhase] = useState<string>('');
   const [lastSuccess, setLastSuccess] = useState<{ kind: Kind; at: string } | null>(null);
   const [localPunches, setLocalPunches] = useState<LocalPunchMap>({});
+  const [draftHydrated, setDraftHydrated] = useState(false);
 
   // Outside punch-out request
   const [reqOpen, setReqOpen] = useState(false);
@@ -93,6 +95,9 @@ const Attendance = () => {
   const { data: todayAttendance } = useQuery({
     queryKey: ['attendance-today', staff?.user_id],
     enabled: !!staff?.user_id,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const { data } = await supabase.from('attendance' as any)
         .select('*').eq('staff_user_id', staff!.user_id).eq('date', today).maybeSingle();
@@ -103,6 +108,9 @@ const Attendance = () => {
   const { data: recent } = useQuery({
     queryKey: ['attendance-recent', staff?.user_id],
     enabled: !!staff?.user_id,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const { data } = await supabase.from('attendance' as any)
         .select('*').eq('staff_user_id', staff!.user_id)
@@ -114,6 +122,9 @@ const Attendance = () => {
   const { data: todayEvents } = useQuery({
     queryKey: ['attendance-events-today', staff?.user_id],
     enabled: !!staff?.user_id,
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const start = new Date(); start.setHours(0, 0, 0, 0);
       const { data } = await supabase.from('attendance_events' as any)
@@ -126,6 +137,9 @@ const Attendance = () => {
   const { data: myRequests } = useQuery({
     queryKey: ['my-punchout-reqs', staff?.user_id],
     enabled: !!staff?.user_id && isSales,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       const { data } = await supabase.from('punch_out_requests' as any)
         .select('*').eq('staff_user_id', staff!.user_id)
@@ -137,6 +151,7 @@ const Attendance = () => {
   useEffect(() => {
     if (!staff?.user_id) {
       setLocalPunches({});
+      setDraftHydrated(true);
       return;
     }
 
@@ -144,7 +159,15 @@ const Attendance = () => {
     setLocalPunches(savedPunches);
 
     const savedDraft = readStoredJson<PunchDraft>(getDraftKey(staff.user_id, today));
-    if (!savedDraft?.kind) return;
+    if (!savedDraft?.kind) {
+      setDraftHydrated(true);
+      return;
+    }
+    if (savedPunches[savedDraft.kind]) {
+      localStorage.removeItem(getDraftKey(staff.user_id, today));
+      setDraftHydrated(true);
+      return;
+    }
 
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${savedDraft.kind}`);
@@ -159,6 +182,7 @@ const Attendance = () => {
         description: 'Your in-progress punch was reopened. Please capture the bike photo again and submit.',
       });
     }
+    setDraftHydrated(true);
   }, [staff?.user_id, today, toast]);
 
   useEffect(() => {
@@ -176,6 +200,14 @@ const Attendance = () => {
       reading,
     } satisfies PunchDraft);
   }, [activeKind, coords, reading, staff?.user_id, today]);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   const successfulTodayEvents = (todayEvents || []).filter((event: any) => !event.is_rejected);
   const checkInEvent = [...successfulTodayEvents]
@@ -245,19 +277,24 @@ const Attendance = () => {
       setImagePreview(URL.createObjectURL(compressed));
       setImgInfo({ kb: Math.round(compressed.size / 1024), blur: Math.round(blur) });
       if (blur < 25) toast({ title: 'Image looks blurry', description: 'Retake for a clearer shot if possible.', variant: 'destructive' });
+      if (requiresLocation && !coords) {
+        toast({ title: 'Now capture location', description: 'Photo is ready. Capture your live location to finish attendance.' });
+        captureLocation();
+      }
     } finally { setBusy(false); setProgress(0); setPhase(''); }
   };
 
   const startPunch = (kind: Kind) => {
+    submitLockRef.current = false;
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${kind}`);
     setActiveKind(kind);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
-    if (requiresLocation) captureLocation();
   };
 
   const cancelPunch = () => {
+    submitLockRef.current = false;
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = null;
     setActiveKind(null);
@@ -276,11 +313,13 @@ const Attendance = () => {
   }, []);
 
   const submitPunch = async () => {
-    if (busy || !activeKind || !staff?.user_id) return;
+    if (submitLockRef.current || busy || !activeKind || !staff?.user_id) return;
     if (requiresLocation && !coords) { toast({ title: 'Capture location first', variant: 'destructive' }); return; }
     if (requiresPhoto && !imageFile) { toast({ title: 'Bike meter photo is required', variant: 'destructive' }); return; }
 
+    submitLockRef.current = true;
     setBusy(true);
+    let uploadedImagePath: string | null = null;
     try {
       await Promise.all([
         qc.cancelQueries({ queryKey: ['attendance-today', staff.user_id] }),
@@ -297,10 +336,12 @@ const Attendance = () => {
         const { error: upErr } = await supabase.storage.from('attendance-media')
           .upload(path, imageFile, { contentType: 'image/jpeg', upsert: false, cacheControl: '3600' });
         if (upErr) throw upErr;
-        imagePath = path; setProgress(70);
+        imagePath = path;
+        uploadedImagePath = path;
+        setProgress(70);
       }
       setPhase('Saving punch...'); setProgress(85);
-      const { error } = await supabase.rpc('punch_attendance' as any, {
+      const { data: eventId, error } = await supabase.rpc('punch_attendance' as any, {
         _kind: savedKind, _lat: coords?.lat ?? null, _lng: coords?.lng ?? null,
         _accuracy: coords?.acc ?? null, _image_path: imagePath,
         _reading: reading ? Number(reading) : null,
@@ -310,7 +351,7 @@ const Attendance = () => {
       qc.setQueryData(['attendance-events-today', staff.user_id], (current: any[] | undefined) => {
         const existing = (current || []).filter((event: any) => !(event.kind === savedKind && !event.is_rejected));
         return [{
-          id: `optimistic-${savedKind}-${capturedAt}`,
+          id: eventId || `optimistic-${savedKind}-${capturedAt}`,
           staff_user_id: staff.user_id,
           kind: savedKind,
           captured_at: capturedAt,
@@ -367,8 +408,16 @@ const Attendance = () => {
         ]);
         return;
       }
+      if (uploadedImagePath) {
+        void supabase.storage.from('attendance-media').remove([uploadedImagePath]);
+      }
       toast({ title: 'Failed', description: e.message || 'Unknown error', variant: 'destructive' });
-    } finally { setBusy(false); setPhase(''); setProgress(0); }
+    } finally {
+      submitLockRef.current = false;
+      setBusy(false);
+      setPhase('');
+      setProgress(0);
+    }
   };
 
   const sendOutsideRequest = async () => {
@@ -446,7 +495,7 @@ const Attendance = () => {
                   key={k}
                   type="button"
                   onClick={() => !state.disabled && startPunch(k)}
-                  disabled={state.disabled}
+                    disabled={!draftHydrated || state.disabled}
                   className={`group relative h-24 sm:h-28 rounded-xl border transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1 px-3 text-center ${
                     primary
                       ? 'gradient-primary text-primary-foreground border-transparent shadow-elevated hover:shadow-glow'
