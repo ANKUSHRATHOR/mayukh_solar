@@ -1,0 +1,12 @@
+REVOKE ALL ON FUNCTION public.get_last_saved_bike_reading(uuid, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_last_saved_bike_reading(uuid, uuid, uuid) FROM anon;
+REVOKE ALL ON FUNCTION public.get_last_saved_bike_reading(uuid, uuid, uuid) FROM authenticated;
+REVOKE ALL ON FUNCTION public.validate_attendance_bike_reading() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.validate_attendance_bike_reading() FROM anon;
+REVOKE ALL ON FUNCTION public.validate_attendance_bike_reading() FROM authenticated;
+REVOKE ALL ON FUNCTION public.validate_field_visit_bike_reading() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.validate_field_visit_bike_reading() FROM anon;
+REVOKE ALL ON FUNCTION public.validate_field_visit_bike_reading() FROM authenticated;
+REVOKE ALL ON FUNCTION public.get_project_timeline(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_project_timeline(uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.get_project_timeline(uuid) TO authenticated;
