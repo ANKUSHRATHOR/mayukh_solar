@@ -47,6 +47,9 @@ interface StaffWithRole {
   is_active: boolean;
   last_login: string | null;
   created_at: string;
+  must_change_password?: boolean;
+  temp_password_plain?: string | null;
+  temp_password_issued_at?: string | null;
   role?: AppRole;
 }
 
@@ -366,6 +369,40 @@ const StaffManagement = () => {
         ))}
       </Tabs>
 
+      {/* Admin Credentials Panel — shows any staff with a pending temp PIN */}
+      {(() => {
+        const pending = staffList.filter((s) => s.temp_password_plain && s.must_change_password);
+        if (pending.length === 0) return null;
+        return (
+          <Card className="border-warning/40 bg-warning/5 shadow-card">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-warning" />
+                <p className="font-semibold text-sm text-foreground">Pending Temporary PINs ({pending.length})</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These staff have not changed their password yet. Share the PIN privately — it disappears once they set a new password.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {pending.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{s.full_name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {s.mobile} {s.temp_password_issued_at ? `• issued ${new Date(s.temp_password_issued_at).toLocaleDateString()}` : ''}
+                      </p>
+                    </div>
+                    <span className="font-mono text-lg font-bold tracking-widest text-primary select-all">{s.temp_password_plain}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+
+
 
       {/* Edit Dialog */}
       <Dialog open={!!editStaff} onOpenChange={(open) => !open && setEditStaff(null)}>
@@ -441,12 +478,12 @@ const StaffManagement = () => {
             <AlertDialogDescription>
               {tempPassword ? (
                 <span className="space-y-2 block">
-                  <span className="block">Temporary password for <strong>{resetStaff?.full_name}</strong>:</span>
-                  <span className="block bg-muted p-3 rounded-md font-mono text-lg text-foreground text-center select-all">{tempPassword}</span>
-                  <span className="block text-xs">Share this with the staff member. They will be asked to set a new password on next login.</span>
+                  <span className="block">Temporary 6-digit PIN for <strong>{resetStaff?.full_name}</strong>:</span>
+                  <span className="block bg-muted p-3 rounded-md font-mono text-2xl tracking-widest text-foreground text-center select-all">{tempPassword}</span>
+                  <span className="block text-xs">Share this PIN with the staff member. They will be forced to set a new password on next login. All their data (leads, projects, attendance, notes) is preserved.</span>
                 </span>
               ) : (
-                <>Reset password for <strong>{resetStaff?.full_name}</strong>? A temporary password will be generated.</>
+                <>Reset password for <strong>{resetStaff?.full_name}</strong>? A secure 6-digit PIN will be generated. All their data is kept intact.</>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

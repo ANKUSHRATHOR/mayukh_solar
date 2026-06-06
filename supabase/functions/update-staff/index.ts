@@ -6,12 +6,11 @@ const corsHeaders = {
 };
 
 function generateTempPassword(): string {
-  // 10 chars, letters+digits, easy to read
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  const arr = new Uint32Array(10);
+  // 6-digit numeric PIN, easy to read and dictate over the phone
+  const arr = new Uint32Array(6);
   crypto.getRandomValues(arr);
   let out = "";
-  for (let i = 0; i < arr.length; i++) out += alphabet[arr[i] % alphabet.length];
+  for (let i = 0; i < arr.length; i++) out += (arr[i] % 10).toString();
   return out;
 }
 
