@@ -369,6 +369,40 @@ const StaffManagement = () => {
         ))}
       </Tabs>
 
+      {/* Admin Credentials Panel — shows any staff with a pending temp PIN */}
+      {(() => {
+        const pending = staffList.filter((s) => s.temp_password_plain && s.must_change_password);
+        if (pending.length === 0) return null;
+        return (
+          <Card className="border-warning/40 bg-warning/5 shadow-card">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-warning" />
+                <p className="font-semibold text-sm text-foreground">Pending Temporary PINs ({pending.length})</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These staff have not changed their password yet. Share the PIN privately — it disappears once they set a new password.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {pending.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{s.full_name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {s.mobile} {s.temp_password_issued_at ? `• issued ${new Date(s.temp_password_issued_at).toLocaleDateString()}` : ''}
+                      </p>
+                    </div>
+                    <span className="font-mono text-lg font-bold tracking-widest text-primary select-all">{s.temp_password_plain}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+
+
 
       {/* Edit Dialog */}
       <Dialog open={!!editStaff} onOpenChange={(open) => !open && setEditStaff(null)}>
