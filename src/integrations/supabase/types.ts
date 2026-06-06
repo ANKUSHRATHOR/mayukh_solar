@@ -1355,7 +1355,28 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_last_saved_bike_reading: {
+        Args: {
+          _exclude_attendance_event?: string
+          _exclude_field_visit?: string
+          _staff_user_id: string
+        }
+        Returns: number
+      }
       get_lead_people: { Args: { _lead_id: string }; Returns: Json }
+      get_project_timeline: {
+        Args: { _project_id: string }
+        Returns: {
+          details: string
+          event_key: string
+          happened_at: string
+          label: string
+          sort_order: number
+          staff_name: string
+          staff_role: Database["public"]["Enums"]["app_role"]
+          staff_user_id: string
+        }[]
+      }
       get_staff_public: {
         Args: { _user_id: string }
         Returns: {
