@@ -8,11 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
-import { ArrowUpDown, Download, Filter, PhoneCall, Search, UserPlus as AssignIcon, Users } from 'lucide-react';
+import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, UserPlus as AssignIcon, Users, ChevronRight } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
+import { useStickyState } from '@/hooks/useStickyState';
 import type { Database } from '@/integrations/supabase/types';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -103,16 +103,16 @@ const AdminLeadsList = () => {
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
   const [operatorStaff, setOperatorStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
-  const [filterCreator, setFilterCreator] = useState('all');
-  const [filterAssigned, setFilterAssigned] = useState('all');
-  const [filterOperator, setFilterOperator] = useState('all');
-  const [filterProjectType, setFilterProjectType] = useState<'all' | PaymentType>('all');
-  const [filterDate, setFilterDate] = useState<DateFilter>('all');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const [sortBy, setSortBy] = useState<SortKey>('latest_activity_desc');
+  const [search, setSearch] = useStickyState<string>('admin-leads:search', '');
+  const [filterStatus, setFilterStatus] = useStickyState<StatusFilter>('admin-leads:status', 'all');
+  const [filterCreator, setFilterCreator] = useStickyState<string>('admin-leads:creator', 'all');
+  const [filterAssigned, setFilterAssigned] = useStickyState<string>('admin-leads:assigned', 'all');
+  const [filterOperator, setFilterOperator] = useStickyState<string>('admin-leads:operator', 'all');
+  const [filterProjectType, setFilterProjectType] = useStickyState<'all' | PaymentType>('admin-leads:projectType', 'all');
+  const [filterDate, setFilterDate] = useStickyState<DateFilter>('admin-leads:date', 'all');
+  const [customFrom, setCustomFrom] = useStickyState<string>('admin-leads:customFrom', '');
+  const [customTo, setCustomTo] = useStickyState<string>('admin-leads:customTo', '');
+  const [sortBy, setSortBy] = useStickyState<SortKey>('admin-leads:sort', 'latest_activity_desc');
   const [assigningId, setAssigningId] = useState<string | null>(null);
 
   const fetchData = useCallback(async (background = false) => {
