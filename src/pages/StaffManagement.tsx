@@ -47,6 +47,9 @@ interface StaffWithRole {
   is_active: boolean;
   last_login: string | null;
   created_at: string;
+  must_change_password?: boolean;
+  temp_password_plain?: string | null;
+  temp_password_issued_at?: string | null;
   role?: AppRole;
 }
 

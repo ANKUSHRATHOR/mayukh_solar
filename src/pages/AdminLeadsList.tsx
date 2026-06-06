@@ -364,7 +364,7 @@ const AdminLeadsList = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-display">All Leads</h1>
-          <p className="text-muted-foreground text-sm mt-1">Professional CRM table with latest activity, follow-ups, analytics, and live sync.</p>
+          <p className="text-muted-foreground text-sm mt-1">Premium CRM cards with latest activity, follow-ups, staff analytics, and live sync.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportRows} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Export CSV/Excel</Button>
