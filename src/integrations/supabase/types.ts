@@ -1052,6 +1052,9 @@ export type Database = {
           last_login: string | null
           mobile: string
           must_change_password: boolean
+          temp_password_issued_at: string | null
+          temp_password_issued_by: string | null
+          temp_password_plain: string | null
           updated_at: string
           user_id: string
         }
@@ -1064,6 +1067,9 @@ export type Database = {
           last_login?: string | null
           mobile: string
           must_change_password?: boolean
+          temp_password_issued_at?: string | null
+          temp_password_issued_by?: string | null
+          temp_password_plain?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1076,6 +1082,9 @@ export type Database = {
           last_login?: string | null
           mobile?: string
           must_change_password?: boolean
+          temp_password_issued_at?: string | null
+          temp_password_issued_by?: string | null
+          temp_password_plain?: string | null
           updated_at?: string
           user_id?: string
         }
