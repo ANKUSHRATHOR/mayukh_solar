@@ -80,6 +80,7 @@ const Attendance = () => {
   const [phase, setPhase] = useState<string>('');
   const [lastSuccess, setLastSuccess] = useState<{ kind: Kind; at: string } | null>(null);
   const [localPunches, setLocalPunches] = useState<LocalPunchMap>({});
+  const [draftHydrated, setDraftHydrated] = useState(false);
 
   // Outside punch-out request
   const [reqOpen, setReqOpen] = useState(false);
@@ -150,6 +151,7 @@ const Attendance = () => {
   useEffect(() => {
     if (!staff?.user_id) {
       setLocalPunches({});
+      setDraftHydrated(true);
       return;
     }
 
@@ -157,7 +159,15 @@ const Attendance = () => {
     setLocalPunches(savedPunches);
 
     const savedDraft = readStoredJson<PunchDraft>(getDraftKey(staff.user_id, today));
-    if (!savedDraft?.kind) return;
+    if (!savedDraft?.kind) {
+      setDraftHydrated(true);
+      return;
+    }
+    if (savedPunches[savedDraft.kind]) {
+      localStorage.removeItem(getDraftKey(staff.user_id, today));
+      setDraftHydrated(true);
+      return;
+    }
 
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${savedDraft.kind}`);
@@ -172,6 +182,7 @@ const Attendance = () => {
         description: 'Your in-progress punch was reopened. Please capture the bike photo again and submit.',
       });
     }
+    setDraftHydrated(true);
   }, [staff?.user_id, today, toast]);
 
   useEffect(() => {
@@ -308,6 +319,7 @@ const Attendance = () => {
 
     submitLockRef.current = true;
     setBusy(true);
+    let uploadedImagePath: string | null = null;
     try {
       await Promise.all([
         qc.cancelQueries({ queryKey: ['attendance-today', staff.user_id] }),
@@ -324,7 +336,9 @@ const Attendance = () => {
         const { error: upErr } = await supabase.storage.from('attendance-media')
           .upload(path, imageFile, { contentType: 'image/jpeg', upsert: false, cacheControl: '3600' });
         if (upErr) throw upErr;
-        imagePath = path; setProgress(70);
+        imagePath = path;
+        uploadedImagePath = path;
+        setProgress(70);
       }
       setPhase('Saving punch...'); setProgress(85);
       const { data: eventId, error } = await supabase.rpc('punch_attendance' as any, {
@@ -393,6 +407,9 @@ const Attendance = () => {
           qc.invalidateQueries({ queryKey: ['attendance-events-today', staff.user_id] }),
         ]);
         return;
+      }
+      if (uploadedImagePath) {
+        void supabase.storage.from('attendance-media').remove([uploadedImagePath]);
       }
       toast({ title: 'Failed', description: e.message || 'Unknown error', variant: 'destructive' });
     } finally {
@@ -478,7 +495,7 @@ const Attendance = () => {
                   key={k}
                   type="button"
                   onClick={() => !state.disabled && startPunch(k)}
-                  disabled={state.disabled}
+                    disabled={!draftHydrated || state.disabled}
                   className={`group relative h-24 sm:h-28 rounded-xl border transition-all active:scale-[0.98] flex flex-col items-center justify-center gap-1 px-3 text-center ${
                     primary
                       ? 'gradient-primary text-primary-foreground border-transparent shadow-elevated hover:shadow-glow'
