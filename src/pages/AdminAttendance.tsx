@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Eye, XCircle, Download, Check, X as XIcon } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
+import { useStickyState } from '@/hooks/useStickyState';
 
 const statusColor: Record<string, string> = {
   present: 'bg-success text-success-foreground',
@@ -23,8 +24,8 @@ const AdminAttendance = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const now = new Date();
-  const [month, setMonth] = useState<string>(format(now, 'yyyy-MM'));
-  const [staffId, setStaffId] = useState<string>('all');
+  const [month, setMonth] = useStickyState<string>('admin-attendance:month', format(now, 'yyyy-MM'));
+  const [staffId, setStaffId] = useStickyState<string>('admin-attendance:staffId', 'all');
 
   const { data: staff } = useQuery({
     queryKey: ['staff-list'],
