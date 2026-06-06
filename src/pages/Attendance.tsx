@@ -270,6 +270,7 @@ const Attendance = () => {
   };
 
   const startPunch = (kind: Kind) => {
+    submitLockRef.current = false;
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${kind}`);
     setActiveKind(kind);
@@ -279,6 +280,7 @@ const Attendance = () => {
   };
 
   const cancelPunch = () => {
+    submitLockRef.current = false;
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = null;
     setActiveKind(null);
@@ -297,10 +299,11 @@ const Attendance = () => {
   }, []);
 
   const submitPunch = async () => {
-    if (busy || !activeKind || !staff?.user_id) return;
+    if (submitLockRef.current || busy || !activeKind || !staff?.user_id) return;
     if (requiresLocation && !coords) { toast({ title: 'Capture location first', variant: 'destructive' }); return; }
     if (requiresPhoto && !imageFile) { toast({ title: 'Bike meter photo is required', variant: 'destructive' }); return; }
 
+    submitLockRef.current = true;
     setBusy(true);
     try {
       await Promise.all([
@@ -321,7 +324,7 @@ const Attendance = () => {
         imagePath = path; setProgress(70);
       }
       setPhase('Saving punch...'); setProgress(85);
-      const { error } = await supabase.rpc('punch_attendance' as any, {
+      const { data: eventId, error } = await supabase.rpc('punch_attendance' as any, {
         _kind: savedKind, _lat: coords?.lat ?? null, _lng: coords?.lng ?? null,
         _accuracy: coords?.acc ?? null, _image_path: imagePath,
         _reading: reading ? Number(reading) : null,
@@ -331,7 +334,7 @@ const Attendance = () => {
       qc.setQueryData(['attendance-events-today', staff.user_id], (current: any[] | undefined) => {
         const existing = (current || []).filter((event: any) => !(event.kind === savedKind && !event.is_rejected));
         return [{
-          id: `optimistic-${savedKind}-${capturedAt}`,
+          id: eventId || `optimistic-${savedKind}-${capturedAt}`,
           staff_user_id: staff.user_id,
           kind: savedKind,
           captured_at: capturedAt,
@@ -389,7 +392,12 @@ const Attendance = () => {
         return;
       }
       toast({ title: 'Failed', description: e.message || 'Unknown error', variant: 'destructive' });
-    } finally { setBusy(false); setPhase(''); setProgress(0); }
+    } finally {
+      submitLockRef.current = false;
+      setBusy(false);
+      setPhase('');
+      setProgress(0);
+    }
   };
 
   const sendOutsideRequest = async () => {
