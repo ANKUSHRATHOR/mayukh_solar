@@ -294,9 +294,32 @@ const AdminProjects = () => {
                       </div>
                     </div>
 
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="rounded-md border border-border/60 bg-muted/10 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">Operator</p>
+                        <p className="mt-1 truncate text-sm font-medium text-foreground" title={staffName(p.assigned_operator_id)}>
+                          {staffName(p.assigned_operator_id)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-border/60 bg-muted/10 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">Welder</p>
+                        <p className="mt-1 truncate text-sm font-medium text-foreground" title={staffName(p.assigned_welder_id)}>
+                          {staffName(p.assigned_welder_id)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-border/60 bg-muted/10 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">Electrician</p>
+                        <p className="mt-1 truncate text-sm font-medium text-foreground" title={staffName(p.assigned_electrician_id)}>
+                          {staffName(p.assigned_electrician_id)}
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Customer: <span className="font-medium text-foreground">{p.leads?.customer_name || '—'}</span></span>
                       {p.k_number && <span className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5" /> K Number: <span className="break-all font-medium text-foreground">{p.k_number}</span></span>}
+                      <span className="flex items-center gap-1.5">Finalized by <span className="font-medium text-foreground">{staffName(p.created_by_user_id)}</span> on <span className="font-medium text-foreground">{new Date(p.created_at).toLocaleDateString()}</span></span>
+                      {p.completed_at && <span className="flex items-center gap-1.5 text-success">Completed on <span className="font-medium">{new Date(p.completed_at).toLocaleDateString()}</span></span>}
                     </div>
 
                     <div className="rounded-md border border-border/60 bg-muted/20 p-3">
