@@ -40,7 +40,7 @@ const cleanupPreviewServiceWorkers = async () => {
 
 const checkForPublishedUpdate = async () => {
   if (isInIframe || isPreviewHost) return;
-  if (hasActiveRefreshLock()) return;
+  if (hasActiveRefreshLock() || hasAttendanceDraft()) return;
   // Don't auto-refresh while a download/preview is in progress
   if ((window as any).__mayukhDownloading) return;
   // Only auto-refresh once per session
