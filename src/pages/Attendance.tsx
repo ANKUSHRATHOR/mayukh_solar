@@ -169,19 +169,21 @@ const Attendance = () => {
       return;
     }
 
+    // Only restore drafts that already had real progress (coords or reading).
+    // An empty draft just leftover from opening the camera shouldn't reopen
+    // the punch screen and alarm the user.
+    const hasProgress = Boolean(savedDraft.coords) || Boolean(savedDraft.reading);
+    if (!hasProgress) {
+      localStorage.removeItem(getDraftKey(staff.user_id, today));
+      setDraftHydrated(true);
+      return;
+    }
+
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${savedDraft.kind}`);
     setActiveKind(savedDraft.kind);
     setCoords(savedDraft.coords ?? null);
     setReading(savedDraft.reading ?? '');
-
-    if (!restoredDraftNoticeRef.current) {
-      restoredDraftNoticeRef.current = true;
-      toast({
-        title: 'Punch restored',
-        description: 'Your in-progress punch was reopened. Please capture the bike photo again and submit.',
-      });
-    }
     setDraftHydrated(true);
   }, [staff?.user_id, today, toast]);
 
