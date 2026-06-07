@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
-import { hasActiveRefreshLock } from "./lib/refreshLock";
+import { hasActiveRefreshLock, hasAttendanceDraft } from "./lib/refreshLock";
 
 declare const __APP_VERSION__: string;
 
