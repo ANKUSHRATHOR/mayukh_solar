@@ -1,5 +1,5 @@
 // Sales person field-visit reporting: live location + bike meter photo + notes + outcome.
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
