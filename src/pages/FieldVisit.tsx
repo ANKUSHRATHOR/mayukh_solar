@@ -71,10 +71,17 @@ const FieldVisit = () => {
     },
   });
 
-  useEffect(() => {
-    if (isSales) captureLocation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Note: location intentionally NOT auto-captured on mount — mobile browsers
+  // often block geolocation prompts that are not initiated by a user gesture.
+
+  const { data: lastReading } = useQuery({
+    queryKey: ['last-bike-reading', staff?.user_id],
+    enabled: !!staff?.user_id && isSales,
+    queryFn: async () => {
+      const { data } = await supabase.rpc('get_last_saved_bike_reading' as any, { _user: staff!.user_id });
+      return Number(data ?? 0);
+    },
+  });
 
   const captureLocation = () => {
     if (!navigator.geolocation) { toast({ title: 'Location not supported', variant: 'destructive' }); return; }
@@ -85,6 +92,9 @@ const FieldVisit = () => {
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   };
+
+  const readingNum = reading ? Number(reading) : NaN;
+  const readingTooLow = !isNaN(readingNum) && lastReading != null && lastReading > 0 && readingNum < lastReading;
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; e.target.value = '';
@@ -99,19 +109,31 @@ const FieldVisit = () => {
     if (!coords) { toast({ title: 'Location required', variant: 'destructive' }); return; }
     if (!imageFile) { toast({ title: 'Bike meter photo required', variant: 'destructive' }); return; }
     if (!notes.trim()) { toast({ title: 'Notes required', variant: 'destructive' }); return; }
+    if (readingTooLow) {
+      toast({ title: 'Odometer reading too low', description: `Last saved reading is ${lastReading} km. Enter a value greater than or equal to this.`, variant: 'destructive' });
+      return;
+    }
 
     setBusy(true);
+    let uploadedPath: string | null = null;
     try {
       const path = `${staff.user_id}/field-visits/${Date.now()}-${crypto.randomUUID()}.jpg`;
-      const { error: upErr } = await supabase.storage.from('attendance-media')
-        .upload(path, imageFile, { contentType: 'image/jpeg', upsert: false });
-      if (upErr) throw upErr;
+      // Retry upload up to 2 times for flaky mobile networks
+      let upErr: any = null;
+      for (let i = 0; i < 2; i++) {
+        const res = await supabase.storage.from('attendance-media')
+          .upload(path, imageFile, { contentType: 'image/jpeg', upsert: false });
+        upErr = res.error;
+        if (!upErr) { uploadedPath = path; break; }
+        await new Promise(r => setTimeout(r, 800));
+      }
+      if (upErr || !uploadedPath) throw upErr || new Error('Upload failed');
 
       const { error } = await supabase.from('field_visits' as any).insert({
         staff_user_id: staff.user_id,
         project_id: projectId || null,
         latitude: coords.lat, longitude: coords.lng, accuracy_m: coords.acc,
-        bike_meter_image_path: path,
+        bike_meter_image_path: uploadedPath,
         bike_meter_reading: reading ? Number(reading) : null,
         notes: notes.trim(),
         outcome,
@@ -121,6 +143,7 @@ const FieldVisit = () => {
       toast({ title: 'Field visit saved' });
       setNotes(''); setReading(''); setImageFile(null); setImagePreview(null); setProjectId('');
       qc.invalidateQueries({ queryKey: ['my-field-visits', staff.user_id] });
+      qc.invalidateQueries({ queryKey: ['last-bike-reading', staff.user_id] });
     } catch (e: any) {
       toast({ title: 'Failed to save', description: e.message, variant: 'destructive' });
     } finally { setBusy(false); }
@@ -169,7 +192,12 @@ const FieldVisit = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Odometer (km)</Label>
-              <Input type="number" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="optional" />
+              <Input type="number" value={reading} onChange={(e) => setReading(e.target.value)} placeholder={lastReading ? `≥ ${lastReading}` : 'optional'} />
+              {lastReading ? (
+                <p className={`text-xs ${readingTooLow ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                  Last saved reading: {lastReading} km
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1.5">
               <Label>Outcome</Label>
