@@ -240,6 +240,15 @@ const Attendance = () => {
     void cameraVideoRef.current.play().catch(() => undefined);
   }, [cameraOpen]);
 
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+      if (imagePreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const stopCameraStream = () => {
     cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
     cameraStreamRef.current = null;
@@ -344,14 +353,6 @@ const Attendance = () => {
     }
   };
 
-    return () => {
-      stopCameraStream();
-      if (imagePreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreview);
-      }
-    };
-  }, [imagePreview]);
-
   const successfulTodayEvents = (todayEvents || []).filter((event: any) => !event.is_rejected);
   const checkInEvent = [...successfulTodayEvents]
     .filter((event: any) => event.kind === 'check_in')
@@ -417,6 +418,7 @@ const Attendance = () => {
     submitLockRef.current = false;
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${kind}`);
+    setPendingCaptureKind(null);
     setActiveKind(kind);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
