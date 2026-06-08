@@ -30,6 +30,7 @@ const FieldVisit = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
 
   const [coords, setCoords] = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -180,9 +181,13 @@ const FieldVisit = () => {
           <div className="space-y-2">
             <Label>Bike Meter Photo <span className="text-destructive">*</span></Label>
             <input ref={fileInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} />
+            <input ref={galleryInput} type="file" accept="image/*" className="hidden" onChange={onFile} />
             <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant="outline" onClick={() => fileInput.current?.click()}>
                 <Camera className="h-4 w-4 mr-1" />{imagePreview ? 'Retake' : 'Open camera'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => galleryInput.current?.click()}>
+                <Camera className="h-4 w-4 mr-1" />Upload from gallery
               </Button>
               {imagePreview && <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Ready</span>}
             </div>
