@@ -64,6 +64,7 @@ const Attendance = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const releaseRefreshLockRef = useRef<(() => void) | null>(null);
   const restoredDraftNoticeRef = useRef(false);
   const submitLockRef = useRef(false);
@@ -550,9 +551,13 @@ const Attendance = () => {
                   Bike Meter Photo <span className="text-destructive">*</span>
                 </Label>
                 <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChosen} />
+                <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChosen} />
                 <div className="flex flex-wrap items-center gap-2">
                   <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={busy} className="h-9">
                     <Camera className="h-4 w-4 mr-1.5" /> {imagePreview ? 'Retake' : 'Open camera'}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => galleryInputRef.current?.click()} disabled={busy} className="h-9">
+                    <Camera className="h-4 w-4 mr-1.5" /> Upload from gallery
                   </Button>
                   {imgInfo && (
                     <>

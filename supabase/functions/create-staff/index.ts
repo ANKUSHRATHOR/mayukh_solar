@@ -74,11 +74,16 @@ Deno.serve(async (req) => {
     const tempPin = Array.from(_pinArr).map((v) => v % 10).join("");
     const mobileEmail = `${mobile}@mayukhsolar.app`;
 
-    // Check if user already exists
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find(
-      (u) => u.email === mobileEmail
-    );
+    // Check if user already exists — paginate listUsers because the default
+    // page size only returns the first 50 users and we may have many.
+    let existingUser: any = null;
+    for (let page = 1; page <= 50 && !existingUser; page++) {
+      const { data: pageData, error: listErr } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 });
+      if (listErr) throw listErr;
+      const users = pageData?.users || [];
+      existingUser = users.find((u: any) => u.email === mobileEmail) || null;
+      if (users.length < 1000) break;
+    }
 
     let userId: string;
 
