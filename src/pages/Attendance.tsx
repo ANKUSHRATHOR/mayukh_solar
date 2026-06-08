@@ -45,6 +45,34 @@ type LocalPunchMap = Partial<Record<Kind, string>>;
 
 const getDraftKey = (userId: string, date: string) => `attendance-draft:${userId}:${date}`;
 const getLocalPunchKey = (userId: string, date: string) => `attendance-local-punches:${userId}:${date}`;
+const PENDING_CAPTURE_KEY = 'attendance-pending-photo-kind';
+
+const isKind = (value: string | null): value is Kind => (
+  value === 'check_in' || value === 'field_visit' || value === 'check_out'
+);
+
+const getPendingCaptureKind = (): Kind | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const value = window.sessionStorage.getItem(PENDING_CAPTURE_KEY);
+    return isKind(value) ? value : null;
+  } catch {
+    return null;
+  }
+};
+
+const setPendingCaptureKind = (kind: Kind | null) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!kind) {
+      window.sessionStorage.removeItem(PENDING_CAPTURE_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(PENDING_CAPTURE_KEY, kind);
+  } catch {
+    /* ignore */
+  }
+};
 
 const readStoredJson = <T,>(key: string): T | null => {
   try {
@@ -65,8 +93,9 @@ const Attendance = () => {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   const releaseRefreshLockRef = useRef<(() => void) | null>(null);
-  const restoredDraftNoticeRef = useRef(false);
   const submitLockRef = useRef(false);
 
   const [activeKind, setActiveKind] = useState<Kind | null>(null);
@@ -82,6 +111,8 @@ const Attendance = () => {
   const [lastSuccess, setLastSuccess] = useState<{ kind: Kind; at: string } | null>(null);
   const [localPunches, setLocalPunches] = useState<LocalPunchMap>({});
   const [draftHydrated, setDraftHydrated] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraBusy, setCameraBusy] = useState(false);
 
   // Outside punch-out request
   const [reqOpen, setReqOpen] = useState(false);
@@ -170,11 +201,10 @@ const Attendance = () => {
       return;
     }
 
-    // Only restore drafts that already had real progress (coords or reading).
-    // An empty draft just leftover from opening the camera shouldn't reopen
-    // the punch screen and alarm the user.
     const hasProgress = Boolean(savedDraft.coords) || Boolean(savedDraft.reading);
-    if (!hasProgress) {
+    const pendingCaptureKind = getPendingCaptureKind();
+    const shouldRestore = hasProgress || pendingCaptureKind === savedDraft.kind;
+    if (!shouldRestore) {
       localStorage.removeItem(getDraftKey(staff.user_id, today));
       setDraftHydrated(true);
       return;
@@ -205,12 +235,123 @@ const Attendance = () => {
   }, [activeKind, coords, reading, staff?.user_id, today]);
 
   useEffect(() => {
+    if (!cameraOpen || !cameraVideoRef.current || !cameraStreamRef.current) return;
+    cameraVideoRef.current.srcObject = cameraStreamRef.current;
+    void cameraVideoRef.current.play().catch(() => undefined);
+  }, [cameraOpen]);
+
+  useEffect(() => {
     return () => {
+      stopCameraStream();
       if (imagePreview?.startsWith('blob:')) {
         URL.revokeObjectURL(imagePreview);
       }
     };
   }, [imagePreview]);
+
+  const stopCameraStream = () => {
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+    if (cameraVideoRef.current) {
+      cameraVideoRef.current.srcObject = null;
+    }
+  };
+
+  const prepareChosenImage = async (file: File) => {
+    if (!/^image\//.test(file.type)) {
+      toast({ title: 'Pick an image', variant: 'destructive' });
+      return;
+    }
+
+    setPendingCaptureKind(null);
+    setBusy(true);
+    setPhase('Compressing...');
+    setProgress(20);
+
+    try {
+      const compressed = await compressImage(file);
+      setProgress(60);
+      setPhase('Checking quality...');
+      const blur = await estimateBlur(compressed);
+      setImageFile(compressed);
+      setImagePreview(URL.createObjectURL(compressed));
+      setImgInfo({ kb: Math.round(compressed.size / 1024), blur: Math.round(blur) });
+      if (blur < 25) {
+        toast({ title: 'Image looks blurry', description: 'Retake for a clearer shot if possible.', variant: 'destructive' });
+      }
+      if (requiresLocation && !coords) {
+        toast({ title: 'Now capture location', description: 'Photo is ready. Capture your live location to finish attendance.' });
+        captureLocation();
+      }
+    } finally {
+      setBusy(false);
+      setProgress(0);
+      setPhase('');
+    }
+  };
+
+  const openCamera = async () => {
+    if (!activeKind) return;
+    setPendingCaptureKind(activeKind);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      stopCameraStream();
+      cameraStreamRef.current = stream;
+      setCameraOpen(true);
+    } catch (error: any) {
+      toast({
+        title: 'Camera unavailable',
+        description: error?.message || 'Opening device camera instead.',
+        variant: 'destructive',
+      });
+      fileInputRef.current?.click();
+    }
+  };
+
+  const captureInlinePhoto = async () => {
+    const video = cameraVideoRef.current;
+    if (!video) return;
+
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+    if (!width || !height) {
+      toast({ title: 'Camera not ready yet', description: 'Wait one second and try again.', variant: 'destructive' });
+      return;
+    }
+
+    setCameraBusy(true);
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Camera capture failed');
+      ctx.drawImage(video, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.92);
+      });
+      if (!blob) throw new Error('Camera capture failed');
+
+      const capturedFile = new File([blob], `bike-meter-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      stopCameraStream();
+      setCameraOpen(false);
+      await prepareChosenImage(capturedFile);
+    } catch (error: any) {
+      toast({ title: 'Photo capture failed', description: error?.message || 'Try again.', variant: 'destructive' });
+    } finally {
+      setCameraBusy(false);
+    }
+  };
 
   const successfulTodayEvents = (todayEvents || []).filter((event: any) => !event.is_rejected);
   const checkInEvent = [...successfulTodayEvents]
@@ -270,27 +411,14 @@ const Attendance = () => {
   const onFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; e.target.value = '';
     if (!f) return;
-    if (!/^image\//.test(f.type)) { toast({ title: 'Pick an image', variant: 'destructive' }); return; }
-    setBusy(true); setPhase('Compressing...'); setProgress(20);
-    try {
-      const compressed = await compressImage(f);
-      setProgress(60); setPhase('Checking quality...');
-      const blur = await estimateBlur(compressed);
-      setImageFile(compressed);
-      setImagePreview(URL.createObjectURL(compressed));
-      setImgInfo({ kb: Math.round(compressed.size / 1024), blur: Math.round(blur) });
-      if (blur < 25) toast({ title: 'Image looks blurry', description: 'Retake for a clearer shot if possible.', variant: 'destructive' });
-      if (requiresLocation && !coords) {
-        toast({ title: 'Now capture location', description: 'Photo is ready. Capture your live location to finish attendance.' });
-        captureLocation();
-      }
-    } finally { setBusy(false); setProgress(0); setPhase(''); }
+    await prepareChosenImage(f);
   };
 
   const startPunch = (kind: Kind) => {
     submitLockRef.current = false;
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${kind}`);
+    setPendingCaptureKind(null);
     setActiveKind(kind);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
@@ -300,6 +428,9 @@ const Attendance = () => {
     submitLockRef.current = false;
     releaseRefreshLockRef.current?.();
     releaseRefreshLockRef.current = null;
+    stopCameraStream();
+    setCameraOpen(false);
+    setPendingCaptureKind(null);
     setActiveKind(null);
     setImageFile(null); setImagePreview(null); setImgInfo(null);
     setReading(''); setCoords(null); setProgress(0); setPhase('');
@@ -553,7 +684,7 @@ const Attendance = () => {
                 <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChosen} />
                 <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChosen} />
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={busy} className="h-9">
+                  <Button variant="outline" size="sm" onClick={openCamera} disabled={busy || cameraBusy} className="h-9">
                     <Camera className="h-4 w-4 mr-1.5" /> {imagePreview ? 'Retake' : 'Open camera'}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => galleryInputRef.current?.click()} disabled={busy} className="h-9">
@@ -690,6 +821,43 @@ const Attendance = () => {
             <Button variant="outline" onClick={() => setReqOpen(false)} disabled={reqBusy}>Cancel</Button>
             <Button onClick={sendOutsideRequest} disabled={reqBusy} className="gradient-primary text-primary-foreground">
               {reqBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />} Send request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={cameraOpen}
+        onOpenChange={(open) => {
+          setCameraOpen(open);
+          if (!open) stopCameraStream();
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Capture bike meter photo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="overflow-hidden rounded-lg border border-border bg-muted/20">
+              <video ref={cameraVideoRef} autoPlay playsInline muted className="aspect-[4/3] w-full object-cover" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Keep the meter reading fully visible, then capture the photo here so the app stays on the same punch screen.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                stopCameraStream();
+                setCameraOpen(false);
+              }}
+              disabled={cameraBusy}
+            >
+              Cancel
+            </Button>
+            <Button onClick={captureInlinePhoto} disabled={cameraBusy} className="gradient-primary text-primary-foreground">
+              {cameraBusy ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Capturing…</> : <><Camera className="h-4 w-4 mr-2" />Capture photo</>}
             </Button>
           </DialogFooter>
         </DialogContent>
