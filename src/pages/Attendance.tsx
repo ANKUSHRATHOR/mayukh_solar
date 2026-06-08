@@ -684,7 +684,7 @@ const Attendance = () => {
                 <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChosen} />
                 <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChosen} />
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={busy} className="h-9">
+                  <Button variant="outline" size="sm" onClick={openCamera} disabled={busy || cameraBusy} className="h-9">
                     <Camera className="h-4 w-4 mr-1.5" /> {imagePreview ? 'Retake' : 'Open camera'}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => galleryInputRef.current?.click()} disabled={busy} className="h-9">
@@ -821,6 +821,43 @@ const Attendance = () => {
             <Button variant="outline" onClick={() => setReqOpen(false)} disabled={reqBusy}>Cancel</Button>
             <Button onClick={sendOutsideRequest} disabled={reqBusy} className="gradient-primary text-primary-foreground">
               {reqBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />} Send request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={cameraOpen}
+        onOpenChange={(open) => {
+          setCameraOpen(open);
+          if (!open) stopCameraStream();
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Capture bike meter photo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="overflow-hidden rounded-lg border border-border bg-muted/20">
+              <video ref={cameraVideoRef} autoPlay playsInline muted className="aspect-[4/3] w-full object-cover" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Keep the meter reading fully visible, then capture the photo here so the app stays on the same punch screen.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                stopCameraStream();
+                setCameraOpen(false);
+              }}
+              disabled={cameraBusy}
+            >
+              Cancel
+            </Button>
+            <Button onClick={captureInlinePhoto} disabled={cameraBusy} className="gradient-primary text-primary-foreground">
+              {cameraBusy ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Capturing…</> : <><Camera className="h-4 w-4 mr-2" />Capture photo</>}
             </Button>
           </DialogFooter>
         </DialogContent>
