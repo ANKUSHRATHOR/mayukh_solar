@@ -1278,6 +1278,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_list_temp_passwords: {
+        Args: never
+        Returns: {
+          temp_password_issued_at: string
+          temp_password_plain: string
+          user_id: string
+        }[]
+      }
       bike_km_for_day: {
         Args: { _date: string; _user: string }
         Returns: number
