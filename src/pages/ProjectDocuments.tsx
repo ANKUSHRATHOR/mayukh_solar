@@ -115,8 +115,9 @@ const ProjectDocuments = () => {
     setUploading(docType);
     try {
       const ext = file.name.split('.').pop();
-      const folder = quotationNumber || projectId;
-      const path = `${folder}/${docType}.${ext}`;
+      // IMPORTANT: folder MUST be projectId — storage RLS for sales persons checks
+      // foldername[1] == project.id. Using quotation_number here breaks sales uploads.
+      const path = `${projectId}/${docType}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('project-documents')
