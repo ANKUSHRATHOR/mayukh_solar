@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { compressImage, estimateBlur } from "@/lib/capture";
-import { acquireRefreshLock } from "@/lib/refreshLock";
 import { Link } from "react-router-dom";
 
 type Kind = "check_in" | "field_visit" | "check_out";
@@ -103,7 +102,6 @@ const Attendance = () => {
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
-  const releaseRefreshLockRef = useRef<(() => void) | null>(null);
   const submitLockRef = useRef(false);
 
   const [activeKind, setActiveKind] = useState<Kind | null>(null);
