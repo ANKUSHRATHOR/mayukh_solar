@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { compressImage, estimateBlur } from "@/lib/capture";
-import { acquireRefreshLock } from "@/lib/refreshLock";
 import { Link } from "react-router-dom";
 
 type Kind = "check_in" | "field_visit" | "check_out";
@@ -103,7 +102,6 @@ const Attendance = () => {
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
-  const releaseRefreshLockRef = useRef<(() => void) | null>(null);
   const submitLockRef = useRef(false);
 
   const [activeKind, setActiveKind] = useState<Kind | null>(null);
@@ -232,8 +230,6 @@ const Attendance = () => {
       return;
     }
 
-    releaseRefreshLockRef.current?.();
-    releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${savedDraft.kind}`);
     setActiveKind(savedDraft.kind);
     setCoords(savedDraft.coords ?? null);
     setReading(savedDraft.reading ?? "");
@@ -466,8 +462,6 @@ const Attendance = () => {
 
   const startPunch = (kind: Kind) => {
     submitLockRef.current = false;
-    releaseRefreshLockRef.current?.();
-    releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${kind}`);
     setPendingCaptureKind(null);
     setActiveKind(kind);
     setImageFile(null);
@@ -481,8 +475,6 @@ const Attendance = () => {
 
   const cancelPunch = () => {
     submitLockRef.current = false;
-    releaseRefreshLockRef.current?.();
-    releaseRefreshLockRef.current = null;
     stopCameraStream();
     setCameraOpen(false);
     setPendingCaptureKind(null);
@@ -500,10 +492,7 @@ const Attendance = () => {
   };
 
   useEffect(() => {
-    return () => {
-      releaseRefreshLockRef.current?.();
-      releaseRefreshLockRef.current = null;
-    };
+    return () => {};
   }, []);
 
   const submitPunch = async () => {

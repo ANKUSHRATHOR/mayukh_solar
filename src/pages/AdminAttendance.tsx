@@ -90,7 +90,6 @@ const AdminAttendance = () => {
         .select('*').order('created_at', { ascending: false }).limit(50);
       return (data as any[]) || [];
     },
-    refetchInterval: 15000,
   });
 
   const reviewReq = async (id: string, approve: boolean) => {

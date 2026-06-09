@@ -208,8 +208,6 @@ const OperatorProjectDetail = () => {
     const fileDocs = docs.filter(d => d.file_url);
     if (fileDocs.length === 0) return;
     setBulkDownloading(true);
-    // Suppress auto-refresh during long download
-    (window as any).__mayukhDownloading = true;
     try {
       const zip = new JSZip();
       let added = 0;
@@ -245,7 +243,6 @@ const OperatorProjectDetail = () => {
       toast({ title: 'Bulk download failed', description: err.message, variant: 'destructive' });
     } finally {
       setBulkDownloading(false);
-      (window as any).__mayukhDownloading = false;
     }
   };
 
