@@ -95,19 +95,27 @@ const StaffManagement = () => {
     try {
       const { data: staffData, error } = await supabase
         .from('staff')
-        .select('*')
+        .select('id, user_id, full_name, mobile, email, is_active, last_login, created_at, must_change_password')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       const { data: rolesData } = await supabase.from('user_roles').select('*');
+      const { data: tempPwData } = await supabase.rpc('admin_list_temp_passwords' as any);
 
       const roleMap = new Map<string, AppRole>();
       rolesData?.forEach((r) => roleMap.set(r.user_id, r.role));
+      const tempPwMap = new Map<string, { temp_password_plain: string | null; temp_password_issued_at: string | null }>();
+      (tempPwData as any[] | null)?.forEach((t) => tempPwMap.set(t.user_id, {
+        temp_password_plain: t.temp_password_plain,
+        temp_password_issued_at: t.temp_password_issued_at,
+      }));
 
       const enriched: StaffWithRole[] = (staffData || []).map((s) => ({
         ...s,
         role: roleMap.get(s.user_id),
+        temp_password_plain: tempPwMap.get(s.user_id)?.temp_password_plain ?? null,
+        temp_password_issued_at: tempPwMap.get(s.user_id)?.temp_password_issued_at ?? null,
       }));
 
       setStaffList(enriched);
