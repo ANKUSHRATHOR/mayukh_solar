@@ -230,8 +230,6 @@ const Attendance = () => {
       return;
     }
 
-    releaseRefreshLockRef.current?.();
-    releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${savedDraft.kind}`);
     setActiveKind(savedDraft.kind);
     setCoords(savedDraft.coords ?? null);
     setReading(savedDraft.reading ?? "");
