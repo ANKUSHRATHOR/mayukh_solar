@@ -462,8 +462,6 @@ const Attendance = () => {
 
   const startPunch = (kind: Kind) => {
     submitLockRef.current = false;
-    releaseRefreshLockRef.current?.();
-    releaseRefreshLockRef.current = acquireRefreshLock(`attendance-punch-${kind}`);
     setPendingCaptureKind(null);
     setActiveKind(kind);
     setImageFile(null);
@@ -477,8 +475,6 @@ const Attendance = () => {
 
   const cancelPunch = () => {
     submitLockRef.current = false;
-    releaseRefreshLockRef.current?.();
-    releaseRefreshLockRef.current = null;
     stopCameraStream();
     setCameraOpen(false);
     setPendingCaptureKind(null);
@@ -496,10 +492,7 @@ const Attendance = () => {
   };
 
   useEffect(() => {
-    return () => {
-      releaseRefreshLockRef.current?.();
-      releaseRefreshLockRef.current = null;
-    };
+    return () => {};
   }, []);
 
   const submitPunch = async () => {
