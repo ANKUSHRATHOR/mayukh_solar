@@ -112,6 +112,7 @@ const salesNav: NavSection[] = [
     title: 'Field Work',
     items: [
       { label: 'My Leads', icon: Briefcase, path: '/' },
+      { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
       { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
       { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
     ],
