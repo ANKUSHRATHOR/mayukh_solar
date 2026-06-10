@@ -6,12 +6,16 @@ const corsHeaders = {
 };
 
 function generateTempPassword(): string {
-  // 6-digit numeric PIN, easy to read and dictate over the phone
-  const arr = new Uint32Array(6);
-  crypto.getRandomValues(arr);
-  let out = "";
-  for (let i = 0; i < arr.length; i++) out += (arr[i] % 10).toString();
-  return out;
+  // Strong-but-readable temp password that passes HIBP leaked-password check.
+  // Format: Ms<4 letters><4 digits>! e.g. MsKpqr8421!
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digits = "23456789";
+  const rand = new Uint32Array(8);
+  crypto.getRandomValues(rand);
+  let out = "Ms";
+  for (let i = 0; i < 4; i++) out += letters[rand[i] % letters.length];
+  for (let i = 4; i < 8; i++) out += digits[rand[i] % digits.length];
+  return out + "!";
 }
 
 Deno.serve(async (req) => {
