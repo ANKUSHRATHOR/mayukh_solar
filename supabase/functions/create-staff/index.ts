@@ -69,15 +69,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Strong-but-readable temp password (HIBP-safe): Ms<4 letters><4 digits>!
-    const _lett = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-    const _dig = "23456789";
-    const _r = new Uint32Array(8);
-    crypto.getRandomValues(_r);
-    let tempPin = "Ms";
-    for (let i = 0; i < 4; i++) tempPin += _lett[_r[i] % _lett.length];
-    for (let i = 4; i < 8; i++) tempPin += _dig[_r[i] % _dig.length];
-    tempPin += "!";
+    const _pinArr = new Uint32Array(6);
+    crypto.getRandomValues(_pinArr);
+    const tempPin = Array.from(_pinArr).map((v) => v % 10).join("");
     const mobileEmail = `${mobile}@mayukhsolar.app`;
 
     // Check if user already exists — paginate listUsers because the default
