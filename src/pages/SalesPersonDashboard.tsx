@@ -77,9 +77,14 @@ const SalesPersonDashboard = () => {
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Sales Dashboard</h1>
-        <p className="text-muted-foreground text-sm mt-1">Manage your leads and site visits</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Sales Dashboard</h1>
+          <p className="text-muted-foreground text-sm mt-1">Manage your leads and site visits</p>
+        </div>
+        <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
+          <PhoneCall className="mr-2 h-4 w-4" /> Create New Lead
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
