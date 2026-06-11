@@ -116,6 +116,7 @@ const CreateLead = () => {
       if (error) throw error;
 
       toast({ title: 'Lead created!', description: `${form.customer_name} has been added.` });
+      setForm(initialForm);
       navigate(-1);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
