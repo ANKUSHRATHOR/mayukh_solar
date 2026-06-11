@@ -39,7 +39,7 @@ const CreateLead = () => {
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
   const [duplicateChecked, setDuplicateChecked] = useState(false);
 
-  const [form, setForm] = useState({
+  const initialForm = {
     customer_name: '',
     mobile: '',
     alt_mobile: '',
@@ -51,7 +51,9 @@ const CreateLead = () => {
     source: '' as LeadSource | '',
     reference_name: '',
     notes: '',
-  });
+  };
+
+  const [form, setForm] = useStickyState(`create-lead:draft:${user?.id ?? 'anon'}`, initialForm);
 
   const updateField = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
