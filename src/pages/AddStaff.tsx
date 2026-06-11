@@ -69,6 +69,9 @@ const AddStaff = () => {
         description: `Temporary PIN: ${result.temp_pin} — Share with ${fullName}. They must change it on first login.`,
       });
 
+      setFullName('');
+      setMobile('');
+      setRole('');
       navigate('/staff');
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
