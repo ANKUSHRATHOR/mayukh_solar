@@ -37,10 +37,10 @@ const FieldVisit = () => {
   const [locating, setLocating] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [reading, setReading] = useState('');
-  const [notes, setNotes] = useState('');
-  const [outcome, setOutcome] = useState('interested');
-  const [projectId, setProjectId] = useState<string>('');
+  const [reading, setReading] = useStickyState<string>(`field-visit:reading:${staff?.user_id ?? 'anon'}`, '');
+  const [notes, setNotes] = useStickyState<string>(`field-visit:notes:${staff?.user_id ?? 'anon'}`, '');
+  const [outcome, setOutcome] = useStickyState<string>(`field-visit:outcome:${staff?.user_id ?? 'anon'}`, 'interested');
+  const [projectId, setProjectId] = useStickyState<string>(`field-visit:projectId:${staff?.user_id ?? 'anon'}`, '');
   const [busy, setBusy] = useState(false);
 
   const isSales = role === 'sales_person';
