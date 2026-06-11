@@ -114,7 +114,16 @@ const ProjectDocuments = () => {
 
     setUploading(docType);
     try {
-      const ext = file.name.split('.').pop();
+      const mimeExtMap: Record<string, string> = {
+        'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
+        'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif',
+        'application/pdf': 'pdf',
+      };
+      const rawExt = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
+      const safeExt = (rawExt && /^[a-z0-9]{1,5}$/.test(rawExt))
+        ? rawExt
+        : (mimeExtMap[file.type] || 'bin');
+      const ext = safeExt;
       // IMPORTANT: folder MUST be projectId — storage RLS for sales persons checks
       // foldername[1] == project.id. Using quotation_number here breaks sales uploads.
       const path = `${projectId}/${docType}.${ext}`;
