@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useStickyState } from '@/hooks/useStickyState';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,7 +39,7 @@ const CreateLead = () => {
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
   const [duplicateChecked, setDuplicateChecked] = useState(false);
 
-  const [form, setForm] = useState({
+  const initialForm = {
     customer_name: '',
     mobile: '',
     alt_mobile: '',
@@ -50,7 +51,9 @@ const CreateLead = () => {
     source: '' as LeadSource | '',
     reference_name: '',
     notes: '',
-  });
+  };
+
+  const [form, setForm] = useStickyState(`create-lead:draft:${user?.id ?? 'anon'}`, initialForm);
 
   const updateField = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -113,6 +116,7 @@ const CreateLead = () => {
       if (error) throw error;
 
       toast({ title: 'Lead created!', description: `${form.customer_name} has been added.` });
+      setForm(initialForm);
       navigate(-1);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });

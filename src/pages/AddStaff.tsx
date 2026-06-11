@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useStickyState } from '@/hooks/useStickyState';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -22,9 +23,9 @@ const roles: { value: AppRole; label: string }[] = [
 ];
 
 const AddStaff = () => {
-  const [fullName, setFullName] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [role, setRole] = useState<AppRole | ''>('');
+  const [fullName, setFullName] = useStickyState<string>('add-staff:draft:fullName', '');
+  const [mobile, setMobile] = useStickyState<string>('add-staff:draft:mobile', '');
+  const [role, setRole] = useStickyState<AppRole | ''>('add-staff:draft:role', '');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -68,6 +69,9 @@ const AddStaff = () => {
         description: `Temporary PIN: ${result.temp_pin} — Share with ${fullName}. They must change it on first login.`,
       });
 
+      setFullName('');
+      setMobile('');
+      setRole('');
       navigate('/staff');
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
