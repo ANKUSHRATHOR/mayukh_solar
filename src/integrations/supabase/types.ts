@@ -1499,6 +1499,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sales_can_access_project: {
+        Args: { _project_id: string }
+        Returns: boolean
+      }
       staff_performance: {
         Args: { _from: string; _to: string }
         Returns: {
