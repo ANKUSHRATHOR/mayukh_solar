@@ -23,9 +23,9 @@ const roles: { value: AppRole; label: string }[] = [
 ];
 
 const AddStaff = () => {
-  const [fullName, setFullName] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [role, setRole] = useState<AppRole | ''>('');
+  const [fullName, setFullName] = useStickyState<string>('add-staff:draft:fullName', '');
+  const [mobile, setMobile] = useStickyState<string>('add-staff:draft:mobile', '');
+  const [role, setRole] = useStickyState<AppRole | ''>('add-staff:draft:role', '');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
