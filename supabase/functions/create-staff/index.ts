@@ -88,28 +88,34 @@ Deno.serve(async (req) => {
     let userId: string;
 
     if (existingUser) {
-      // Check if already in staff table (active staff with this mobile already exists)
       const { data: existingStaff } = await adminClient
         .from("staff")
-        .select("id")
+        .select("id, is_active")
         .eq("user_id", existingUser.id)
         .maybeSingle();
 
-      if (existingStaff) {
-        return new Response(JSON.stringify({ error: "Staff member with this mobile already exists" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Orphan auth user from a previous delete — clean up any stale role rows,
-      // reset password, and re-confirm email so they can sign in again.
+      // Reuse an existing auth user for this mobile. If a linked staff row already
+      // exists, treat it as a reactivation/update instead of blocking creation.
       await adminClient.from("user_roles").delete().eq("user_id", existingUser.id);
       const { error: resetErr } = await adminClient.auth.admin.updateUserById(existingUser.id, {
         password: tempPin,
         email_confirm: true,
       });
       if (resetErr) throw resetErr;
+
+      if (existingStaff) {
+        const { error: existingStaffUpdateError } = await adminClient
+          .from("staff")
+          .update({
+            full_name: full_name.trim(),
+            mobile,
+            is_active: true,
+            must_change_password: true,
+          })
+          .eq("id", existingStaff.id);
+        if (existingStaffUpdateError) throw existingStaffUpdateError;
+      }
+
       userId = existingUser.id;
     } else {
       // Create new auth user
@@ -123,13 +129,15 @@ Deno.serve(async (req) => {
     }
 
     // Create staff record
-    const { error: staffError } = await adminClient.from("staff").insert({
-      user_id: userId,
-      full_name: full_name.trim(),
-      mobile,
-      must_change_password: true,
-    });
-    if (staffError) throw staffError;
+    if (!existingUser) {
+      const { error: staffError } = await adminClient.from("staff").insert({
+        user_id: userId,
+        full_name: full_name.trim(),
+        mobile,
+        must_change_password: true,
+      });
+      if (staffError) throw staffError;
+    }
 
     // Assign role
     const { error: roleError } = await adminClient.from("user_roles").insert({
