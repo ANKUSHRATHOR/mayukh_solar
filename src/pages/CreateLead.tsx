@@ -40,7 +40,6 @@ const CreateLead = () => {
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
   const [duplicateChecked, setDuplicateChecked] = useState(false);
   const [salesPersons, setSalesPersons] = useState<AssignableSalesPerson[]>([]);
-  const [assignedToUserId, setAssignedToUserId] = useState<string>('');
 
   const initialForm = {
     customer_name: '',
