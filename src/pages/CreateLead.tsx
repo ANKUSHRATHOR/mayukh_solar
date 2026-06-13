@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStickyState } from '@/hooks/useStickyState';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +15,7 @@ import { ArrowLeft, PhoneCall, AlertTriangle } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type LeadSource = Database['public']['Enums']['lead_source'];
+type AssignableSalesPerson = Database['public']['Functions']['get_assignable_sales_persons']['Returns'][number];
 
 const sourceOptions: { value: LeadSource; label: string }[] = [
   { value: 'phone_call', label: 'Phone Call' },
@@ -38,6 +39,7 @@ const CreateLead = () => {
   const [loading, setLoading] = useState(false);
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
   const [duplicateChecked, setDuplicateChecked] = useState(false);
+  const [salesPersons, setSalesPersons] = useState<AssignableSalesPerson[]>([]);
 
   const initialForm = {
     customer_name: '',
@@ -54,6 +56,31 @@ const CreateLead = () => {
   };
 
   const [form, setForm] = useStickyState(`create-lead:draft:${user?.id ?? 'anon'}`, initialForm);
+  const [assignedToUserId, setAssignedToUserId] = useStickyState(`create-lead:assignee:${user?.id ?? 'anon'}`, '');
+
+  const canAssignSalesPerson = role === 'admin' || role === 'telecaller' || role === 'sales_person';
+
+  useEffect(() => {
+    if (!canAssignSalesPerson) return;
+
+    const fetchSalesPersons = async () => {
+      const { data, error } = await supabase.rpc('get_assignable_sales_persons');
+      if (error) {
+        toast({ title: 'Unable to load sales team', description: error.message, variant: 'destructive' });
+        return;
+      }
+
+      const list = (data as AssignableSalesPerson[]) || [];
+      setSalesPersons(list);
+
+      if (!assignedToUserId && role === 'sales_person' && user?.id) {
+        const selfExists = list.some((person) => person.user_id === user.id);
+        if (selfExists) setAssignedToUserId(user.id);
+      }
+    };
+
+    fetchSalesPersons();
+  }, [assignedToUserId, canAssignSalesPerson, role, toast, user?.id, setAssignedToUserId]);
 
   const updateField = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -84,6 +111,7 @@ const CreateLead = () => {
     if (!form.state.trim()) { toast({ title: 'State required', variant: 'destructive' }); return; }
     if (!form.address.trim()) { toast({ title: 'Full address required', variant: 'destructive' }); return; }
     if (!form.source) { toast({ title: 'Lead source required', variant: 'destructive' }); return; }
+    if (canAssignSalesPerson && !assignedToUserId) { toast({ title: 'Sales person required', description: 'Please assign this lead to a sales person.', variant: 'destructive' }); return; }
 
     // Check duplicate if not checked yet
     if (!duplicateChecked) {
@@ -101,6 +129,7 @@ const CreateLead = () => {
     try {
       const { error } = await supabase.from('leads').insert({
         created_by_user_id: user!.id,
+        assigned_to_user_id: canAssignSalesPerson ? assignedToUserId : null,
         customer_name: form.customer_name.trim(),
         mobile: form.mobile,
         alt_mobile: form.alt_mobile || null,
@@ -117,6 +146,7 @@ const CreateLead = () => {
 
       toast({ title: 'Lead created!', description: `${form.customer_name} has been added.` });
       setForm(initialForm);
+      setAssignedToUserId(role === 'sales_person' && user?.id ? user.id : '');
       navigate(-1);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -239,6 +269,24 @@ const CreateLead = () => {
               </SelectContent>
             </Select>
           </div>
+
+          {canAssignSalesPerson && (
+            <div className="space-y-1.5">
+              <Label>Assign to Sales Person *</Label>
+              <Select value={assignedToUserId} onValueChange={setAssignedToUserId}>
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Select sales person" />
+                </SelectTrigger>
+                <SelectContent>
+                  {salesPersons.map((person) => (
+                    <SelectItem key={person.user_id} value={person.user_id}>
+                      {person.full_name} • {person.mobile}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Reference Name (conditional) */}
           {form.source === 'reference' && (

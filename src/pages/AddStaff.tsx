@@ -48,15 +48,15 @@ const AddStaff = () => {
 
     setLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-
       const response = await supabase.functions.invoke('create-staff', {
         body: { full_name: fullName.trim(), mobile, role },
       });
 
       if (response.error) {
-        throw new Error(response.error.message || 'Failed to create staff');
+        const functionMessage = typeof response.data === 'object' && response.data && 'error' in response.data
+          ? String(response.data.error)
+          : null;
+        throw new Error(functionMessage || response.error.message || 'Failed to create staff');
       }
 
       const result = response.data;
