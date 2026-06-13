@@ -97,7 +97,7 @@ const App = () => (
             <Route
               path="/leads/new"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'telecaller']}>
+                <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person']}>
                   <CreateLead />
                 </ProtectedRoute>
               }

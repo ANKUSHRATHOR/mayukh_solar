@@ -15,6 +15,7 @@ import { ArrowLeft, PhoneCall, AlertTriangle } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type LeadSource = Database['public']['Enums']['lead_source'];
+type AssignableSalesPerson = Database['public']['Functions']['get_assignable_sales_persons']['Returns'][number];
 
 const sourceOptions: { value: LeadSource; label: string }[] = [
   { value: 'phone_call', label: 'Phone Call' },
@@ -38,6 +39,8 @@ const CreateLead = () => {
   const [loading, setLoading] = useState(false);
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
   const [duplicateChecked, setDuplicateChecked] = useState(false);
+  const [salesPersons, setSalesPersons] = useState<AssignableSalesPerson[]>([]);
+  const [assignedToUserId, setAssignedToUserId] = useState<string>('');
 
   const initialForm = {
     customer_name: '',
@@ -54,6 +57,12 @@ const CreateLead = () => {
   };
 
   const [form, setForm] = useStickyState(`create-lead:draft:${user?.id ?? 'anon'}`, initialForm);
+
+  const canAssignSalesPerson = role === 'admin' || role === 'telecaller' || role === 'sales_person';
+
+  useState(() => {
+    return undefined;
+  });
 
   const updateField = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
