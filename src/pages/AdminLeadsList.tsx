@@ -128,7 +128,7 @@ const AdminLeadsList = () => {
     try {
       const [leadsRes, staffRes, rolesRes, projectsRes, quotationsRes] = await Promise.all([
         supabase.from('leads').select('*').eq('is_in_bin', false).order('updated_at', { ascending: false }),
-        supabase.from('staff').select('user_id, full_name, is_active'),
+        supabase.from('staff').select('user_id, full_name, mobile, is_active'),
         supabase.from('user_roles').select('user_id, role'),
         supabase.from('projects').select('id, lead_id, assigned_operator_id, payment_type, status, updated_at').not('lead_id', 'is', null),
         supabase.from('quotations').select('project_id, created_at').not('project_id', 'is', null),
