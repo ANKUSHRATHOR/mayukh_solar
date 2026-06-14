@@ -182,24 +182,51 @@ const StaffManagement = () => {
     }
   };
 
+  const ensureSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+    if (session.expires_at && session.expires_at * 1000 < Date.now() + 30_000) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      return refreshed.session ?? null;
+    }
+    return session;
+  };
+
+  const handleAuthFailure = async () => {
+    toast({ title: 'Session expired', description: 'Please sign in again.', variant: 'destructive' });
+    await supabase.auth.signOut().catch(() => {});
+    navigate('/login', { replace: true });
+  };
+
+  const invokeStaffFn = async (body: Record<string, unknown>) => {
+    const session = await ensureSession();
+    if (!session) {
+      await handleAuthFailure();
+      throw new Error('Session expired');
+    }
+    const { data, error } = await supabase.functions.invoke('update-staff', { body });
+    const msg = (error?.message || data?.error || '').toString();
+    if (/invalid token|not authenticated|jwt/i.test(msg) || error?.context?.status === 401) {
+      await handleAuthFailure();
+      throw new Error('Session expired');
+    }
+    if (error) throw new Error(error.message);
+    if (data?.error) throw new Error(data.error);
+    return data;
+  };
+
   const handleDelete = async () => {
     if (!deleteStaff) return;
     setDeleteLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('update-staff', {
-        body: {
-          action: 'delete',
-          staff_id: deleteStaff.id,
-          user_id: deleteStaff.user_id,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
+      await invokeStaffFn({ action: 'delete', staff_id: deleteStaff.id, user_id: deleteStaff.user_id });
       toast({ title: 'Staff deleted successfully' });
       setDeleteStaff(null);
       fetchStaff();
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      if (err.message !== 'Session expired') {
+        toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      }
     } finally {
       setDeleteLoading(false);
     }
@@ -209,24 +236,19 @@ const StaffManagement = () => {
     if (!resetStaff) return;
     setResetLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('update-staff', {
-        body: {
-          action: 'reset_password',
-          staff_id: resetStaff.id,
-          user_id: resetStaff.user_id,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
+      const data = await invokeStaffFn({ action: 'reset_password', staff_id: resetStaff.id, user_id: resetStaff.user_id });
       setTempPassword(data.temp_password);
       toast({ title: 'Password reset successfully' });
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      if (err.message !== 'Session expired') {
+        toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      }
       setResetStaff(null);
     } finally {
       setResetLoading(false);
     }
   };
+
 
   const matchesSearch = (s: StaffWithRole) =>
     s.full_name.toLowerCase().includes(search.toLowerCase()) ||
