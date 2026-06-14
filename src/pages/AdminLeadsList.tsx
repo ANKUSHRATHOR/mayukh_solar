@@ -571,10 +571,18 @@ const AdminLeadsList = () => {
                     <div>
                       <p className="text-muted-foreground">Created by</p>
                       <p className="font-medium text-foreground truncate">{lead.createdByName}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {lead.createdByRole ? statusLabel(lead.createdByRole) : 'Unknown role'}
+                        {lead.createdByMobile ? ` • ${lead.createdByMobile}` : ''}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Assigned</p>
                       <p className="font-medium text-foreground truncate">{lead.assignedToName}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {lead.assignedToRole ? statusLabel(lead.assignedToRole) : '—'}
+                        {lead.assignedToMobile ? ` • ${lead.assignedToMobile}` : ''}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Type</p>
