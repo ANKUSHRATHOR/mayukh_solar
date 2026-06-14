@@ -22,6 +22,7 @@ type ProjectStatus = Database['public']['Enums']['project_status'];
 type StaffMember = {
   full_name: string;
   is_active: boolean;
+  mobile?: string | null;
   role?: string;
   user_id: string;
 };
@@ -29,10 +30,14 @@ type StaffMember = {
 type LeadRow = {
   assignedToName: string;
   assignedToUserId: string | null;
+  assignedToMobile: string | null;
+  assignedToRole: string | null;
   consumerName: string;
   createdAt: string;
   createdByName: string;
   createdByUserId: string;
+  createdByMobile: string | null;
+  createdByRole: string | null;
   hasQuotation: boolean;
   id: string;
   lastActivityAt: string;
@@ -48,6 +53,7 @@ type LeadRow = {
   projectType: PaymentType | null;
   status: LeadStatus;
 };
+
 
 type StatusFilter = 'all' | LeadStatus | 'documents_pending' | 'quotation_sent' | 'site_visit';
 type DateFilter = 'all' | 'today' | 'this_week' | 'this_month' | 'custom';
