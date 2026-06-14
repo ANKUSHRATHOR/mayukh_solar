@@ -30,29 +30,37 @@ const TelecallerDashboard = () => {
   const fetchLeads = async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('created_by_user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    const allLeads = data || [];
-    setLeads(allLeads);
 
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
+    const [recentRes, totalRes, monthRes, todayRes] = await Promise.all([
+      supabase.from('leads').select('*').eq('created_by_user_id', user.id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id).gte('created_at', startOfMonth),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id).gte('created_at', startOfDay),
+    ]);
+
+    setLeads(recentRes.data || []);
     setStats({
-      total: allLeads.length,
-      thisMonth: allLeads.filter(l => new Date(l.created_at) >= startOfMonth).length,
-      today: allLeads.filter(l => new Date(l.created_at) >= startOfDay).length,
+      total: totalRes.count || 0,
+      thisMonth: monthRes.count || 0,
+      today: todayRes.count || 0,
     });
     setLoading(false);
   };
 
   useEffect(() => { fetchLeads(); }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`telecaller-leads-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `created_by_user_id=eq.${user.id}` }, () => fetchLeads())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [user]);
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
