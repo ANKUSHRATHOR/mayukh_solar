@@ -104,17 +104,44 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Revoke role so the user immediately loses all app access.
       await adminClient.from("user_roles").delete().eq("user_id", user_id);
-      await adminClient.from("staff").delete().eq("id", staff_id);
+
+      // Try a hard delete first; if the user has historical references
+      // (leads, projects, documents, site_visits, audit_logs) the FK
+      // constraints will block it — fall back to a safe soft-delete that
+      // preserves the "created by / assigned to" trail.
+      let hardDeleted = false;
       try {
+        const { error: staffDelError } = await adminClient.from("staff").delete().eq("id", staff_id);
+        if (staffDelError) throw staffDelError;
         await adminClient.auth.admin.deleteUser(user_id);
-      } catch (e: any) {
-        if (!String(e?.message || "").toLowerCase().includes("not found")) throw e;
+        hardDeleted = true;
+      } catch (_e) {
+        // Soft-delete path
+        const randomPwd = crypto.randomUUID() + crypto.randomUUID();
+        try {
+          await adminClient.auth.admin.updateUserById(user_id, {
+            password: randomPwd,
+            email: `deleted-${user_id}@mayukhsolar.app`,
+            ban_duration: "876000h", // ~100 years
+          } as any);
+        } catch (_inner) {
+          // Best-effort; even if auth update fails, role removal already blocks login.
+        }
+        await adminClient.from("staff").update({
+          is_active: false,
+          must_change_password: true,
+          temp_password_plain: null,
+        }).eq("id", staff_id);
       }
-      return new Response(JSON.stringify({ success: true }), {
+
+      return new Response(JSON.stringify({ success: true, hard_deleted: hardDeleted }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     return new Response(JSON.stringify({ error: "Invalid action" }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
