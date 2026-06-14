@@ -22,6 +22,7 @@ type ProjectStatus = Database['public']['Enums']['project_status'];
 type StaffMember = {
   full_name: string;
   is_active: boolean;
+  mobile?: string | null;
   role?: string;
   user_id: string;
 };
@@ -29,10 +30,14 @@ type StaffMember = {
 type LeadRow = {
   assignedToName: string;
   assignedToUserId: string | null;
+  assignedToMobile: string | null;
+  assignedToRole: string | null;
   consumerName: string;
   createdAt: string;
   createdByName: string;
   createdByUserId: string;
+  createdByMobile: string | null;
+  createdByRole: string | null;
   hasQuotation: boolean;
   id: string;
   lastActivityAt: string;
@@ -48,6 +53,7 @@ type LeadRow = {
   projectType: PaymentType | null;
   status: LeadStatus;
 };
+
 
 type StatusFilter = 'all' | LeadStatus | 'documents_pending' | 'quotation_sent' | 'site_visit';
 type DateFilter = 'all' | 'today' | 'this_week' | 'this_month' | 'custom';
@@ -122,7 +128,7 @@ const AdminLeadsList = () => {
     try {
       const [leadsRes, staffRes, rolesRes, projectsRes, quotationsRes] = await Promise.all([
         supabase.from('leads').select('*').eq('is_in_bin', false).order('updated_at', { ascending: false }),
-        supabase.from('staff').select('user_id, full_name, is_active'),
+        supabase.from('staff').select('user_id, full_name, mobile, is_active'),
         supabase.from('user_roles').select('user_id, role'),
         supabase.from('projects').select('id, lead_id, assigned_operator_id, payment_type, status, updated_at').not('lead_id', 'is', null),
         supabase.from('quotations').select('project_id, created_at').not('project_id', 'is', null),
@@ -173,10 +179,14 @@ const AdminLeadsList = () => {
         return {
           assignedToName: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.full_name || 'Not assigned' : 'Not assigned',
           assignedToUserId: lead.assigned_to_user_id,
+          assignedToMobile: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.mobile || null : null,
+          assignedToRole: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.role || null : null,
           consumerName: lead.customer_name,
           createdAt: lead.created_at,
           createdByName: staffMap[lead.created_by_user_id]?.full_name || 'Unknown user',
           createdByUserId: lead.created_by_user_id,
+          createdByMobile: staffMap[lead.created_by_user_id]?.mobile || null,
+          createdByRole: staffMap[lead.created_by_user_id]?.role || null,
           hasQuotation,
           id: lead.id,
           lastActivityAt: latestVisit?.visit_date || project?.updated_at || lead.updated_at || lead.created_at,
@@ -561,10 +571,18 @@ const AdminLeadsList = () => {
                     <div>
                       <p className="text-muted-foreground">Created by</p>
                       <p className="font-medium text-foreground truncate">{lead.createdByName}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {lead.createdByRole ? statusLabel(lead.createdByRole) : 'Unknown role'}
+                        {lead.createdByMobile ? ` • ${lead.createdByMobile}` : ''}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Assigned</p>
                       <p className="font-medium text-foreground truncate">{lead.assignedToName}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {lead.assignedToRole ? statusLabel(lead.assignedToRole) : '—'}
+                        {lead.assignedToMobile ? ` • ${lead.assignedToMobile}` : ''}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Type</p>
