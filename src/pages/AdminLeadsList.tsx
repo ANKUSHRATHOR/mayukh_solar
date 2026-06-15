@@ -340,6 +340,25 @@ const AdminLeadsList = () => {
     }
   };
 
+  const updateCreator = async (leadId: string, userId: string) => {
+    try {
+      const { error } = await supabase.from('leads').update({ created_by_user_id: userId }).eq('id', leadId);
+      if (error) throw error;
+      const staff = staffDirectory[userId];
+      setLeadRows((current) => current.map((lead) => lead.id === leadId ? {
+        ...lead,
+        createdByUserId: userId,
+        createdByName: staff?.full_name || 'Updated',
+        createdByMobile: staff?.mobile || null,
+        createdByRole: staff?.role || null,
+      } : lead));
+      setEditingCreatorId(null);
+      toast({ title: 'Creator updated' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
   const resetFilters = () => {
     setFilterStatus('all');
     setFilterCreator('all');
