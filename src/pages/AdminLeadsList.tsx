@@ -120,6 +120,7 @@ const AdminLeadsList = () => {
   const [customTo, setCustomTo] = useStickyState<string>('admin-leads:customTo', '');
   const [sortBy, setSortBy] = useStickyState<SortKey>('admin-leads:sort', 'latest_activity_desc');
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [editingCreatorId, setEditingCreatorId] = useState<string | null>(null);
 
   const fetchData = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
