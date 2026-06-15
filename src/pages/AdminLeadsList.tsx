@@ -588,13 +588,33 @@ const AdminLeadsList = () => {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-                    <div>
+                    <div onClick={(e) => e.stopPropagation()}>
                       <p className="text-muted-foreground">Created by</p>
-                      <p className="font-medium text-foreground truncate">{lead.createdByName}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {lead.createdByRole ? statusLabel(lead.createdByRole) : 'Unknown role'}
-                        {lead.createdByMobile ? ` • ${lead.createdByMobile}` : ''}
-                      </p>
+                      {editingCreatorId === lead.id ? (
+                        <Select onValueChange={(value) => updateCreator(lead.id, value)}>
+                          <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue placeholder="Pick staff..." /></SelectTrigger>
+                          <SelectContent>
+                            {allStaff.map((member) => (
+                              <SelectItem key={member.user_id} value={member.user_id}>
+                                {member.full_name}{member.role ? ` • ${statusLabel(member.role)}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingCreatorId(lead.id)}
+                          className="text-left w-full hover:bg-muted/40 rounded px-1 -mx-1 transition-colors"
+                          title="Click to change creator"
+                        >
+                          <p className="font-medium text-foreground truncate">{lead.createdByName}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {lead.createdByRole ? statusLabel(lead.createdByRole) : 'Tap to set creator'}
+                            {lead.createdByMobile ? ` • ${lead.createdByMobile}` : ''}
+                          </p>
+                        </button>
+                      )}
                     </div>
                     <div>
                       <p className="text-muted-foreground">Assigned</p>
