@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
     }
 
     let userId: string;
+    let hasStaffRow = false;
 
     if (existingUser) {
       const { data: existingStaff } = await adminClient
@@ -104,6 +105,7 @@ Deno.serve(async (req) => {
       if (resetErr) throw resetErr;
 
       if (existingStaff) {
+        hasStaffRow = true;
         const { error: existingStaffUpdateError } = await adminClient
           .from("staff")
           .update({
@@ -111,6 +113,9 @@ Deno.serve(async (req) => {
             mobile,
             is_active: true,
             must_change_password: true,
+            temp_password_plain: tempPin,
+            temp_password_issued_at: new Date().toISOString(),
+            temp_password_issued_by: caller.id,
           })
           .eq("id", existingStaff.id);
         if (existingStaffUpdateError) throw existingStaffUpdateError;
@@ -128,13 +133,18 @@ Deno.serve(async (req) => {
       userId = authData.user.id;
     }
 
-    // Create staff record
-    if (!existingUser) {
+    // Create staff record if missing (covers brand-new users AND orphaned auth users
+    // whose previous staff row was hard-deleted).
+    if (!hasStaffRow) {
       const { error: staffError } = await adminClient.from("staff").insert({
         user_id: userId,
         full_name: full_name.trim(),
         mobile,
         must_change_password: true,
+        is_active: true,
+        temp_password_plain: tempPin,
+        temp_password_issued_at: new Date().toISOString(),
+        temp_password_issued_by: caller.id,
       });
       if (staffError) throw staffError;
     }
