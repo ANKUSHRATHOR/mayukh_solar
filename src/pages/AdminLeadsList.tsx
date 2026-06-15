@@ -120,6 +120,7 @@ const AdminLeadsList = () => {
   const [customTo, setCustomTo] = useStickyState<string>('admin-leads:customTo', '');
   const [sortBy, setSortBy] = useStickyState<SortKey>('admin-leads:sort', 'latest_activity_desc');
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [editingCreatorId, setEditingCreatorId] = useState<string | null>(null);
 
   const fetchData = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
@@ -334,6 +335,25 @@ const AdminLeadsList = () => {
       setLeadRows((current) => current.map((lead) => lead.id === leadId ? { ...lead, assignedToUserId: userId, assignedToName: staffDirectory[userId]?.full_name || 'Assigned' } : lead));
       setAssigningId(null);
       toast({ title: 'Lead assigned' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const updateCreator = async (leadId: string, userId: string) => {
+    try {
+      const { error } = await supabase.from('leads').update({ created_by_user_id: userId }).eq('id', leadId);
+      if (error) throw error;
+      const staff = staffDirectory[userId];
+      setLeadRows((current) => current.map((lead) => lead.id === leadId ? {
+        ...lead,
+        createdByUserId: userId,
+        createdByName: staff?.full_name || 'Updated',
+        createdByMobile: staff?.mobile || null,
+        createdByRole: staff?.role || null,
+      } : lead));
+      setEditingCreatorId(null);
+      toast({ title: 'Creator updated' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
@@ -568,13 +588,33 @@ const AdminLeadsList = () => {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-                    <div>
+                    <div onClick={(e) => e.stopPropagation()}>
                       <p className="text-muted-foreground">Created by</p>
-                      <p className="font-medium text-foreground truncate">{lead.createdByName}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {lead.createdByRole ? statusLabel(lead.createdByRole) : 'Unknown role'}
-                        {lead.createdByMobile ? ` • ${lead.createdByMobile}` : ''}
-                      </p>
+                      {editingCreatorId === lead.id ? (
+                        <Select onValueChange={(value) => updateCreator(lead.id, value)}>
+                          <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue placeholder="Pick staff..." /></SelectTrigger>
+                          <SelectContent>
+                            {allStaff.map((member) => (
+                              <SelectItem key={member.user_id} value={member.user_id}>
+                                {member.full_name}{member.role ? ` • ${statusLabel(member.role)}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingCreatorId(lead.id)}
+                          className="text-left w-full hover:bg-muted/40 rounded px-1 -mx-1 transition-colors"
+                          title="Click to change creator"
+                        >
+                          <p className="font-medium text-foreground truncate">{lead.createdByName}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {lead.createdByRole ? statusLabel(lead.createdByRole) : 'Tap to set creator'}
+                            {lead.createdByMobile ? ` • ${lead.createdByMobile}` : ''}
+                          </p>
+                        </button>
+                      )}
                     </div>
                     <div>
                       <p className="text-muted-foreground">Assigned</p>
