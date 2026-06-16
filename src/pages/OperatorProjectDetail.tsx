@@ -268,6 +268,25 @@ const OperatorProjectDetail = () => {
     }
   };
 
+  const handleApproveAllDocs = async () => {
+    const pending = docs.filter(d => d.is_verified !== true);
+    if (pending.length === 0) {
+      toast({ title: 'Nothing to approve', description: 'All documents are already approved.' });
+      return;
+    }
+    const ids = pending.map(d => d.id);
+    const { error } = await supabase
+      .from('documents')
+      .update({ is_verified: true, rejection_reason: null })
+      .in('id', ids);
+    if (error) {
+      toast({ title: 'Bulk approve failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'All documents approved', description: `${ids.length} document(s) marked verified.` });
+      fetchData();
+    }
+  };
+
   const handleRejectDoc = async (docId: string) => {
     const reason = rejectionReasons[docId];
     if (!reason?.trim()) {
@@ -493,9 +512,20 @@ const OperatorProjectDetail = () => {
       {(project.status === 'pending_operator_review' || project.status === 'pending_documents') && (
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-primary" /> Document Review
-            </CardTitle>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <FileText className="h-5 w-5 text-primary" /> Document Review
+              </CardTitle>
+              {project.status === 'pending_operator_review' && docs.some(d => d.is_verified !== true) && (
+                <Button
+                  size="sm"
+                  onClick={handleApproveAllDocs}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1" /> Approve All Documents
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {docs.length === 0 ? (
