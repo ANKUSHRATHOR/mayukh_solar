@@ -11,7 +11,7 @@ import {
   ClipboardCheck, FileSearch, AlertTriangle, Package,
   CheckCircle2, Clock, Search, ChevronRight, Truck, Wrench, X
 } from 'lucide-react';
-import { Button as UIButton } from '@/components/ui/button';
+
 import type { Database } from '@/integrations/supabase/types';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
