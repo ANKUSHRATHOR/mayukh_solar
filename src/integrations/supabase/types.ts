@@ -1423,6 +1423,15 @@ export type Database = {
           staff_user_id: string
         }[]
       }
+      get_staff_directory: {
+        Args: never
+        Returns: {
+          full_name: string
+          mobile: string
+          role: string
+          user_id: string
+        }[]
+      }
       get_staff_public: {
         Args: { _user_id: string }
         Returns: {
