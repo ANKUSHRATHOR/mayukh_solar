@@ -38,6 +38,7 @@ import NotFound from "./pages/NotFound.tsx";
 import PasswordResetLogs from "./pages/PasswordResetLogs.tsx";
 import StaffProfile from "./pages/StaffProfile.tsx";
 import KNumberLookup from "./pages/KNumberLookup.tsx";
+import StaffContacts from "./pages/StaffContacts.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 
 const queryClient = new QueryClient();
