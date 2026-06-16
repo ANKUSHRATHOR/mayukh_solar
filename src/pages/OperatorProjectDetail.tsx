@@ -268,6 +268,25 @@ const OperatorProjectDetail = () => {
     }
   };
 
+  const handleApproveAllDocs = async () => {
+    const pending = docs.filter(d => d.is_verified !== true);
+    if (pending.length === 0) {
+      toast({ title: 'Nothing to approve', description: 'All documents are already approved.' });
+      return;
+    }
+    const ids = pending.map(d => d.id);
+    const { error } = await supabase
+      .from('documents')
+      .update({ is_verified: true, rejection_reason: null })
+      .in('id', ids);
+    if (error) {
+      toast({ title: 'Bulk approve failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'All documents approved', description: `${ids.length} document(s) marked verified.` });
+      fetchData();
+    }
+  };
+
   const handleRejectDoc = async (docId: string) => {
     const reason = rejectionReasons[docId];
     if (!reason?.trim()) {
