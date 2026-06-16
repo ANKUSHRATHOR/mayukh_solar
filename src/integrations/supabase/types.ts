@@ -538,6 +538,44 @@ export type Database = {
         }
         Relationships: []
       }
+      project_status_notes: {
+        Row: {
+          created_at: string
+          created_by: string
+          from_status: string | null
+          id: string
+          note: string
+          project_id: string
+          to_status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          from_status?: string | null
+          id?: string
+          note: string
+          project_id: string
+          to_status: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          from_status?: string | null
+          id?: string
+          note?: string
+          project_id?: string
+          to_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_status_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           assigned_electrician_id: string | null

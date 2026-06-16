@@ -59,9 +59,17 @@ const CreateLead = () => {
   const [assignedToUserId, setAssignedToUserId] = useStickyState(`create-lead:assignee:${user?.id ?? 'anon'}`, '');
 
   const canAssignSalesPerson = role === 'admin' || role === 'telecaller' || role === 'sales_person';
+  const isSalesPerson = role === 'sales_person';
+
+  // Sales persons always create leads assigned to themselves
+  useEffect(() => {
+    if (isSalesPerson && user?.id && assignedToUserId !== user.id) {
+      setAssignedToUserId(user.id);
+    }
+  }, [isSalesPerson, user?.id, assignedToUserId, setAssignedToUserId]);
 
   useEffect(() => {
-    if (!canAssignSalesPerson) return;
+    if (!canAssignSalesPerson || isSalesPerson) return;
 
     const fetchSalesPersons = async () => {
       const { data, error } = await supabase.rpc('get_assignable_sales_persons');
@@ -69,18 +77,11 @@ const CreateLead = () => {
         toast({ title: 'Unable to load sales team', description: error.message, variant: 'destructive' });
         return;
       }
-
-      const list = (data as AssignableSalesPerson[]) || [];
-      setSalesPersons(list);
-
-      if (!assignedToUserId && role === 'sales_person' && user?.id) {
-        const selfExists = list.some((person) => person.user_id === user.id);
-        if (selfExists) setAssignedToUserId(user.id);
-      }
+      setSalesPersons((data as AssignableSalesPerson[]) || []);
     };
 
     fetchSalesPersons();
-  }, [assignedToUserId, canAssignSalesPerson, role, toast, user?.id, setAssignedToUserId]);
+  }, [canAssignSalesPerson, isSalesPerson, toast]);
 
   const updateField = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -270,7 +271,7 @@ const CreateLead = () => {
             </Select>
           </div>
 
-          {canAssignSalesPerson && (
+          {canAssignSalesPerson && !isSalesPerson && (
             <div className="space-y-1.5">
               <Label>Assign to Sales Person *</Label>
               <Select value={assignedToUserId} onValueChange={setAssignedToUserId}>
@@ -286,6 +287,9 @@ const CreateLead = () => {
                 </SelectContent>
               </Select>
             </div>
+          )}
+          {isSalesPerson && (
+            <p className="text-xs text-muted-foreground">This lead will be assigned to you automatically.</p>
           )}
 
           {/* Reference Name (conditional) */}
