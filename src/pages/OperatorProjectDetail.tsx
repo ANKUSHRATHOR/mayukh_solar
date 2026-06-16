@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, CheckCircle2, XCircle, FileText, Eye,
   ClipboardCheck, CreditCard, Package, Truck, Wrench, Zap,
-  Calendar, Search, Award, PartyPopper, Download, Share2
+  Calendar, Search, Award, PartyPopper, Download, Share2, PhoneCall
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import StageChecklist from '@/components/projects/StageChecklist';
