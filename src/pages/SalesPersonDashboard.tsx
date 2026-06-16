@@ -157,25 +157,72 @@ const SalesPersonDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-md">
+      {/* Search + Filters */}
+      <div className="flex flex-col gap-3">
+        <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search by name, mobile, city..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {['all', 'new', 'visited', 'follow_up', 'interested', 'final'].map(s => (
-            <Button
-              key={s}
-              variant={filterStatus === s ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterStatus(s)}
-              className={filterStatus === s ? 'gradient-primary text-primary-foreground' : ''}
-            >
-              {s === 'all' ? 'All' : statusLabel(s)}
-            </Button>
-          ))}
-        </div>
+
+        <Card className="shadow-card border-border">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Filters</p>
+              {activeCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs">
+                  <X className="h-3 w-3 mr-1" /> Clear ({activeCount})
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Status</p>
+              <div className="flex flex-wrap gap-1.5">
+                {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final'].map(s => (
+                  <Chip key={s} active={filterStatus === s} onClick={() => setFilterStatus(s)}>
+                    {s === 'all' ? 'All' : statusLabelLocal(s)}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Date Range</p>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { v: 'all', l: 'All Time' },
+                  { v: 'this_month', l: 'This Month' },
+                  { v: 'today', l: 'Today' },
+                ] as { v: DateRange; l: string }[]).map(c => (
+                  <Chip key={c.v} active={filterDate === c.v} onClick={() => setFilterDate(c.v)}>{c.l}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Lead Source</p>
+              <div className="flex flex-wrap gap-1.5">
+                {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
+                  <Chip key={s} active={filterSource === s} onClick={() => setFilterSource(s)}>
+                    {s === 'all' ? 'All' : statusLabelLocal(s)}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+
+            {cityOptions.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground">City / Location</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Chip active={filterCity === 'all'} onClick={() => setFilterCity('all')}>All</Chip>
+                  {cityOptions.map(c => (
+                    <Chip key={c} active={filterCity === c} onClick={() => setFilterCity(c)}>{c}</Chip>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Lead List */}
