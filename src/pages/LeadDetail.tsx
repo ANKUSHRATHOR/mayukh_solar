@@ -418,10 +418,25 @@ const LeadDetail = () => {
                 </div>
 
                 {/* Visit Notes */}
-                {(newStatus === 'visited' || newStatus === 'follow_up' || newStatus === 'interested' || newStatus === 'final') && (
+                {(newStatus === 'visited' || newStatus === 'follow_up' || newStatus === 'interested' || newStatus === 'final' || isNegativeStatus) && (
                   <div className="space-y-1.5">
-                    <Label>Visit / Status Notes</Label>
-                    <Textarea value={visitNotes} onChange={e => setVisitNotes(e.target.value)} placeholder="Notes about this visit or update" rows={2} />
+                    <Label>
+                      Visit / Status Notes
+                      {isNegativeStatus && <span className="text-destructive"> * (min {NEGATIVE_NOTE_MIN_WORDS} words)</span>}
+                    </Label>
+                    <Textarea
+                      value={visitNotes}
+                      onChange={e => setVisitNotes(e.target.value)}
+                      placeholder={isNegativeStatus
+                        ? `Explain in detail why this lead is being marked ${statusLabel(newStatus)}. At least ${NEGATIVE_NOTE_MIN_WORDS} words required.`
+                        : 'Notes about this visit or update'}
+                      rows={isNegativeStatus ? 6 : 2}
+                    />
+                    {isNegativeStatus && (
+                      <p className={`text-xs ${wordCount(visitNotes) >= NEGATIVE_NOTE_MIN_WORDS ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                        {wordCount(visitNotes)} / {NEGATIVE_NOTE_MIN_WORDS} words
+                      </p>
+                    )}
                   </div>
                 )}
 
