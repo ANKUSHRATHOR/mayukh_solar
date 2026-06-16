@@ -24,6 +24,22 @@ const statusColor: Record<string, string> = {
 
 const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 
+type DateRange = 'all' | 'today' | 'this_month';
+
+const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+      active
+        ? 'bg-primary text-primary-foreground border-primary'
+        : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+    }`}
+  >
+    {children}
+  </button>
+);
+
 const SalesPersonDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -31,6 +47,9 @@ const SalesPersonDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<DateRange>('all');
+  const [filterCity, setFilterCity] = useState<string>('all');
   const [todayKm, setTodayKm] = useState<number>(0);
   const [monthKm, setMonthKm] = useState<number>(0);
 
@@ -69,11 +88,37 @@ const SalesPersonDashboard = () => {
     overdue: leads.filter(l => l.status === 'follow_up' && l.follow_up_date && new Date(l.follow_up_date) < new Date()).length,
   };
 
+  // Cities present in current leads list
+  const cityOptions = Array.from(new Set(leads.map(l => (l.village_city || '').trim()).filter(Boolean))).sort().slice(0, 24);
+
   const filtered = leads.filter(l => {
     const matchSearch = !search || l.customer_name.toLowerCase().includes(search.toLowerCase()) || l.mobile.includes(search) || l.village_city.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'all' || l.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchSource = filterSource === 'all' || l.source === filterSource;
+    const matchCity = filterCity === 'all' || (l.village_city || '').trim() === filterCity;
+    const ts = new Date(l.created_at).getTime();
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const matchDate = filterDate === 'all' || (filterDate === 'today' ? ts >= startToday : ts >= startMonth);
+    return matchSearch && matchStatus && matchSource && matchCity && matchDate;
   });
+
+  const activeCount =
+    (filterStatus !== 'all' ? 1 : 0) +
+    (filterSource !== 'all' ? 1 : 0) +
+    (filterCity !== 'all' ? 1 : 0) +
+    (filterDate !== 'all' ? 1 : 0);
+
+  const clearFilters = () => {
+    setFilterStatus('all');
+    setFilterSource('all');
+    setFilterCity('all');
+    setFilterDate('all');
+  };
+
+  const statusLabelLocal = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
