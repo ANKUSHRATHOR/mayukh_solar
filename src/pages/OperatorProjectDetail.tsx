@@ -290,39 +290,75 @@ const OperatorProjectDetail = () => {
 
   const handleStatusUpdate = async (newStatus: ProjectStatus) => {
     if (!projectId) return;
+    if (!statusNote.trim() || statusNote.trim().length < 5) {
+      toast({
+        title: 'Note required',
+        description: 'Please add a short note (min 5 chars) explaining why this stage is being updated.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setUpdating(true);
+
+    // Pre-check stage requirements so we can show a precise blocker instead of the generic trigger error
+    const { data: reqData } = await supabase.rpc('project_stage_requirements', { _project_id: projectId });
+    const req = (reqData ?? {}) as Record<string, boolean>;
+    const blockers: string[] = [];
+    const gatedStatuses: ProjectStatus[] = ['registration_pending', 'registration_done', 'loan_process', 'loan_done', 'cash_file'];
+    if (gatedStatuses.includes(newStatus)) {
+      if (!req.documents_verified) blockers.push('All documents must be approved');
+      if (!req.quotation_created) blockers.push('A quotation must be created for this project');
+    }
+    if (['material_ordered', 'material_dispatched'].includes(newStatus) && !req.quotation_created) {
+      blockers.push('A quotation must be created');
+    }
+    if (['material_delivered', 'installation_pending'].includes(newStatus)) {
+      if (!req.material_dispatched) blockers.push('Material dispatch must be recorded');
+      if (!req.home_location_saved) blockers.push('Home location must be saved');
+    }
+    if (['installation_done', 'wiring_pending', 'wiring_done'].includes(newStatus) && !req.material_dispatched) {
+      blockers.push('Material dispatch must be recorded');
+    }
+    if (['net_metering_submitted', 'inspection_scheduled', 'inspection_completed', 'net_meter_installed', 'project_completed'].includes(newStatus) && !req.serial_numbers_entered) {
+      blockers.push('Serial numbers must be entered');
+    }
+    if (blockers.length > 0) {
+      toast({
+        title: `Cannot move to ${statusLabels[newStatus]}`,
+        description: blockers.join(' • '),
+        variant: 'destructive',
+      });
+      setUpdating(false);
+      return;
+    }
+
     const updates: any = { status: newStatus };
 
-    if (newStatus === 'loan_process' && loanBank) {
-      updates.loan_bank = loanBank;
-    }
-    if (newStatus === 'installation_pending' && selectedWelder) {
-      updates.assigned_welder_id = selectedWelder;
-    }
-    if (newStatus === 'wiring_pending' && selectedElectrician) {
-      updates.assigned_electrician_id = selectedElectrician;
-    }
-    if (newStatus === 'net_metering_submitted' && netMeteringFileNumber) {
-      updates.net_metering_file_number = netMeteringFileNumber;
-    }
-    if (newStatus === 'inspection_scheduled' && inspectionDate) {
-      updates.inspection_date = inspectionDate;
-    }
-    if ((newStatus === 'inspection_completed' || newStatus === 'inspection_failed') && inspectionNotes) {
-      updates.inspection_notes = inspectionNotes;
-    }
-    if (newStatus === 'net_meter_installed' && netMeterNumber) {
-      updates.net_meter_number = netMeterNumber;
-    }
-    if (newStatus === 'project_completed') {
-      updates.completed_at = new Date().toISOString();
-    }
+    if (newStatus === 'loan_process' && loanBank) updates.loan_bank = loanBank;
+    if (newStatus === 'installation_pending' && selectedWelder) updates.assigned_welder_id = selectedWelder;
+    if (newStatus === 'wiring_pending' && selectedElectrician) updates.assigned_electrician_id = selectedElectrician;
+    if (newStatus === 'net_metering_submitted' && netMeteringFileNumber) updates.net_metering_file_number = netMeteringFileNumber;
+    if (newStatus === 'inspection_scheduled' && inspectionDate) updates.inspection_date = inspectionDate;
+    if ((newStatus === 'inspection_completed' || newStatus === 'inspection_failed') && inspectionNotes) updates.inspection_notes = inspectionNotes;
+    if (newStatus === 'net_meter_installed' && netMeterNumber) updates.net_meter_number = netMeterNumber;
+    if (newStatus === 'project_completed') updates.completed_at = new Date().toISOString();
 
+    const fromStatus = project?.status as ProjectStatus | undefined;
     const { error } = await supabase.from('projects').update(updates).eq('id', projectId);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
+      if (user?.id) {
+        await supabase.from('project_status_notes').insert({
+          project_id: projectId,
+          from_status: fromStatus ?? null,
+          to_status: newStatus,
+          note: statusNote.trim(),
+          created_by: user.id,
+        });
+      }
       toast({ title: 'Status Updated', description: `Project moved to ${statusLabels[newStatus]}` });
+      setStatusNote('');
       fetchData();
     }
     setUpdating(false);
