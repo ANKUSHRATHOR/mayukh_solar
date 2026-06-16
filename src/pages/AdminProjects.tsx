@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText, User, MapPin, Zap, IndianRupee, Hash, Download } from 'lucide-react';
+import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText, User, MapPin, Zap, IndianRupee, Hash, Download, Phone } from 'lucide-react';
 import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
@@ -250,6 +250,35 @@ const AdminProjects = () => {
         </Select>
       </div>
 
+      {/* Quick status chip filters */}
+      <div className="flex flex-wrap gap-1.5">
+        {([
+          { v: 'all', l: 'All' },
+          { v: 'pending_documents', l: 'Docs Pending' },
+          { v: 'pending_operator_review', l: 'Operator Review' },
+          { v: 'registration_pending', l: 'Registration' },
+          { v: 'loan_process', l: 'Loan' },
+          { v: 'material_dispatched', l: 'Dispatched' },
+          { v: 'installation_pending', l: 'Installation' },
+          { v: 'net_metering_submitted', l: 'Net Metering' },
+          { v: 'inspection_scheduled', l: 'Inspection' },
+          { v: 'project_completed', l: 'Completed' },
+        ]).map((c) => (
+          <button
+            key={c.v}
+            type="button"
+            onClick={() => setStatusFilter(c.v)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              statusFilter === c.v
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+            }`}
+          >
+            {c.l}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-3">
         {filtered.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-muted-foreground">No projects found.</CardContent></Card>
@@ -265,10 +294,27 @@ const AdminProjects = () => {
                         <h2 className="break-words text-xl font-extrabold leading-tight text-foreground sm:text-2xl">
                           {p.project_code}
                         </h2>
+                        {p.leads?.mobile && (
+                          <a
+                            href={`tel:${p.leads.mobile}`}
+                            className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
+                          >
+                            <Phone className="h-3.5 w-3.5" /> {p.leads.mobile}
+                          </a>
+                        )}
                       </div>
-                      <Badge className={`${STATUS_COLORS[p.status] || 'bg-accent text-accent-foreground'} w-fit rounded-full px-3 py-1 text-xs font-semibold`}>
-                        {STATUS_LABELS[p.status as ProjectStatus] || p.status}
-                      </Badge>
+                      <div className="flex flex-col items-start sm:items-end gap-2">
+                        <Badge className={`${STATUS_COLORS[p.status] || 'bg-accent text-accent-foreground'} w-fit rounded-full px-3 py-1 text-xs font-semibold`}>
+                          {STATUS_LABELS[p.status as ProjectStatus] || p.status}
+                        </Badge>
+                        {p.leads?.mobile && (
+                          <Button asChild size="sm" className="gradient-primary text-primary-foreground">
+                            <a href={`tel:${p.leads.mobile}`}>
+                              <Phone className="mr-1.5 h-3.5 w-3.5" /> Call Client
+                            </a>
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

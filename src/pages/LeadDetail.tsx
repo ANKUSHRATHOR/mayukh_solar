@@ -244,14 +244,28 @@ const LeadDetail = () => {
               <div>
                 <h1 className="text-xl font-bold text-foreground">{lead.customer_name}</h1>
                 <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground flex-wrap">
-                  <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> {lead.mobile}</span>
+                  <a href={`tel:${lead.mobile}`} className="flex items-center gap-1 text-primary hover:underline font-medium">
+                    <Phone className="h-3.5 w-3.5" /> {lead.mobile}
+                  </a>
+                  {lead.alt_mobile && (
+                    <a href={`tel:${lead.alt_mobile}`} className="flex items-center gap-1 text-primary hover:underline">
+                      <Phone className="h-3.5 w-3.5" /> Alt
+                    </a>
+                  )}
                   <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {lead.village_city}, {lead.district}</span>
                 </div>
               </div>
             </div>
-            <Badge className={`text-sm px-3 py-1 ${statusColor[lead.status] || ''}`}>
-              {statusLabel(lead.status)}
-            </Badge>
+            <div className="flex flex-col items-end gap-2">
+              <Badge className={`text-sm px-3 py-1 ${statusColor[lead.status] || ''}`}>
+                {statusLabel(lead.status)}
+              </Badge>
+              <Button asChild size="sm" className="gradient-primary text-primary-foreground">
+                <a href={`tel:${lead.mobile}`}>
+                  <Phone className="mr-1.5 h-3.5 w-3.5" /> Call Client
+                </a>
+              </Button>
+            </div>
           </div>
 
           {/* Lead details */}

@@ -36,6 +36,7 @@ const Tasks = () => {
   const [proofNotes, setProofNotes] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [statusChip, setStatusChip] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: salesPersons } = useQuery({
@@ -147,11 +148,34 @@ const Tasks = () => {
         ))}
       </div>
 
+      {/* Status chip filters */}
+      <div className="flex flex-wrap gap-1.5">
+        {([
+          { v: 'all', l: `All (${(tasks || []).length})` },
+          { v: 'pending', l: `Pending (${pendingCount})` },
+          { v: 'in_progress', l: `In Progress (${inProgressCount})` },
+          { v: 'completed', l: `Completed (${doneCount})` },
+        ] as const).map((c) => (
+          <button
+            key={c.v}
+            type="button"
+            onClick={() => setStatusChip(c.v)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              statusChip === c.v
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+            }`}
+          >
+            {c.l}
+          </button>
+        ))}
+      </div>
+
       {!tasks?.length ? (
         <div className="bento p-8 text-center text-muted-foreground">No tasks yet.</div>
       ) : (
         <div className="space-y-3">
-          {tasks.map((task: any) => (
+          {tasks.filter((task: any) => statusChip === 'all' || task.status === statusChip).map((task: any) => (
             <div key={task.id} className="bento p-4 space-y-2 hover:shadow-elevated transition-shadow">
               <div className="flex items-start justify-between gap-2 flex-wrap">
                 <div className="min-w-0">

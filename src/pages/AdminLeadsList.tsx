@@ -551,9 +551,38 @@ const AdminLeadsList = () => {
 
       <Card className="shadow-card border-border">
         <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <CardTitle className="text-base">Lead Pipeline</CardTitle>
-            <p className="text-sm text-muted-foreground">{filteredRows.length} lead(s) visible • realtime sync enabled</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <CardTitle className="text-base">Lead Pipeline</CardTitle>
+              <p className="text-sm text-muted-foreground">{filteredRows.length} lead(s) visible • realtime sync enabled</p>
+            </div>
+            {/* Quick status chip filters */}
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { v: 'all', l: 'All' },
+                { v: 'new', l: 'New' },
+                { v: 'site_visit', l: 'Site Visit' },
+                { v: 'follow_up', l: 'Follow-up' },
+                { v: 'interested', l: 'Interested' },
+                { v: 'quotation_sent', l: 'Quotation Sent' },
+                { v: 'documents_pending', l: 'Docs Pending' },
+                { v: 'final', l: 'Finalized' },
+                { v: 'not_interested', l: 'Not Interested' },
+              ] as { v: StatusFilter; l: string }[]).map((c) => (
+                <button
+                  key={c.v}
+                  type="button"
+                  onClick={() => setFilterStatus(c.v)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    filterStatus === c.v
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+                  }`}
+                >
+                  {c.l}
+                </button>
+              ))}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
