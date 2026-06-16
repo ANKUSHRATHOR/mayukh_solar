@@ -185,19 +185,34 @@ const electricianNav: NavSection[] = [
   { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
 ];
 
+const teamSection: NavSection = {
+  title: 'Team',
+  items: [{ label: 'Staff Contacts', icon: Contact, path: '/contacts' }],
+};
+
+const withTeam = (sections: NavSection[]): NavSection[] => {
+  // Insert before any final 'Account' section, otherwise at the end
+  const accountIdx = sections.findIndex(s => s.title === 'Account');
+  if (accountIdx >= 0) {
+    return [...sections.slice(0, accountIdx), teamSection, ...sections.slice(accountIdx)];
+  }
+  return [...sections, teamSection];
+};
+
 const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
   const { staff, role, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navSections: NavSection[] =
+  const navSections: NavSection[] = withTeam(
     role === 'admin' ? adminNav :
     role === 'telecaller' ? telecallerNav :
     role === 'sales_person' ? salesNav :
     role === 'operator' ? operatorNav :
     role === 'welder' ? welderNav :
-    role === 'electrician' ? electricianNav : [];
+    role === 'electrician' ? electricianNav : []
+  );
 
 
 
