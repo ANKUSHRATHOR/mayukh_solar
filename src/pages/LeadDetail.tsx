@@ -131,16 +131,28 @@ const LeadDetail = () => {
     return staff.find((s) => s.user_id === userId)?.full_name || 'Staff member';
   };
 
+  const NEGATIVE_NOTE_MIN_WORDS = 100;
+  const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+  const isNegativeStatus = newStatus === 'cancelled' || newStatus === 'not_interested';
+
   const handleStatusUpdate = async () => {
     if (!newStatus || !lead || !user) return;
 
     // Validation
-    if ((newStatus === 'cancelled' || newStatus === 'not_interested') && !cancelReason) {
+    if (isNegativeStatus && !cancelReason) {
       toast({ title: 'Reason required', description: 'Please select a reason', variant: 'destructive' });
       return;
     }
     if (cancelReason === 'other' && !cancelOther.trim()) {
       toast({ title: 'Please specify reason', variant: 'destructive' });
+      return;
+    }
+    if (isNegativeStatus && wordCount(visitNotes) < NEGATIVE_NOTE_MIN_WORDS) {
+      toast({
+        title: 'Detailed note required',
+        description: `Please write at least ${NEGATIVE_NOTE_MIN_WORDS} words explaining the cancellation/not interested reason. Currently: ${wordCount(visitNotes)} words.`,
+        variant: 'destructive',
+      });
       return;
     }
     if (newStatus === 'follow_up' && !followUpDate) {
