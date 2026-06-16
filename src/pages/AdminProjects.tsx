@@ -250,6 +250,35 @@ const AdminProjects = () => {
         </Select>
       </div>
 
+      {/* Quick status chip filters */}
+      <div className="flex flex-wrap gap-1.5">
+        {([
+          { v: 'all', l: 'All' },
+          { v: 'pending_documents', l: 'Docs Pending' },
+          { v: 'pending_operator_review', l: 'Operator Review' },
+          { v: 'registration_pending', l: 'Registration' },
+          { v: 'loan_process', l: 'Loan' },
+          { v: 'material_dispatched', l: 'Dispatched' },
+          { v: 'installation_pending', l: 'Installation' },
+          { v: 'net_metering_submitted', l: 'Net Metering' },
+          { v: 'inspection_scheduled', l: 'Inspection' },
+          { v: 'project_completed', l: 'Completed' },
+        ]).map((c) => (
+          <button
+            key={c.v}
+            type="button"
+            onClick={() => setStatusFilter(c.v)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              statusFilter === c.v
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+            }`}
+          >
+            {c.l}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-3">
         {filtered.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-muted-foreground">No projects found.</CardContent></Card>
