@@ -107,25 +107,62 @@ const tabFilters: Record<TabFilter, ProjectStatus[]> = {
 const OperatorDashboard = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [staffMap, setStaffMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabFilter>('review');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'this_month'>('all');
+  const [salesFilter, setSalesFilter] = useState<string>('all');
+  const [progressFilter, setProgressFilter] = useState<'all' | 'in_progress' | 'finalized'>('all');
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('projects')
-      .select('*')
-      .order('updated_at', { ascending: false });
-    setProjects((data as ProjectRow[]) || []);
+    const [projRes, staffRes] = await Promise.all([
+      supabase
+        .from('projects')
+        .select('*, leads(source, customer_name)')
+        .order('updated_at', { ascending: false }),
+      supabase.from('staff').select('user_id, full_name'),
+    ]);
+    const rows: ProjectRow[] = ((projRes.data as any[]) || []).map((p: any) => ({
+      ...p,
+      lead_source: p.leads?.source || null,
+      sales_person_name: null,
+    }));
+    setProjects(rows);
+    const map: Record<string, string> = {};
+    (staffRes.data || []).forEach((s: any) => { map[s.user_id] = s.full_name; });
+    setStaffMap(map);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
+  // Sales persons that appear in current project list (for chip filter)
+  const salesInData = useMemo(() => {
+    const ids = new Set<string>();
+    projects.forEach(p => { if (p.assigned_sales_person_id) ids.add(p.assigned_sales_person_id); });
+    return Array.from(ids)
+      .map(id => ({ id, name: staffMap[id] || 'Staff' }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projects, staffMap]);
+
   const filtered = projects.filter(p => {
     const statuses = tabFilters[activeTab];
     if (statuses.length > 0 && !statuses.includes(p.status)) return false;
+    if (sourceFilter !== 'all' && p.lead_source !== sourceFilter) return false;
+    if (salesFilter !== 'all' && p.assigned_sales_person_id !== salesFilter) return false;
+    if (progressFilter === 'finalized' && p.status !== 'project_completed') return false;
+    if (progressFilter === 'in_progress' && p.status === 'project_completed') return false;
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      const ts = new Date(p.updated_at).getTime();
+      if (dateFilter === 'today' && ts < startToday) return false;
+      if (dateFilter === 'this_month' && ts < startMonth) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -136,6 +173,22 @@ const OperatorDashboard = () => {
     }
     return true;
   });
+
+  const activeFilterCount =
+    (sourceFilter !== 'all' ? 1 : 0) +
+    (dateFilter !== 'all' ? 1 : 0) +
+    (salesFilter !== 'all' ? 1 : 0) +
+    (progressFilter !== 'all' ? 1 : 0);
+
+  const clearFilters = () => {
+    setSourceFilter('all');
+    setDateFilter('all');
+    setSalesFilter('all');
+    setProgressFilter('all');
+  };
+
+  const labelize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
 
   const reviewCount = projects.filter(p => p.status === 'pending_operator_review').length;
   const regCount = projects.filter(p => ['registration_pending', 'registration_done'].includes(p.status)).length;
