@@ -34,7 +34,24 @@ interface ProjectRow {
   lead_id: string;
   documents_submitted_by_sales: boolean;
   loan_bank: string | null;
+  assigned_sales_person_id: string | null;
+  lead_source: string | null;
+  sales_person_name: string | null;
 }
+
+const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+      active
+        ? 'bg-primary text-primary-foreground border-primary'
+        : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+    }`}
+  >
+    {children}
+  </button>
+);
 
 const statusLabels: Record<ProjectStatus, string> = {
   pending_documents: 'Pending Documents',
