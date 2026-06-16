@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Briefcase, Users, Clock,
-  Search, MapPin, Calendar as CalendarIcon, Bike, PhoneCall
+  Search, MapPin, Calendar as CalendarIcon, Bike, PhoneCall, X
 } from 'lucide-react';
 
 const statusColor: Record<string, string> = {
