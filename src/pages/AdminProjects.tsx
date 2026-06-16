@@ -294,10 +294,27 @@ const AdminProjects = () => {
                         <h2 className="break-words text-xl font-extrabold leading-tight text-foreground sm:text-2xl">
                           {p.project_code}
                         </h2>
+                        {p.leads?.mobile && (
+                          <a
+                            href={`tel:${p.leads.mobile}`}
+                            className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
+                          >
+                            <Phone className="h-3.5 w-3.5" /> {p.leads.mobile}
+                          </a>
+                        )}
                       </div>
-                      <Badge className={`${STATUS_COLORS[p.status] || 'bg-accent text-accent-foreground'} w-fit rounded-full px-3 py-1 text-xs font-semibold`}>
-                        {STATUS_LABELS[p.status as ProjectStatus] || p.status}
-                      </Badge>
+                      <div className="flex flex-col items-start sm:items-end gap-2">
+                        <Badge className={`${STATUS_COLORS[p.status] || 'bg-accent text-accent-foreground'} w-fit rounded-full px-3 py-1 text-xs font-semibold`}>
+                          {STATUS_LABELS[p.status as ProjectStatus] || p.status}
+                        </Badge>
+                        {p.leads?.mobile && (
+                          <Button asChild size="sm" className="gradient-primary text-primary-foreground">
+                            <a href={`tel:${p.leads.mobile}`}>
+                              <Phone className="mr-1.5 h-3.5 w-3.5" /> Call Client
+                            </a>
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
