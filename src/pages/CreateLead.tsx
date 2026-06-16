@@ -271,7 +271,7 @@ const CreateLead = () => {
             </Select>
           </div>
 
-          {canAssignSalesPerson && (
+          {canAssignSalesPerson && !isSalesPerson && (
             <div className="space-y-1.5">
               <Label>Assign to Sales Person *</Label>
               <Select value={assignedToUserId} onValueChange={setAssignedToUserId}>
@@ -287,6 +287,9 @@ const CreateLead = () => {
                 </SelectContent>
               </Select>
             </div>
+          )}
+          {isSalesPerson && (
+            <p className="text-xs text-muted-foreground">This lead will be assigned to you automatically.</p>
           )}
 
           {/* Reference Name (conditional) */}
