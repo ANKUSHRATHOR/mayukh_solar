@@ -154,6 +154,13 @@ const OperatorProjectDetail = () => {
       const { data: leadData } = await supabase.from('leads').select('*').eq('id', proj.lead_id).single();
       setLead(leadData);
     }
+
+    const { data: notesData } = await supabase
+      .from('project_status_notes')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+    setStatusNotesHistory(notesData || []);
     setLoading(false);
   }, [projectId]);
 
