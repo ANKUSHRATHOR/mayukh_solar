@@ -512,9 +512,20 @@ const OperatorProjectDetail = () => {
       {(project.status === 'pending_operator_review' || project.status === 'pending_documents') && (
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-primary" /> Document Review
-            </CardTitle>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <FileText className="h-5 w-5 text-primary" /> Document Review
+              </CardTitle>
+              {project.status === 'pending_operator_review' && docs.some(d => d.is_verified !== true) && (
+                <Button
+                  size="sm"
+                  onClick={handleApproveAllDocs}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1" /> Approve All Documents
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {docs.length === 0 ? (
