@@ -213,7 +213,7 @@ const OperatorDashboard = () => {
         <StatCard onClick={() => setActiveTab('completed')} title="Completed" value={completedCount} icon={CheckCircle2} />
       </div>
 
-      {/* Tabs + Search */}
+      {/* Search */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -225,6 +225,69 @@ const OperatorDashboard = () => {
           />
         </div>
       </div>
+
+      {/* Filter chips */}
+      <Card className="shadow-card border-border">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Filters</p>
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs">
+                <X className="h-3 w-3 mr-1" /> Clear ({activeFilterCount})
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Progress</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { v: 'all', l: 'All' },
+                { v: 'in_progress', l: 'In Progress' },
+                { v: 'finalized', l: 'Finalized' },
+              ] as const).map(c => (
+                <Chip key={c.v} active={progressFilter === c.v} onClick={() => setProgressFilter(c.v)}>{c.l}</Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Date Range</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { v: 'all', l: 'All Time' },
+                { v: 'today', l: 'Today' },
+                { v: 'this_month', l: 'This Month' },
+              ] as const).map(c => (
+                <Chip key={c.v} active={dateFilter === c.v} onClick={() => setDateFilter(c.v)}>{c.l}</Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Lead Source</p>
+            <div className="flex flex-wrap gap-1.5">
+              {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
+                <Chip key={s} active={sourceFilter === s} onClick={() => setSourceFilter(s)}>
+                  {s === 'all' ? 'All' : labelize(s)}
+                </Chip>
+              ))}
+            </div>
+          </div>
+
+          {salesInData.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Sales Person</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Chip active={salesFilter === 'all'} onClick={() => setSalesFilter('all')}>All</Chip>
+                {salesInData.map(s => (
+                  <Chip key={s.id} active={salesFilter === s.id} onClick={() => setSalesFilter(s.id)}>{s.name}</Chip>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabFilter)}>
         <TabsList className="w-full justify-start overflow-x-auto">
