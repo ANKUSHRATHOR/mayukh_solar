@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, CheckCircle2, XCircle, FileText, Eye,
   ClipboardCheck, CreditCard, Package, Truck, Wrench, Zap,
-  Calendar, Search, Award, PartyPopper, Download, Share2
+  Calendar, Search, Award, PartyPopper, Download, Share2, PhoneCall
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import StageChecklist from '@/components/projects/StageChecklist';
@@ -365,12 +365,26 @@ const OperatorProjectDetail = () => {
               </p>
             </div>
             <div><p className="text-muted-foreground text-xs">Amount</p><p className="font-medium">₹{Number(project.final_amount).toLocaleString('en-IN')}</p></div>
+            <div>
+              <p className="text-muted-foreground text-xs">Lead Source</p>
+              <p className="font-medium capitalize">
+                {lead?.source ? String(lead.source).replace(/_/g, ' ') : 'Not Specified'}
+                {lead?.source === 'reference' && lead?.reference_name ? ` (${lead.reference_name})` : ''}
+              </p>
+            </div>
             {project.payment_type === 'loan' && project.loan_bank && (
               <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>
             )}
           </div>
 
           <div className="flex flex-wrap gap-2 pt-2">
+            {lead?.mobile && (
+              <Button asChild size="sm" variant="outline" className="border-success/40 text-success hover:bg-success/10">
+                <a href={`tel:${lead.mobile}`}>
+                  <PhoneCall className="mr-2 h-4 w-4" /> Call Client
+                </a>
+              </Button>
+            )}
             <QuotationButton projectId={project.id} size="sm" />
             <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${project.id}/material-dispatch`)}>
               <Package className="mr-2 h-4 w-4" /> Material Dispatch
