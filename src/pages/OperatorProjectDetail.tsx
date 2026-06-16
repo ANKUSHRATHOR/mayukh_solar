@@ -114,6 +114,8 @@ const OperatorProjectDetail = () => {
   const [inspectionNotes, setInspectionNotes] = useState('');
   const [netMeterNumber, setNetMeterNumber] = useState('');
   const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [statusNote, setStatusNote] = useState('');
+  const [statusNotesHistory, setStatusNotesHistory] = useState<any[]>([]);
 
   const fetchData = useCallback(async () => {
     if (!projectId) return;
