@@ -6,7 +6,7 @@ import StatCard from '@/components/dashboard/StatCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PhoneCall, Users, TrendingUp, Calendar } from 'lucide-react';
+import { PhoneCall, Users, TrendingUp, Calendar, X } from 'lucide-react';
 
 const statusColor: Record<string, string> = {
   new: 'bg-info text-info-foreground',
@@ -18,17 +18,37 @@ const statusColor: Record<string, string> = {
   final: 'bg-primary text-primary-foreground',
 };
 
-const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+const statusLabel = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-type Tab = 'all' | 'month' | 'today';
+type DateRange = 'all' | 'today' | 'this_month' | 'last_month';
+
+const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+      active
+        ? 'bg-primary text-primary-foreground border-primary'
+        : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+    }`}
+  >
+    {children}
+  </button>
+);
 
 const TelecallerDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [leads, setLeads] = useState<any[]>([]);
+  const [salesStaff, setSalesStaff] = useState<{ user_id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, thisMonth: 0, today: 0 });
-  const [tab, setTab] = useState<Tab>('all');
+
+  // Filters
+  const [dateRange, setDateRange] = useState<DateRange>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [assignedFilter, setAssignedFilter] = useState<string>('all');
 
   const fetchLeads = async () => {
     if (!user) return;
@@ -38,14 +58,16 @@ const TelecallerDashboard = () => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-    const [allRes, totalRes, monthRes, todayRes] = await Promise.all([
+    const [allRes, totalRes, monthRes, todayRes, salesRes] = await Promise.all([
       supabase.from('leads').select('*').eq('created_by_user_id', user.id).order('created_at', { ascending: false }).limit(500),
       supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id),
       supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id).gte('created_at', startOfMonth),
       supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id).gte('created_at', startOfDay),
+      supabase.rpc('get_assignable_sales_persons'),
     ]);
 
     setLeads(allRes.data || []);
+    setSalesStaff(((salesRes.data as any[]) || []).map(s => ({ user_id: s.user_id, full_name: s.full_name })));
     setStats({
       total: totalRes.count || 0,
       thisMonth: monthRes.count || 0,
@@ -65,18 +87,47 @@ const TelecallerDashboard = () => {
     return () => { void supabase.removeChannel(channel); };
   }, [user]);
 
-  const filteredLeads = useMemo(() => {
-    if (tab === 'all') return leads;
-    const now = new Date();
-    if (tab === 'month') {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      return leads.filter(l => new Date(l.created_at).getTime() >= start);
-    }
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    return leads.filter(l => new Date(l.created_at).getTime() >= start);
-  }, [leads, tab]);
+  // Restrict the "Sales Person Assigned" chips to staff actually assigned in this list
+  const assignedSalesInData = useMemo(() => {
+    const ids = new Set<string>();
+    leads.forEach(l => { if (l.assigned_to_user_id) ids.add(l.assigned_to_user_id); });
+    return salesStaff.filter(s => ids.has(s.user_id));
+  }, [leads, salesStaff]);
 
-  const tabTitle = tab === 'all' ? 'All Leads' : tab === 'month' ? "This Month's Leads" : "Today's Leads";
+  const filteredLeads = useMemo(() => {
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const endLastMonth = startThisMonth;
+
+    return leads.filter(l => {
+      const ts = new Date(l.created_at).getTime();
+      if (dateRange === 'today' && ts < startToday) return false;
+      if (dateRange === 'this_month' && ts < startThisMonth) return false;
+      if (dateRange === 'last_month' && (ts < startLastMonth || ts >= endLastMonth)) return false;
+      if (statusFilter !== 'all' && l.status !== statusFilter) return false;
+      if (sourceFilter !== 'all' && l.source !== sourceFilter) return false;
+      if (assignedFilter !== 'all') {
+        if (assignedFilter === 'unassigned' && l.assigned_to_user_id) return false;
+        if (assignedFilter !== 'unassigned' && l.assigned_to_user_id !== assignedFilter) return false;
+      }
+      return true;
+    });
+  }, [leads, dateRange, statusFilter, sourceFilter, assignedFilter]);
+
+  const activeFilterCount =
+    (dateRange !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0) +
+    (sourceFilter !== 'all' ? 1 : 0) +
+    (assignedFilter !== 'all' ? 1 : 0);
+
+  const clearFilters = () => {
+    setDateRange('all');
+    setStatusFilter('all');
+    setSourceFilter('all');
+    setAssignedFilter('all');
+  };
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
@@ -91,20 +142,77 @@ const TelecallerDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className={tab === 'all' ? 'ring-2 ring-primary rounded-xl' : ''}>
-          <StatCard onClick={() => setTab('all')} title="Total Leads" value={stats.total} icon={Users} />
-        </div>
-        <div className={tab === 'month' ? 'ring-2 ring-primary rounded-xl' : ''}>
-          <StatCard onClick={() => setTab('month')} title="This Month" value={stats.thisMonth} icon={TrendingUp} />
-        </div>
-        <div className={tab === 'today' ? 'ring-2 ring-primary rounded-xl' : ''}>
-          <StatCard onClick={() => setTab('today')} title="Today" value={stats.today} icon={Calendar} />
-        </div>
+        <StatCard onClick={() => setDateRange('all')} title="Total Leads" value={stats.total} icon={Users} />
+        <StatCard onClick={() => setDateRange('this_month')} title="This Month" value={stats.thisMonth} icon={TrendingUp} />
+        <StatCard onClick={() => setDateRange('today')} title="Today" value={stats.today} icon={Calendar} />
       </div>
+
+      {/* Filter chips */}
+      <Card className="shadow-card border-border">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Filters</p>
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs">
+                <X className="h-3 w-3 mr-1" /> Clear ({activeFilterCount})
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Date Range</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { v: 'all', l: 'All Time' },
+                { v: 'today', l: 'Today' },
+                { v: 'this_month', l: 'This Month' },
+                { v: 'last_month', l: 'Last Month' },
+              ] as { v: DateRange; l: string }[]).map(c => (
+                <Chip key={c.v} active={dateRange === c.v} onClick={() => setDateRange(c.v)}>{c.l}</Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Status</p>
+            <div className="flex flex-wrap gap-1.5">
+              {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final', 'cancelled'].map(s => (
+                <Chip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
+                  {s === 'all' ? 'All' : statusLabel(s)}
+                </Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Lead Source</p>
+            <div className="flex flex-wrap gap-1.5">
+              {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
+                <Chip key={s} active={sourceFilter === s} onClick={() => setSourceFilter(s)}>
+                  {s === 'all' ? 'All' : statusLabel(s)}
+                </Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Sales Person Assigned</p>
+            <div className="flex flex-wrap gap-1.5">
+              <Chip active={assignedFilter === 'all'} onClick={() => setAssignedFilter('all')}>All</Chip>
+              <Chip active={assignedFilter === 'unassigned'} onClick={() => setAssignedFilter('unassigned')}>Unassigned</Chip>
+              {assignedSalesInData.map(s => (
+                <Chip key={s.user_id} active={assignedFilter === s.user_id} onClick={() => setAssignedFilter(s.user_id)}>
+                  {s.full_name}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="shadow-card border-border">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-base font-semibold">{tabTitle}</CardTitle>
+          <CardTitle className="text-base font-semibold">Leads</CardTitle>
           <span className="text-xs text-muted-foreground">{filteredLeads.length} shown</span>
         </CardHeader>
         <CardContent>
@@ -112,7 +220,7 @@ const TelecallerDashboard = () => {
             <p className="text-muted-foreground text-sm py-4 text-center">Loading...</p>
           ) : filteredLeads.length === 0 ? (
             <p className="text-muted-foreground text-sm py-8 text-center">
-              {tab === 'all' ? 'No leads yet. Create your first lead!' : 'No leads in this period.'}
+              {leads.length === 0 ? 'No leads yet. Create your first lead!' : 'No leads match the current filters.'}
             </p>
           ) : (
             <div className="space-y-3">

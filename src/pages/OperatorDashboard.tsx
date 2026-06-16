@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,8 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import StatCard from '@/components/dashboard/StatCard';
 import {
   ClipboardCheck, FileSearch, AlertTriangle, Package,
-  CheckCircle2, Clock, Search, ChevronRight, Truck, Wrench
+  CheckCircle2, Clock, Search, ChevronRight, Truck, Wrench, X
 } from 'lucide-react';
+
 import type { Database } from '@/integrations/supabase/types';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
@@ -33,7 +34,24 @@ interface ProjectRow {
   lead_id: string;
   documents_submitted_by_sales: boolean;
   loan_bank: string | null;
+  assigned_sales_person_id: string | null;
+  lead_source: string | null;
+  sales_person_name: string | null;
 }
+
+const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+      active
+        ? 'bg-primary text-primary-foreground border-primary'
+        : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+    }`}
+  >
+    {children}
+  </button>
+);
 
 const statusLabels: Record<ProjectStatus, string> = {
   pending_documents: 'Pending Documents',
@@ -89,25 +107,62 @@ const tabFilters: Record<TabFilter, ProjectStatus[]> = {
 const OperatorDashboard = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [staffMap, setStaffMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabFilter>('review');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'this_month'>('all');
+  const [salesFilter, setSalesFilter] = useState<string>('all');
+  const [progressFilter, setProgressFilter] = useState<'all' | 'in_progress' | 'finalized'>('all');
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('projects')
-      .select('*')
-      .order('updated_at', { ascending: false });
-    setProjects((data as ProjectRow[]) || []);
+    const [projRes, staffRes] = await Promise.all([
+      supabase
+        .from('projects')
+        .select('*, leads(source, customer_name)')
+        .order('updated_at', { ascending: false }),
+      supabase.from('staff').select('user_id, full_name'),
+    ]);
+    const rows: ProjectRow[] = ((projRes.data as any[]) || []).map((p: any) => ({
+      ...p,
+      lead_source: p.leads?.source || null,
+      sales_person_name: null,
+    }));
+    setProjects(rows);
+    const map: Record<string, string> = {};
+    (staffRes.data || []).forEach((s: any) => { map[s.user_id] = s.full_name; });
+    setStaffMap(map);
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
+  // Sales persons that appear in current project list (for chip filter)
+  const salesInData = useMemo(() => {
+    const ids = new Set<string>();
+    projects.forEach(p => { if (p.assigned_sales_person_id) ids.add(p.assigned_sales_person_id); });
+    return Array.from(ids)
+      .map(id => ({ id, name: staffMap[id] || 'Staff' }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projects, staffMap]);
+
   const filtered = projects.filter(p => {
     const statuses = tabFilters[activeTab];
     if (statuses.length > 0 && !statuses.includes(p.status)) return false;
+    if (sourceFilter !== 'all' && p.lead_source !== sourceFilter) return false;
+    if (salesFilter !== 'all' && p.assigned_sales_person_id !== salesFilter) return false;
+    if (progressFilter === 'finalized' && p.status !== 'project_completed') return false;
+    if (progressFilter === 'in_progress' && p.status === 'project_completed') return false;
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      const ts = new Date(p.updated_at).getTime();
+      if (dateFilter === 'today' && ts < startToday) return false;
+      if (dateFilter === 'this_month' && ts < startMonth) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -118,6 +173,22 @@ const OperatorDashboard = () => {
     }
     return true;
   });
+
+  const activeFilterCount =
+    (sourceFilter !== 'all' ? 1 : 0) +
+    (dateFilter !== 'all' ? 1 : 0) +
+    (salesFilter !== 'all' ? 1 : 0) +
+    (progressFilter !== 'all' ? 1 : 0);
+
+  const clearFilters = () => {
+    setSourceFilter('all');
+    setDateFilter('all');
+    setSalesFilter('all');
+    setProgressFilter('all');
+  };
+
+  const labelize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
 
   const reviewCount = projects.filter(p => p.status === 'pending_operator_review').length;
   const regCount = projects.filter(p => ['registration_pending', 'registration_done'].includes(p.status)).length;
@@ -142,7 +213,7 @@ const OperatorDashboard = () => {
         <StatCard onClick={() => setActiveTab('completed')} title="Completed" value={completedCount} icon={CheckCircle2} />
       </div>
 
-      {/* Tabs + Search */}
+      {/* Search */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -154,6 +225,69 @@ const OperatorDashboard = () => {
           />
         </div>
       </div>
+
+      {/* Filter chips */}
+      <Card className="shadow-card border-border">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Filters</p>
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs">
+                <X className="h-3 w-3 mr-1" /> Clear ({activeFilterCount})
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Progress</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { v: 'all', l: 'All' },
+                { v: 'in_progress', l: 'In Progress' },
+                { v: 'finalized', l: 'Finalized' },
+              ] as const).map(c => (
+                <Chip key={c.v} active={progressFilter === c.v} onClick={() => setProgressFilter(c.v)}>{c.l}</Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Date Range</p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { v: 'all', l: 'All Time' },
+                { v: 'today', l: 'Today' },
+                { v: 'this_month', l: 'This Month' },
+              ] as const).map(c => (
+                <Chip key={c.v} active={dateFilter === c.v} onClick={() => setDateFilter(c.v)}>{c.l}</Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Lead Source</p>
+            <div className="flex flex-wrap gap-1.5">
+              {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
+                <Chip key={s} active={sourceFilter === s} onClick={() => setSourceFilter(s)}>
+                  {s === 'all' ? 'All' : labelize(s)}
+                </Chip>
+              ))}
+            </div>
+          </div>
+
+          {salesInData.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Sales Person</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Chip active={salesFilter === 'all'} onClick={() => setSalesFilter('all')}>All</Chip>
+                {salesInData.map(s => (
+                  <Chip key={s.id} active={salesFilter === s.id} onClick={() => setSalesFilter(s.id)}>{s.name}</Chip>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabFilter)}>
         <TabsList className="w-full justify-start overflow-x-auto">

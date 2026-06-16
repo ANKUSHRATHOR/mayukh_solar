@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Briefcase, Users, Clock,
-  Search, MapPin, Calendar as CalendarIcon, Bike, PhoneCall
+  Search, MapPin, Calendar as CalendarIcon, Bike, PhoneCall, X
 } from 'lucide-react';
 
 const statusColor: Record<string, string> = {
@@ -24,6 +24,22 @@ const statusColor: Record<string, string> = {
 
 const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 
+type DateRange = 'all' | 'today' | 'this_month';
+
+const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+      active
+        ? 'bg-primary text-primary-foreground border-primary'
+        : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
+    }`}
+  >
+    {children}
+  </button>
+);
+
 const SalesPersonDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -31,6 +47,9 @@ const SalesPersonDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<DateRange>('all');
+  const [filterCity, setFilterCity] = useState<string>('all');
   const [todayKm, setTodayKm] = useState<number>(0);
   const [monthKm, setMonthKm] = useState<number>(0);
 
@@ -69,11 +88,37 @@ const SalesPersonDashboard = () => {
     overdue: leads.filter(l => l.status === 'follow_up' && l.follow_up_date && new Date(l.follow_up_date) < new Date()).length,
   };
 
+  // Cities present in current leads list
+  const cityOptions = Array.from(new Set(leads.map(l => (l.village_city || '').trim()).filter(Boolean))).sort().slice(0, 24);
+
   const filtered = leads.filter(l => {
     const matchSearch = !search || l.customer_name.toLowerCase().includes(search.toLowerCase()) || l.mobile.includes(search) || l.village_city.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'all' || l.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchSource = filterSource === 'all' || l.source === filterSource;
+    const matchCity = filterCity === 'all' || (l.village_city || '').trim() === filterCity;
+    const ts = new Date(l.created_at).getTime();
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const matchDate = filterDate === 'all' || (filterDate === 'today' ? ts >= startToday : ts >= startMonth);
+    return matchSearch && matchStatus && matchSource && matchCity && matchDate;
   });
+
+  const activeCount =
+    (filterStatus !== 'all' ? 1 : 0) +
+    (filterSource !== 'all' ? 1 : 0) +
+    (filterCity !== 'all' ? 1 : 0) +
+    (filterDate !== 'all' ? 1 : 0);
+
+  const clearFilters = () => {
+    setFilterStatus('all');
+    setFilterSource('all');
+    setFilterCity('all');
+    setFilterDate('all');
+  };
+
+  const statusLabelLocal = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
@@ -112,25 +157,72 @@ const SalesPersonDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-md">
+      {/* Search + Filters */}
+      <div className="flex flex-col gap-3">
+        <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search by name, mobile, city..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {['all', 'new', 'visited', 'follow_up', 'interested', 'final'].map(s => (
-            <Button
-              key={s}
-              variant={filterStatus === s ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterStatus(s)}
-              className={filterStatus === s ? 'gradient-primary text-primary-foreground' : ''}
-            >
-              {s === 'all' ? 'All' : statusLabel(s)}
-            </Button>
-          ))}
-        </div>
+
+        <Card className="shadow-card border-border">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Filters</p>
+              {activeCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs">
+                  <X className="h-3 w-3 mr-1" /> Clear ({activeCount})
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Status</p>
+              <div className="flex flex-wrap gap-1.5">
+                {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final'].map(s => (
+                  <Chip key={s} active={filterStatus === s} onClick={() => setFilterStatus(s)}>
+                    {s === 'all' ? 'All' : statusLabelLocal(s)}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Date Range</p>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { v: 'all', l: 'All Time' },
+                  { v: 'this_month', l: 'This Month' },
+                  { v: 'today', l: 'Today' },
+                ] as { v: DateRange; l: string }[]).map(c => (
+                  <Chip key={c.v} active={filterDate === c.v} onClick={() => setFilterDate(c.v)}>{c.l}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Lead Source</p>
+              <div className="flex flex-wrap gap-1.5">
+                {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
+                  <Chip key={s} active={filterSource === s} onClick={() => setFilterSource(s)}>
+                    {s === 'all' ? 'All' : statusLabelLocal(s)}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+
+            {cityOptions.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground">City / Location</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Chip active={filterCity === 'all'} onClick={() => setFilterCity('all')}>All</Chip>
+                  {cityOptions.map(c => (
+                    <Chip key={c} active={filterCity === c} onClick={() => setFilterCity(c)}>{c}</Chip>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Lead List */}
