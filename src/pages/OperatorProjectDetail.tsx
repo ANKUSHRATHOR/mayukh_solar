@@ -778,6 +778,15 @@ const OperatorProjectDetail = () => {
             <p className="text-sm text-muted-foreground">
               Current: <span className="font-semibold text-foreground">{statusLabels[project.status as ProjectStatus]}</span>
             </p>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Status Note (required)</Label>
+              <Textarea
+                value={statusNote}
+                onChange={e => setStatusNote(e.target.value)}
+                placeholder="Why is this stage pending / what was completed? Add a short note before updating."
+                rows={2}
+              />
+            </div>
             <div className="flex flex-wrap gap-2">
               {nextStatuses.map(ns => {
                 const needsWelder = ns === 'installation_pending' && !selectedWelder;
