@@ -564,7 +564,14 @@ const OperatorProjectDetail = () => {
 
             {/* Approve all docs and move forward */}
             {project.status === 'pending_operator_review' && allDocsApproved && (
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
+                <Label className="text-sm">Note (required) — why moving to Registration?</Label>
+                <Textarea
+                  value={statusNote}
+                  onChange={e => setStatusNote(e.target.value)}
+                  placeholder="e.g. All docs verified, customer agreement received. Proceeding to registration."
+                  rows={2}
+                />
                 <Button
                   onClick={() => handleStatusUpdate('registration_pending')}
                   disabled={updating}
