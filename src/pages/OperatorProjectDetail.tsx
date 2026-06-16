@@ -838,6 +838,31 @@ const OperatorProjectDetail = () => {
           <ProjectTimeline currentStatus={project.status} paymentType={project.payment_type} />
         </CardContent>
       </Card>
+
+      {/* Status Notes History */}
+      {statusNotesHistory.length > 0 && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="text-lg">Status Notes History</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {statusNotesHistory.map(n => (
+              <div key={n.id} className="border border-border rounded-lg p-3 space-y-1">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <Badge variant="secondary" className="text-xs">
+                    {n.from_status ? `${statusLabels[n.from_status as ProjectStatus] || n.from_status} → ` : ''}
+                    {statusLabels[n.to_status as ProjectStatus] || n.to_status}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(n.created_at).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{n.note}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
