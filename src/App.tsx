@@ -223,6 +223,7 @@ const App = () => (
             <Route path="/projects/:projectId/home-location" element={<ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}><ProjectHomeLocation /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><StaffProfile /></ProtectedRoute>} />
             <Route path="/k-lookup" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator']}><KNumberLookup /></ProtectedRoute>} />
+            <Route path="/contacts" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><StaffContacts /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
