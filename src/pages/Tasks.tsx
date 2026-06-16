@@ -36,6 +36,7 @@ const Tasks = () => {
   const [proofNotes, setProofNotes] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [statusChip, setStatusChip] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: salesPersons } = useQuery({
