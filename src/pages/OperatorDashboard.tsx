@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import StatCard from '@/components/dashboard/StatCard';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
 import {
   ClipboardCheck, FileSearch, AlertTriangle, Package,
-  CheckCircle2, Clock, Search, ChevronRight, Truck, Wrench, X
+  CheckCircle2, Clock, Search, ChevronRight, Truck, Wrench
 } from 'lucide-react';
 
 import type { Database } from '@/integrations/supabase/types';
