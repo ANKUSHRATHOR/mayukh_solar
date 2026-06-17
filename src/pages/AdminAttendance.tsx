@@ -36,7 +36,9 @@ const AdminAttendance = () => {
   });
 
   const range = useMemo(() => {
-    const [y, m] = month.split('-').map(Number);
+    const parts = (month || '').split('-').map(Number);
+    const y = Number.isFinite(parts[0]) && parts[0] > 0 ? parts[0] : now.getFullYear();
+    const m = Number.isFinite(parts[1]) && parts[1] >= 1 && parts[1] <= 12 ? parts[1] : now.getMonth() + 1;
     const start = new Date(y, m - 1, 1);
     const end = new Date(y, m, 0);
     return { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') };
