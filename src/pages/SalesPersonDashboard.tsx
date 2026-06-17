@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
 import {
   Briefcase, Users, Clock,
-  Search, MapPin, Calendar as CalendarIcon, Bike, PhoneCall, X
+  Search, MapPin, Calendar as CalendarIcon, Bike, PhoneCall
 } from 'lucide-react';
 
 const statusColor: Record<string, string> = {
