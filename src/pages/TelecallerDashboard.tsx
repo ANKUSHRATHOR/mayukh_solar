@@ -148,73 +148,62 @@ const TelecallerDashboard = () => {
         <StatCard onClick={() => setDateRange('today')} title="Today" value={stats.today} icon={Calendar} />
       </div>
 
-      {/* Filter chips */}
       <Card className="shadow-card border-border">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Filters</p>
-            {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs">
-                <X className="h-3 w-3 mr-1" /> Clear ({activeFilterCount})
-              </Button>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground">Date Range</p>
-            <div className="flex flex-wrap gap-1.5">
-              {([
-                { v: 'all', l: 'All Time' },
-                { v: 'today', l: 'Today' },
-                { v: 'this_month', l: 'This Month' },
-                { v: 'last_month', l: 'Last Month' },
-              ] as { v: DateRange; l: string }[]).map(c => (
-                <Chip key={c.v} active={dateRange === c.v} onClick={() => setDateRange(c.v)}>{c.l}</Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground">Status</p>
-            <div className="flex flex-wrap gap-1.5">
-              {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final', 'cancelled'].map(s => (
-                <Chip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-                  {s === 'all' ? 'All' : statusLabel(s)}
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground">Lead Source</p>
-            <div className="flex flex-wrap gap-1.5">
-              {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
-                <Chip key={s} active={sourceFilter === s} onClick={() => setSourceFilter(s)}>
-                  {s === 'all' ? 'All' : statusLabel(s)}
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground">Sales Person Assigned</p>
-            <div className="flex flex-wrap gap-1.5">
-              <Chip active={assignedFilter === 'all'} onClick={() => setAssignedFilter('all')}>All</Chip>
-              <Chip active={assignedFilter === 'unassigned'} onClick={() => setAssignedFilter('unassigned')}>Unassigned</Chip>
-              {assignedSalesInData.map(s => (
-                <Chip key={s.user_id} active={assignedFilter === s.user_id} onClick={() => setAssignedFilter(s.user_id)}>
-                  {s.full_name}
-                </Chip>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-card border-border">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base font-semibold">Leads</CardTitle>
-          <span className="text-xs text-muted-foreground">{filteredLeads.length} shown</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">{filteredLeads.length} shown</span>
+            <FiltersPopover activeCount={activeFilterCount} onClear={clearFilters}>
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Date Range</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { v: 'all', l: 'All Time' },
+                    { v: 'today', l: 'Today' },
+                    { v: 'this_month', l: 'This Month' },
+                    { v: 'last_month', l: 'Last Month' },
+                  ] as { v: DateRange; l: string }[]).map(c => (
+                    <Chip key={c.v} active={dateRange === c.v} onClick={() => setDateRange(c.v)}>{c.l}</Chip>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Status</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final', 'cancelled'].map(s => (
+                    <Chip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
+                      {s === 'all' ? 'All' : statusLabel(s)}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead Source</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
+                    <Chip key={s} active={sourceFilter === s} onClick={() => setSourceFilter(s)}>
+                      {s === 'all' ? 'All' : statusLabel(s)}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Sales Person Assigned</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Chip active={assignedFilter === 'all'} onClick={() => setAssignedFilter('all')}>All</Chip>
+                  <Chip active={assignedFilter === 'unassigned'} onClick={() => setAssignedFilter('unassigned')}>Unassigned</Chip>
+                  {assignedSalesInData.map(s => (
+                    <Chip key={s.user_id} active={assignedFilter === s.user_id} onClick={() => setAssignedFilter(s.user_id)}>
+                      {s.full_name}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            </FiltersPopover>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
