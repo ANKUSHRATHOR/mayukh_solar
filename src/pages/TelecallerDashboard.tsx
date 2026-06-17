@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import StatCard from '@/components/dashboard/StatCard';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PhoneCall, Users, TrendingUp, Calendar, X } from 'lucide-react';
+import { PhoneCall, Users, TrendingUp, Calendar } from 'lucide-react';
 
 const statusColor: Record<string, string> = {
   new: 'bg-info text-info-foreground',
