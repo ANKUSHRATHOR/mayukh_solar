@@ -15,6 +15,7 @@ import {
 
 const statusColor: Record<string, string> = {
   new: 'bg-info text-info-foreground',
+  visit_created: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   visited: 'bg-accent text-accent-foreground',
   follow_up: 'bg-warning text-warning-foreground',
   interested: 'bg-success text-success-foreground',
@@ -57,10 +58,12 @@ const SalesPersonDashboard = () => {
   const fetchLeads = async () => {
     if (!user) return;
     setLoading(true);
+    // Fetch only leads created by self, assigned to self, or visit_created (authorized for sales person)
     const { data } = await supabase
       .from('leads')
       .select('*')
       .eq('is_in_bin', false)
+      .or(`created_by_user_id.eq.${user.id},assigned_to_user_id.eq.${user.id},status.eq.visit_created`)
       .order('created_at', { ascending: false });
     setLeads(data || []);
     setLoading(false);
@@ -85,6 +88,7 @@ const SalesPersonDashboard = () => {
   const stats = {
     total: leads.length,
     newLeads: leads.filter(l => l.status === 'new').length,
+    visitCreated: leads.filter(l => l.status === 'visit_created').length,
     followUps: leads.filter(l => l.status === 'follow_up').length,
     overdue: leads.filter(l => l.status === 'follow_up' && l.follow_up_date && new Date(l.follow_up_date) < new Date()).length,
   };
@@ -93,7 +97,7 @@ const SalesPersonDashboard = () => {
   const cityOptions = Array.from(new Set(leads.map(l => (l.village_city || '').trim()).filter(Boolean))).sort().slice(0, 24);
 
   const filtered = leads.filter(l => {
-    const matchSearch = !search || l.customer_name.toLowerCase().includes(search.toLowerCase()) || l.mobile.includes(search) || l.village_city.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || l.customer_name.toLowerCase().includes(search.toLowerCase()) || l.mobile.includes(search) || (l.village_city && l.village_city.toLowerCase().includes(search.toLowerCase()));
     const matchStatus = filterStatus === 'all' || l.status === filterStatus;
     const matchSource = filterSource === 'all' || l.source === filterSource;
     const matchCity = filterCity === 'all' || (l.village_city || '').trim() === filterCity;
@@ -120,22 +124,21 @@ const SalesPersonDashboard = () => {
 
   const statusLabelLocal = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6 font-sans">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Sales Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage your leads and site visits</p>
         </div>
         <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
           <PhoneCall className="mr-2 h-4 w-4" /> Create New Lead
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard onClick={() => setFilterStatus('all')} title="Total Leads" value={stats.total} icon={Users} />
         <StatCard onClick={() => setFilterStatus('new')} title="New Leads" value={stats.newLeads} icon={Briefcase} />
+        <StatCard onClick={() => setFilterStatus('visit_created')} title="Visits Booked" value={stats.visitCreated} icon={CalendarIcon} />
         <StatCard onClick={() => setFilterStatus('follow_up')} title="Follow-ups" value={stats.followUps} icon={CalendarIcon} />
         <StatCard onClick={() => setFilterStatus('follow_up')} title="Overdue" value={stats.overdue} icon={Clock} changeType={stats.overdue > 0 ? 'down' : 'neutral'} change={stats.overdue > 0 ? 'Action needed!' : 'All clear'} />
       </div>
@@ -168,7 +171,7 @@ const SalesPersonDashboard = () => {
           <div className="space-y-2">
             <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Status</p>
             <div className="flex flex-wrap gap-1.5">
-              {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final'].map(s => (
+              {['all', 'new', 'visit_created', 'visited', 'follow_up', 'interested', 'not_interested', 'final'].map(s => (
                 <Chip key={s} active={filterStatus === s} onClick={() => setFilterStatus(s)}>
                   {s === 'all' ? 'All' : statusLabelLocal(s)}
                 </Chip>

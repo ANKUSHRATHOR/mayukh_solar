@@ -1,0 +1,12 @@
+-- ---------------------------------------------------------------------------
+-- User seeding removed
+-- ---------------------------------------------------------------------------
+-- This migration originally created ankushrathor1996@gmail.com with the
+-- password Admin@123, hardcoded and therefore present in this repository's git
+-- history. It is not recreated on the new project.
+--
+-- It would also have failed to apply: `gen_salt()` comes from pgcrypto, which
+-- newer Supabase projects install into the `extensions` schema, so the
+-- unqualified call does not resolve.
+--
+-- Create the first admin manually — see SETUP_NEW_SUPABASE.md.

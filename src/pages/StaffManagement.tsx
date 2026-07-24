@@ -160,18 +160,15 @@ const StaffManagement = () => {
     }
     setEditLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('update-staff', {
-        body: {
-          action: 'update',
-          staff_id: editStaff.id,
-          user_id: editStaff.user_id,
-          full_name: editName.trim(),
-          mobile: editMobile,
-          role: editRole,
-        },
+      // These admin_* RPCs exist (20260703190000_native_staff_management.sql)
+      // but postdate the last types.ts generation, hence the cast.
+      const { error } = await supabase.rpc('admin_update_staff' as any, {
+        _staff_id: editStaff.id,
+        _full_name: editName.trim(),
+        _mobile: editMobile,
+        _role: editRole,
       });
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
+      if (error) throw error;
       toast({ title: 'Staff updated successfully' });
       setEditStaff(null);
       fetchStaff();
@@ -198,35 +195,19 @@ const StaffManagement = () => {
     navigate('/login', { replace: true });
   };
 
-  const invokeStaffFn = async (body: Record<string, unknown>) => {
-    const session = await ensureSession();
-    if (!session) {
-      await handleAuthFailure();
-      throw new Error('Session expired');
-    }
-    const { data, error } = await supabase.functions.invoke('update-staff', { body });
-    const msg = (error?.message || data?.error || '').toString();
-    if (/invalid token|not authenticated|jwt/i.test(msg) || error?.context?.status === 401) {
-      await handleAuthFailure();
-      throw new Error('Session expired');
-    }
-    if (error) throw new Error(error.message);
-    if (data?.error) throw new Error(data.error);
-    return data;
-  };
-
   const handleDelete = async () => {
     if (!deleteStaff) return;
     setDeleteLoading(true);
     try {
-      await invokeStaffFn({ action: 'delete', staff_id: deleteStaff.id, user_id: deleteStaff.user_id });
+      const { error } = await supabase.rpc('admin_delete_staff' as any, {
+        _staff_id: deleteStaff.id,
+      });
+      if (error) throw error;
       toast({ title: 'Staff deleted successfully' });
       setDeleteStaff(null);
       fetchStaff();
     } catch (err: any) {
-      if (err.message !== 'Session expired') {
-        toast({ title: 'Error', description: err.message, variant: 'destructive' });
-      }
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setDeleteLoading(false);
     }
@@ -236,13 +217,14 @@ const StaffManagement = () => {
     if (!resetStaff) return;
     setResetLoading(true);
     try {
-      const data = await invokeStaffFn({ action: 'reset_password', staff_id: resetStaff.id, user_id: resetStaff.user_id });
-      setTempPassword(data.temp_password);
+      const { data, error } = await supabase.rpc('admin_reset_staff_password' as any, {
+        _staff_id: resetStaff.id,
+      });
+      if (error) throw error;
+      setTempPassword(String(data ?? ''));
       toast({ title: 'Password reset successfully' });
     } catch (err: any) {
-      if (err.message !== 'Session expired') {
-        toast({ title: 'Error', description: err.message, variant: 'destructive' });
-      }
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
       setResetStaff(null);
     } finally {
       setResetLoading(false);

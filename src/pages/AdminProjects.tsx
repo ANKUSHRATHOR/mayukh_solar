@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText, User, MapPin, Zap, IndianRupee, Hash, Download, Phone } from 'lucide-react';
+import { Loader2, Search, Briefcase, Filter, UserCog, Pencil, Trash2, FileText, User, MapPin, Zap, IndianRupee, Hash, Download, Phone, CheckCircle2 } from 'lucide-react';
 import QuotationButton from '@/components/projects/QuotationButton';
 import { useToast } from '@/hooks/use-toast';
 import StatCard from '@/components/dashboard/StatCard';
@@ -17,31 +17,31 @@ import { downloadCsv } from '@/lib/exportCsv';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProjectTimeline from '@/components/projects/ProjectTimeline';
 import type { Database } from '@/integrations/supabase/types';
+import { allProjectStageMeta } from '@/lib/projectStages';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
 
-const STATUS_LABELS: Record<ProjectStatus, string> = {
-  pending_documents: 'Pending Documents',
-  pending_operator_review: 'Operator Review',
-  registration_pending: 'Registration Pending',
-  registration_done: 'Registration Done',
-  loan_process: 'Loan Process',
-  loan_done: 'Loan Done',
-  cash_file: 'Cash File',
-  material_ordered: 'Material Ordered',
-  material_dispatched: 'Material Dispatched',
-  material_delivered: 'Material Delivered',
-  installation_pending: 'Installation Pending',
-  installation_done: 'Installation Done',
-  wiring_pending: 'Wiring Pending',
-  wiring_done: 'Wiring Done',
-  net_metering_submitted: 'Net Metering Submitted',
-  inspection_scheduled: 'Inspection Scheduled',
-  inspection_completed: 'Inspection Completed',
-  inspection_failed: 'Inspection Failed',
-  net_meter_installed: 'Net Meter Installed',
-  project_completed: 'Project Completed',
+const getProjectStageIndex = (status: string): number => {
+  if (['pending_documents', 'pending_operator_review', 'registration_pending', 'registration_done'].includes(status)) return 0;
+  if (['loan_process', 'loan_done', 'cash_file'].includes(status)) return 1;
+  if (['material_ordered', 'material_dispatched', 'material_delivered'].includes(status)) return 2;
+  if (['installation_pending', 'installation_done', 'wiring_pending', 'wiring_done'].includes(status)) return 3;
+  return 4; // net_metering_submitted, inspection_scheduled, etc.
 };
+
+const STAGES = [
+  { label: 'Registration' },
+  { label: 'Approval' },
+  { label: 'Materials' },
+  { label: 'Execution' },
+  { label: 'Completion' },
+];
+
+// Derived from the shared stage definition — a hardcoded copy here fell out
+// of sync the moment the 12-stage pipeline was introduced.
+const STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(allProjectStageMeta).map(([key, meta]) => [key, meta.label])
+);
 
 const STATUS_COLORS: Record<string, string> = {
   pending_documents: 'bg-warning/15 text-warning',
@@ -49,18 +49,19 @@ const STATUS_COLORS: Record<string, string> = {
   inspection_failed: 'bg-destructive/10 text-destructive',
 };
 
-const AdminProjects = () => {
+const AdminProjects = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [projects, setProjects] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'loan'>('all');
+  const [tabFilter, setTabFilter] = useState<'immediate' | 'awaiting_loan' | 'all'>('immediate');
   const [assignDialog, setAssignDialog] = useState<{ projectId: string; type: 'welder' | 'electrician' | 'sales_person' } | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [projectToDelete, setProjectToDelete] = useState<any | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'created_desc' | 'created_asc' | 'capacity_desc' | 'amount_desc'>('created_desc');
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -180,12 +181,27 @@ const AdminProjects = () => {
       p.leads?.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
       p.k_number?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-    const matchPayment = paymentFilter === 'all' || p.payment_type === paymentFilter;
-    return matchSearch && matchStatus && matchPayment;
+    
+    // Segregate projects:
+    // Immediate = Cash OR Loan Disbursed
+    // Awaiting Loan = Loan & Not Disbursed
+    let matchTab = true;
+    if (tabFilter === 'immediate') {
+      matchTab = p.payment_type === 'cash' || p.loan_disbursed;
+    } else if (tabFilter === 'awaiting_loan') {
+      matchTab = p.payment_type === 'loan' && !p.loan_disbursed;
+    }
+    return matchSearch && matchStatus && matchTab;
+  }).sort((a, b) => {
+    if (sortBy === 'created_desc') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    if (sortBy === 'created_asc') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    if (sortBy === 'capacity_desc') return Number(b.capacity_kw || 0) - Number(a.capacity_kw || 0);
+    if (sortBy === 'amount_desc') return Number(b.final_amount || 0) - Number(a.final_amount || 0);
+    return 0;
   });
 
-  const cashCount = projects.filter(p => p.payment_type === 'cash').length;
-  const loanCount = projects.filter(p => p.payment_type === 'loan').length;
+  const immediateCount = projects.filter(p => p.payment_type === 'cash' || p.loan_disbursed).length;
+  const awaitingLoanCount = projects.filter(p => p.payment_type === 'loan' && !p.loan_disbursed).length;
   const totalRevenue = projects.reduce((s, p) => s + Number(p.final_amount || 0), 0);
   const completed = projects.filter(p => p.status === 'project_completed').length;
   const inProgress = projects.filter(p => p.status !== 'project_completed').length;
@@ -195,28 +211,28 @@ const AdminProjects = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">All Projects</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage all projects across every stage</p>
+    <div className={isEmbedded ? 'space-y-6' : 'p-6 lg:p-8 max-w-7xl mx-auto space-y-6'}>
+      {!isEmbedded && (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">All Projects</h1>
+            <p className="text-sm text-muted-foreground mt-1">Manage all projects across every stage</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => downloadCsv('projects-export.csv', [
+            { header: 'Project Code', value: (p: any) => p.project_code },
+            { header: 'Client', value: (p: any) => p.leads?.customer_name || '' },
+            { header: 'Mobile', value: (p: any) => p.leads?.mobile || '' },
+            { header: 'kW', value: (p: any) => p.capacity_kw },
+            { header: 'Final ₹', value: (p: any) => p.final_amount },
+            { header: 'Payment', value: (p: any) => p.payment_type },
+            { header: 'Status', value: (p: any) => p.status },
+            { header: 'Sales Person', value: (p: any) => staffName(p.assigned_sales_person_id || p.created_by_user_id) },
+            { header: 'K Number', value: (p: any) => p.k_number || '' },
+          ], filtered)} disabled={!projects.length}>
+            <Download className="h-4 w-4 mr-1" /> Export
+          </Button>
         </div>
-        <Button variant="outline" onClick={() => downloadCsv('projects.csv', [
-          { header: 'Created', value: (p: any) => new Date(p.created_at).toLocaleString() },
-          { header: 'Project Code', value: (p: any) => p.project_code },
-          { header: 'Customer', value: (p: any) => p.leads?.customer_name || '' },
-          { header: 'Mobile', value: (p: any) => p.leads?.mobile || '' },
-          { header: 'District', value: (p: any) => p.leads?.district || '' },
-          { header: 'kW', value: (p: any) => p.capacity_kw },
-          { header: 'Final ₹', value: (p: any) => p.final_amount },
-          { header: 'Payment', value: (p: any) => p.payment_type },
-          { header: 'Status', value: (p: any) => p.status },
-          { header: 'Sales Person', value: (p: any) => staffName(p.assigned_sales_person_id || p.created_by_user_id) },
-          { header: 'K Number', value: (p: any) => p.k_number || '' },
-        ], filtered)} disabled={!projects.length}>
-          <Download className="h-4 w-4 mr-1" /> Export
-        </Button>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard title="Total Projects" value={String(projects.length)} icon={Briefcase} change="" changeType="neutral" />
@@ -224,11 +240,11 @@ const AdminProjects = () => {
         <StatCard title="Completed" value={String(completed)} icon={Briefcase} change={`₹${(totalRevenue / 100000).toFixed(1)}L revenue`} changeType="up" />
       </div>
 
-      <Tabs value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as any)}>
+      <Tabs value={tabFilter} onValueChange={(v) => setTabFilter(v as any)}>
         <TabsList className="glass">
-          <TabsTrigger value="all">All <span className="ml-1.5 text-xs opacity-70">{projects.length}</span></TabsTrigger>
-          <TabsTrigger value="cash">Cash <span className="ml-1.5 text-xs opacity-70">{cashCount}</span></TabsTrigger>
-          <TabsTrigger value="loan">Loan <span className="ml-1.5 text-xs opacity-70">{loanCount}</span></TabsTrigger>
+          <TabsTrigger value="immediate">Immediate (Cash / Disbursed) <span className="ml-1.5 text-xs opacity-70">{immediateCount}</span></TabsTrigger>
+          <TabsTrigger value="awaiting_loan">Awaiting Loan <span className="ml-1.5 text-xs opacity-70">{awaitingLoanCount}</span></TabsTrigger>
+          <TabsTrigger value="all">All Projects <span className="ml-1.5 text-xs opacity-70">{projects.length}</span></TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -246,6 +262,17 @@ const AdminProjects = () => {
             {Object.entries(STATUS_LABELS).map(([k, v]) => (
               <SelectItem key={k} value={k}>{v}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_desc">Newest Created</SelectItem>
+            <SelectItem value="created_asc">Oldest Created</SelectItem>
+            <SelectItem value="capacity_desc">Highest Capacity (kW)</SelectItem>
+            <SelectItem value="amount_desc">Highest Value (₹)</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -303,10 +330,19 @@ const AdminProjects = () => {
                           </a>
                         )}
                       </div>
-                      <div className="flex flex-col items-start sm:items-end gap-2">
-                        <Badge className={`${STATUS_COLORS[p.status] || 'bg-accent text-accent-foreground'} w-fit rounded-full px-3 py-1 text-xs font-semibold`}>
-                          {STATUS_LABELS[p.status as ProjectStatus] || p.status}
-                        </Badge>
+                       <div className="flex flex-col items-start sm:items-end gap-2">
+                        <div className="flex flex-wrap gap-1.5 justify-end">
+                          <Badge className={`${STATUS_COLORS[p.status] || 'bg-accent text-accent-foreground'} w-fit rounded-full px-3 py-1 text-xs font-semibold`}>
+                            {STATUS_LABELS[p.status as ProjectStatus] || p.status}
+                          </Badge>
+                          {p.payment_type === 'cash' ? (
+                            <Badge className="bg-emerald-500/15 text-emerald-600 border border-emerald-500/25 rounded-full px-3 py-1 text-xs font-semibold">Cash Project</Badge>
+                          ) : p.loan_disbursed ? (
+                            <Badge className="bg-blue-500/15 text-blue-600 border border-blue-500/25 rounded-full px-3 py-1 text-xs font-semibold">Loan Disbursed ({p.loan_bank})</Badge>
+                          ) : (
+                            <Badge className="bg-amber-500/15 text-amber-600 border border-amber-500/25 rounded-full px-3 py-1 text-xs font-semibold">Awaiting Loan ({p.loan_bank})</Badge>
+                          )}
+                        </div>
                         {p.leads?.mobile && (
                           <Button asChild size="sm" className="gradient-primary text-primary-foreground">
                             <a href={`tel:${p.leads.mobile}`}>
@@ -314,6 +350,44 @@ const AdminProjects = () => {
                             </a>
                           </Button>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Stage Progress Pipeline */}
+                    <div className="relative py-3 px-1 my-1">
+                      <div className="relative flex items-center justify-between w-full">
+                        {/* Connecting Track */}
+                        <div className="absolute left-3 right-3 top-1/2 h-0.5 bg-muted -translate-y-1/2 z-0" />
+                        <div
+                          className="absolute left-3 top-1/2 h-0.5 bg-primary -translate-y-1/2 transition-all duration-300 z-0"
+                          style={{
+                            width: `${(getProjectStageIndex(p.status) / (STAGES.length - 1)) * 92}%`
+                          }}
+                        />
+                        {/* Stage Nodes */}
+                        {STAGES.map((stage, idx) => {
+                          const currentStageIdx = getProjectStageIndex(p.status);
+                          const isCompleted = idx < currentStageIdx;
+                          const isActive = idx === currentStageIdx;
+                          return (
+                            <div key={stage.label} className="relative z-10 flex flex-col items-center">
+                              <span
+                                className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold border transition-all ${
+                                  isCompleted
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : isActive
+                                    ? 'bg-background text-primary border-primary ring-2 ring-primary/20'
+                                    : 'bg-background text-muted-foreground border-border'
+                                }`}
+                              >
+                                {idx + 1}
+                              </span>
+                              <span className="hidden sm:block text-[9px] font-semibold mt-1 text-muted-foreground bg-background px-1 uppercase tracking-wider">
+                                {stage.label}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -374,6 +448,32 @@ const AdminProjects = () => {
                   </div>
 
                   <div className="flex flex-col gap-3 border-t border-border bg-muted/20 p-5 xl:w-80 xl:border-l xl:border-t-0">
+                    {p.payment_type === 'loan' && !p.loan_disbursed && (
+                      <Button
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm h-10 gap-1.5"
+                        onClick={async () => {
+                          if (!confirm(`Mark loan as disbursed for ${p.leads?.customer_name}? This will transition project status to material procurement.`)) return;
+                          try {
+                            const { error } = await supabase
+                              .from('projects')
+                              .update({
+                                loan_disbursed: true,
+                                loan_disbursed_at: new Date().toISOString(),
+                                status: 'material_ordered'
+                              })
+                              .eq('id', p.id);
+                            if (error) throw error;
+                            toast({ title: 'Loan Disbursed!', description: 'Project shifted to Active status queue.' });
+                            fetchData();
+                          } catch (err: any) {
+                            toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                          }
+                        }}
+                      >
+                        <CheckCircle2 className="h-4 w-4" /> Disburse Loan
+                      </Button>
+                    )}
+
                     <Select value={p.status} onValueChange={(val) => handleStatusOverride(p.id, val as ProjectStatus)}>
                       <SelectTrigger className="h-10 w-full bg-card text-sm font-medium">
                         <SelectValue />

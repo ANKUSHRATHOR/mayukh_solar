@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 
 import type { Database } from '@/integrations/supabase/types';
+import { allProjectStageMeta } from '@/lib/projectStages';
+import { humanizeStatus } from '@/lib/statusMeta';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
 
@@ -54,28 +56,6 @@ const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => v
   </button>
 );
 
-const statusLabels: Record<ProjectStatus, string> = {
-  pending_documents: 'Pending Documents',
-  pending_operator_review: 'Pending Review',
-  registration_pending: 'Registration Pending',
-  registration_done: 'Registration Done',
-  loan_process: 'Loan Process',
-  loan_done: 'Loan Done',
-  cash_file: 'Cash File',
-  material_ordered: 'Material Ordered',
-  material_dispatched: 'Material Dispatched',
-  material_delivered: 'Material Delivered',
-  installation_pending: 'Installation Pending',
-  installation_done: 'Installation Done',
-  wiring_pending: 'Wiring Pending',
-  wiring_done: 'Wiring Done',
-  net_metering_submitted: 'Net Metering Submitted',
-  inspection_scheduled: 'Inspection Scheduled',
-  inspection_completed: 'Inspection Completed',
-  inspection_failed: 'Inspection Failed',
-  net_meter_installed: 'Net Meter Installed',
-  project_completed: 'Project Completed',
-};
 
 const statusColors: Record<string, string> = {
   pending_operator_review: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
@@ -94,14 +74,46 @@ const statusColors: Record<string, string> = {
 
 type TabFilter = 'review' | 'registration' | 'finance' | 'material' | 'installation' | 'netmetering' | 'completed' | 'all';
 
+/**
+ * Buckets on the 12-stage pipeline.
+ *
+ * Legacy stages are listed alongside their new equivalents so any row that
+ * predates the migration still lands in a bucket rather than vanishing from
+ * every tab.
+ */
 const tabFilters: Record<TabFilter, ProjectStatus[]> = {
-  review: ['pending_operator_review'],
-  registration: ['registration_pending', 'registration_done'],
-  finance: ['loan_process', 'loan_done', 'cash_file'],
-  material: ['material_ordered', 'material_dispatched', 'material_delivered'],
-  installation: ['installation_pending', 'installation_done', 'wiring_pending', 'wiring_done'],
-  netmetering: ['net_metering_submitted', 'inspection_scheduled', 'inspection_completed', 'inspection_failed', 'net_meter_installed'],
-  completed: ['project_completed'],
+  review: ['documents_pending', 'pending_documents', 'pending_operator_review'] as ProjectStatus[],
+  registration: ['documents_approved', 'registration_pending', 'registration_done'] as ProjectStatus[],
+  finance: [
+    'loan_application_pending',
+    'loan_approved',
+    'payment_pending',
+    'loan_process',
+    'loan_done',
+    'cash_file',
+  ] as ProjectStatus[],
+  material: [
+    'installation_scheduled',
+    'material_ordered',
+    'material_dispatched',
+    'material_delivered',
+  ] as ProjectStatus[],
+  installation: [
+    'installation_completed',
+    'installation_pending',
+    'installation_done',
+    'wiring_pending',
+    'wiring_done',
+  ] as ProjectStatus[],
+  netmetering: [
+    'net_meter_applied',
+    'net_meter_installed',
+    'net_metering_submitted',
+    'inspection_scheduled',
+    'inspection_completed',
+    'inspection_failed',
+  ] as ProjectStatus[],
+  completed: ['project_completed', 'closed'] as ProjectStatus[],
   all: [],
 };
 
@@ -203,7 +215,6 @@ const OperatorDashboard = () => {
     <div className="p-4 lg:p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Operator Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Manage projects, review documents, and track progress</p>
       </div>
 
       {/* Stats */}
@@ -326,7 +337,7 @@ const OperatorDashboard = () => {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-bold text-foreground">{project.project_code}</p>
                           <Badge className={statusColors[project.status] || 'bg-muted text-muted-foreground'}>
-                            {statusLabels[project.status]}
+                            {allProjectStageMeta[project.status]?.label ?? humanizeStatus(project.status)}
                           </Badge>
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-muted-foreground">

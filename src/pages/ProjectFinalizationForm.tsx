@@ -118,6 +118,61 @@ const ProjectFinalizationForm = () => {
     fetchProject();
   }, [projectId, navigate, toast]);
 
+  // Fetch Lead Details to pre-fill if creating a new project/deal
+  useEffect(() => {
+    const fetchLeadAndPreFill = async () => {
+      if (projectId || !leadId) return;
+      setPageLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('k_number, kw_interest, plant_details, quotation_details, notes')
+          .eq('id', leadId)
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          const plant = data.plant_details as any || {};
+          
+          let quote = {} as any;
+          if (Array.isArray(data.quotation_details)) {
+            quote = data.quotation_details.find((q: any) => q?.status === 'accepted') || data.quotation_details[0] || {};
+          } else if (data.quotation_details && typeof data.quotation_details === 'object') {
+            quote = data.quotation_details;
+          }
+          
+          const rawCapacity = quote.capacity_kw ? String(quote.capacity_kw) : (data.kw_interest ? String(data.kw_interest) : (plant.inverter_wt ? String(plant.inverter_wt).replace(/[^0-9.]/g, '') : ''));
+          const rawPanelWatt = quote.panel_watt ? String(quote.panel_watt) : (plant.panel_wt ? String(plant.panel_wt).replace(/[^0-9.]/g, '') : '');
+          const rawPanelQty = quote.panel_qty ? String(quote.panel_qty) : (plant.panel_qty ? String(plant.panel_qty) : '');
+          const rawInvCapacity = quote.inverter_capacity ? String(quote.inverter_capacity) : (plant.inverter_wt ? String(plant.inverter_wt).replace(/[^0-9.]/g, '') : '');
+          
+          setForm({
+            k_number: data.k_number || '',
+            capacity_kw: rawCapacity,
+            panel_watt: rawPanelWatt,
+            panel_qty: rawPanelQty,
+            panel_brand: quote.panel_brand || plant.panel_make || '',
+            inverter_capacity: rawInvCapacity || rawCapacity,
+            inverter_brand: quote.inverter_brand || plant.inverter || '',
+            structure_type: quote.structure_type || plant.structure_type_gauge_make || '',
+            final_amount: quote.quote_price ? String(quote.quote_price) : (plant.total_cost ? String(plant.total_cost) : ''),
+            discount: plant.discount_amount ? String(plant.discount_amount) : '',
+            payment_type: '',
+            loan_bank: '',
+            expected_install_date: '',
+            special_notes: data.notes || '',
+          });
+        }
+      } catch (err: any) {
+        console.error('Error pre-filling lead data:', err);
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    fetchLeadAndPreFill();
+  }, [projectId, leadId]);
+
   // Admin: load staff lists per role for assignment dropdowns
   useEffect(() => {
     if (!isAdmin) return;
@@ -139,33 +194,33 @@ const ProjectFinalizationForm = () => {
     if (!projectId && !leadId) { toast({ title: 'Missing lead', variant: 'destructive' }); return; }
     if (!form.k_number.trim()) { toast({ title: 'K Number required', variant: 'destructive' }); return; }
     if (!form.capacity_kw) { toast({ title: 'Plant capacity required', variant: 'destructive' }); return; }
-    if (!form.panel_watt) { toast({ title: 'Panel watt required', variant: 'destructive' }); return; }
-    if (!form.panel_qty) { toast({ title: 'Panel quantity required', variant: 'destructive' }); return; }
-    if (!form.panel_brand.trim()) { toast({ title: 'Panel brand required', variant: 'destructive' }); return; }
-    if (!form.inverter_capacity) { toast({ title: 'Inverter capacity required', variant: 'destructive' }); return; }
-    if (!form.inverter_brand.trim()) { toast({ title: 'Inverter brand required', variant: 'destructive' }); return; }
-    if (!form.structure_type) { toast({ title: 'Structure type required', variant: 'destructive' }); return; }
-    if (!form.final_amount) { toast({ title: 'Final amount required', variant: 'destructive' }); return; }
-    if (!form.payment_type) { toast({ title: 'Payment type required', variant: 'destructive' }); return; }
-    if (form.payment_type === 'loan' && !form.loan_bank.trim()) { toast({ title: 'Loan bank name required', variant: 'destructive' }); return; }
 
     setLoading(true);
     try {
+      const parseNum = (val: any) => {
+        const n = parseFloat(String(val));
+        return isNaN(n) ? null : n;
+      };
+      const parseIntNum = (val: any) => {
+        const n = parseInt(String(val), 10);
+        return isNaN(n) ? null : n;
+      };
+
       let project;
 
       if (projectId) {
         const updatePayload: any = {
           k_number: form.k_number.trim(),
-          capacity_kw: parseFloat(form.capacity_kw),
-          panel_watt: parseInt(form.panel_watt),
-          panel_qty: parseInt(form.panel_qty),
-          panel_brand: form.panel_brand.trim(),
-          inverter_capacity: parseFloat(form.inverter_capacity),
-          inverter_brand: form.inverter_brand.trim(),
-          structure_type: form.structure_type as StructureType,
-          final_amount: parseFloat(form.final_amount),
+          capacity_kw: parseNum(form.capacity_kw) || null,
+          panel_watt: parseIntNum(form.panel_watt),
+          panel_qty: parseIntNum(form.panel_qty),
+          panel_brand: form.panel_brand.trim() || null,
+          inverter_capacity: parseNum(form.inverter_capacity),
+          inverter_brand: form.inverter_brand.trim() || null,
+          structure_type: form.structure_type as StructureType || null,
+          final_amount: parseNum(form.final_amount) || null,
           discount: form.discount ? parseFloat(form.discount) : 0,
-          payment_type: form.payment_type as PaymentType,
+          payment_type: form.payment_type as PaymentType || null,
           loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
           expected_install_date: form.expected_install_date || null,
           special_notes: form.special_notes.trim() || null,
@@ -190,35 +245,37 @@ const ProjectFinalizationForm = () => {
           lead_id: leadId,
           project_code: projectCode as string,
           k_number: form.k_number.trim(),
-          capacity_kw: parseFloat(form.capacity_kw),
-          panel_watt: parseInt(form.panel_watt),
-          panel_qty: parseInt(form.panel_qty),
-          panel_brand: form.panel_brand.trim(),
-          inverter_capacity: parseFloat(form.inverter_capacity),
-          inverter_brand: form.inverter_brand.trim(),
-          structure_type: form.structure_type as StructureType,
-          final_amount: parseFloat(form.final_amount),
+          capacity_kw: parseNum(form.capacity_kw) || null,
+          panel_watt: parseIntNum(form.panel_watt),
+          panel_qty: parseIntNum(form.panel_qty),
+          panel_brand: form.panel_brand.trim() || null,
+          inverter_capacity: parseNum(form.inverter_capacity),
+          inverter_brand: form.inverter_brand.trim() || null,
+          structure_type: form.structure_type as StructureType || null,
+          final_amount: parseNum(form.final_amount) || null,
           discount: form.discount ? parseFloat(form.discount) : 0,
-          payment_type: form.payment_type as PaymentType,
+          payment_type: form.payment_type as PaymentType || null,
           loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
           expected_install_date: form.expected_install_date || null,
           special_notes: form.special_notes.trim() || null,
           created_by_user_id: user!.id,
           assigned_sales_person_id: user!.id,
-          status: 'pending_documents',
+          // New pipeline stage. 'pending_documents' is the legacy value and
+          // would create the project off-pipeline.
+          status: 'documents_pending',
         }).select().single();
 
         if (error) throw error;
         project = data;
 
-        await supabase.from('leads').update({ status: 'final' }).eq('id', leadId);
+        await supabase.from('leads').update({ status: 'interested' }).eq('id', leadId);
       }
 
       toast({
-        title: projectId ? 'Project Updated!' : 'Project Created!',
-        description: projectId ? 'Project details saved successfully.' : `Project ${project.project_code} created. Now upload required documents.`,
+        title: projectId ? 'Deal Updated!' : 'Deal Created!',
+        description: projectId ? 'Deal details saved successfully.' : `Deal ${project.project_code} created. You can now manage documents and quotations on the Deals Dashboard.`,
       });
-      navigate(`/projects/${project.id}/documents`);
+      navigate('/deals');
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {

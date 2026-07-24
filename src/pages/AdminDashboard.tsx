@@ -14,6 +14,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import AdminLeadsList from './AdminLeadsList';
+import AdminProjects from './AdminProjects';
+import Tasks from './Tasks';
+import AdminAttendance from './AdminAttendance';
 
 interface DashboardStats {
   totalLeads: number;
@@ -145,17 +148,26 @@ const AdminDashboard = () => {
         </Button>
       </div>
 
-      <Tabs defaultValue="dashboard" className="space-y-5">
-        <TabsList className="grid w-full sm:w-auto grid-cols-2 sm:inline-grid">
-          <TabsTrigger value="dashboard" className="gap-2 data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground">
-            <LayoutDashboard className="h-4 w-4" /> Dashboard
+      <Tabs defaultValue="overview" className="space-y-5">
+        <TabsList className="grid w-full sm:w-auto grid-cols-2 lg:flex lg:w-fit gap-1 bg-muted p-1 rounded-lg">
+          <TabsTrigger value="overview" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+            <LayoutDashboard className="h-3.5 w-3.5" /> Overview
           </TabsTrigger>
-          <TabsTrigger value="leads" className="gap-2 data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground">
-            <Users className="h-4 w-4" /> Leads
+          <TabsTrigger value="leads" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+            <Users className="h-3.5 w-3.5" /> Leads Cockpit
+          </TabsTrigger>
+          <TabsTrigger value="projects" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+            <Briefcase className="h-3.5 w-3.5" /> Projects Pipeline
+          </TabsTrigger>
+          <TabsTrigger value="tasks" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+            <Clock className="h-3.5 w-3.5" /> Task Board
+          </TabsTrigger>
+          <TabsTrigger value="attendance" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Staff Attendance
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="dashboard" className="space-y-6 mt-0">
+        <TabsContent value="overview" className="space-y-6 mt-0">
           <Card className="shadow-card border-border">
             <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground shrink-0">
@@ -244,8 +256,20 @@ const AdminDashboard = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="leads" className="mt-0 -mx-4 sm:-mx-6 lg:-mx-8">
-          <AdminLeadsList />
+        <TabsContent value="leads" className="mt-0">
+          <AdminLeadsList isEmbedded={true} />
+        </TabsContent>
+
+        <TabsContent value="projects" className="mt-0">
+          <AdminProjects isEmbedded={true} />
+        </TabsContent>
+
+        <TabsContent value="tasks" className="mt-0">
+          <Tasks isEmbedded={true} />
+        </TabsContent>
+
+        <TabsContent value="attendance" className="mt-0">
+          <AdminAttendance isEmbedded={true} />
         </TabsContent>
       </Tabs>
     </div>

@@ -54,9 +54,6 @@ const StaffContacts = () => {
         <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
           <Users className="h-6 w-6 text-primary" /> Staff Contacts
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Directory of all active team members. Tap the phone icon to call.
-        </p>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">

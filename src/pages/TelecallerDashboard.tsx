@@ -135,7 +135,6 @@ const TelecallerDashboard = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Telecaller Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">Create and track your leads</p>
         </div>
         <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
           <PhoneCall className="mr-2 h-4 w-4" /> Create New Lead

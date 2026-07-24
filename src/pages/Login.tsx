@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Phone, Lock, ArrowRight, Sun, Mail, KeyRound, ShieldCheck } from 'lucide-react';
+import { Phone, Lock, ArrowRight, Sun, Mail, KeyRound, ShieldCheck, User } from 'lucide-react';
 import logo from '@/assets/mayukh-solar-logo.png';
 import SolarScene from '@/components/three/SolarScene';
 
 
-type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'email_password' | 'forgot_password';
+type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'email_password' | 'forgot_password' | 'signup';
 
 const Login = () => {
   const [mobile, setMobile] = useState('');
@@ -22,8 +22,32 @@ const Login = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  const [signupName, setSignupName] = useState('');
+  const [signupMobile, setSignupMobile] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    const searchParams = new URLSearchParams(window.location.search);
+    
+    let errorMsg = searchParams.get('error_description');
+    if (hash && hash.includes('error_description')) {
+      const params = new URLSearchParams(hash.substring(1));
+      errorMsg = params.get('error_description');
+    }
+    
+    if (errorMsg) {
+      toast({
+        title: 'Authentication Error',
+        description: decodeURIComponent(errorMsg).replace(/\+/g, ' '),
+        variant: 'destructive',
+      });
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [toast]);
 
   const mobileEmail = `${mobile}@mayukhsolar.app`;
   const validateMobile = (num: string) => /^[6-9]\d{9}$/.test(num);
@@ -130,6 +154,78 @@ const Login = () => {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      toast({ title: 'Google Login Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    if (!signupName.trim()) {
+      toast({ title: 'Full Name required', description: 'Please enter your full name.', variant: 'destructive' }); return;
+    }
+    if (!signupMobile.trim()) {
+      toast({ title: 'Mobile Number required', description: 'Please enter your 10-digit mobile number.', variant: 'destructive' }); return;
+    }
+    if (!validateMobile(signupMobile)) {
+      toast({ title: 'Invalid mobile number', description: 'Enter a valid 10-digit mobile number starting with 6-9.', variant: 'destructive' }); return;
+    }
+    if (!signupEmail.trim()) {
+      toast({ title: 'Email address required', description: 'Please enter your email address.', variant: 'destructive' }); return;
+    }
+    if (!validateEmail(signupEmail)) {
+      toast({ title: 'Invalid email address', description: 'Please enter a valid email format (e.g. name@domain.com).', variant: 'destructive' }); return;
+    }
+    if (!signupPassword) {
+      toast({ title: 'Password required', description: 'Please choose a password.', variant: 'destructive' }); return;
+    }
+    if (signupPassword.length < 6) {
+      toast({ title: 'Password too short', description: 'Password must be at least 6 characters.', variant: 'destructive' }); return;
+    }
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: signupEmail,
+        password: signupPassword,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            full_name: signupName,
+            phone: signupMobile,
+          }
+        }
+      });
+      if (error) throw error;
+      
+      toast({
+        title: 'Sign Up Successful!',
+        description: data.session ? 'Redirecting to dashboard...' : 'Account created. Please check your email for confirmation.',
+      });
+      
+      if (data.session) {
+        navigate('/');
+      } else {
+        setMode('choose');
+      }
+    } catch (err: any) {
+      toast({ title: 'Sign Up Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleResetPassword = async () => {
     if (newPassword.length < 8) {
       toast({ title: 'Weak password', description: 'Password must be at least 8 characters', variant: 'destructive' });
@@ -159,6 +255,10 @@ const Login = () => {
     setPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    setSignupName('');
+    setSignupMobile('');
+    setSignupEmail('');
+    setSignupPassword('');
   };
 
   return (
@@ -274,6 +374,35 @@ const Login = () => {
                   >
                     <KeyRound className="mr-2 h-4 w-4" /> Email Login
                   </Button>
+                </div>
+                <div className="relative flex items-center justify-center py-1">
+                  <div className="absolute left-0 right-0 top-1/2 h-[1px] bg-border z-0" />
+                  <span className="relative z-10 px-3 bg-background text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Or continue with</span>
+                </div>
+                <Button
+                  onClick={handleGoogleLogin}
+                  variant="outline"
+                  className="w-full h-12 font-semibold border-border hover:bg-muted/50 gap-2.5"
+                  disabled={loading}
+                >
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="matrix(1, 0, 0, 1, 0, 0)">
+                      <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.6h3.3c1.93,-1.78 3.04,-4.4 3.04,-7.4C21.68,11.8 21.56,11.43 21.35,11.1z" fill="#4285F4" />
+                      <path d="M12,20.82c2.38,0 4.38,-0.78 5.84,-2.12l-3.3,-2.6c-0.91,0.61 -2.08,0.97 -3.27,0.97 -2.52,0 -4.66,-1.7 -5.42,-3.98H2.43v2.6C3.9,18.72 7.71,20.82 12,20.82z" fill="#34A853" />
+                      <path d="M6.58,13.19c-0.2,-0.6 -0.31,-1.24 -0.31,-1.9c0,-0.66 0.11,-1.3 0.31,-1.9V6.79H2.43c-0.78,1.57 -1.23,3.34 -1.23,5.21c0,1.87 0.45,3.64 1.23,5.21l4.15,-3.21z" fill="#FBBC05" />
+                      <path d="M12,5.23c1.3,0 2.47,0.45 3.39,1.32l2.54,-2.54C16.37,2.58 14.37,1.82 12,1.82c-4.29,0 -8.1,2.1 -9.57,5.18l4.15,3.21c0.76,-2.28 2.9,-3.98 5.42,-3.98z" fill="#EA4335" />
+                    </g>
+                  </svg>
+                  Google Account
+                </Button>
+                <div className="text-center pt-2">
+                  <span className="text-xs text-muted-foreground">Don't have an account? </span>
+                  <button
+                    onClick={() => setMode('signup')}
+                    className="text-xs text-primary hover:underline font-semibold"
+                  >
+                    Sign Up
+                  </button>
                 </div>
               </div>
             )}
@@ -489,6 +618,84 @@ const Login = () => {
                   className="text-sm text-primary hover:underline font-medium"
                 >
                   Forgot password?
+                </button>
+              </div>
+            )}
+
+            {/* Mode: Sign Up */}
+            {mode === 'signup' && (
+              <div className="space-y-4">
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Enter full name"
+                    value={signupName}
+                    onChange={e => setSignupName(e.target.value)}
+                    className="pl-10 h-12"
+                  />
+                </div>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="tel"
+                    placeholder="Enter mobile number"
+                    value={signupMobile}
+                    onChange={e => setSignupMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    className="pl-10 h-12"
+                    maxLength={10}
+                  />
+                </div>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    placeholder="Enter email address"
+                    value={signupEmail}
+                    onChange={e => setSignupEmail(e.target.value)}
+                    className="pl-10 h-12"
+                  />
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="password"
+                    placeholder="Choose password (min 6 chars)"
+                    value={signupPassword}
+                    onChange={e => setSignupPassword(e.target.value)}
+                    className="pl-10 h-12"
+                    onKeyDown={e => e.key === 'Enter' && handleSignUp()}
+                  />
+                </div>
+                <Button
+                  onClick={handleSignUp}
+                  className="w-full h-12 gradient-primary text-primary-foreground font-semibold"
+                  disabled={loading}
+                >
+                  {loading ? 'Creating Account...' : 'Register'} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <div className="relative flex items-center justify-center py-1">
+                  <div className="absolute left-0 right-0 top-1/2 h-[1px] bg-border z-0" />
+                  <span className="relative z-10 px-3 bg-background text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Or register with</span>
+                </div>
+                <Button
+                  onClick={handleGoogleLogin}
+                  variant="outline"
+                  className="w-full h-12 font-semibold border-border hover:bg-muted/50 gap-2.5"
+                  disabled={loading}
+                >
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="matrix(1, 0, 0, 1, 0, 0)">
+                      <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.6h3.3c1.93,-1.78 3.04,-4.4 3.04,-7.4C21.68,11.8 21.56,11.43 21.35,11.1z" fill="#4285F4" />
+                      <path d="M12,20.82c2.38,0 4.38,-0.78 5.84,-2.12l-3.3,-2.6c-0.91,0.61 -2.08,0.97 -3.27,0.97 -2.52,0 -4.66,-1.7 -5.42,-3.98H2.43v2.6C3.9,18.72 7.71,20.82 12,20.82z" fill="#34A853" />
+                      <path d="M6.58,13.19c-0.2,-0.6 -0.31,-1.24 -0.31,-1.9c0,-0.66 0.11,-1.3 0.31,-1.9V6.79H2.43c-0.78,1.57 -1.23,3.34 -1.23,5.21c0,1.87 0.45,3.64 1.23,5.21l4.15,-3.21z" fill="#FBBC05" />
+                      <path d="M12,5.23c1.3,0 2.47,0.45 3.39,1.32l2.54,-2.54C16.37,2.58 14.37,1.82 12,1.82c-4.29,0 -8.1,2.1 -9.57,5.18l4.15,3.21c0.76,-2.28 2.9,-3.98 5.42,-3.98z" fill="#EA4335" />
+                    </g>
+                  </svg>
+                  Google Account
+                </Button>
+                <button onClick={resetMode} className="text-sm text-muted-foreground hover:text-primary w-full text-center transition-colors">
+                  ← Back to login options
                 </button>
               </div>
             )}

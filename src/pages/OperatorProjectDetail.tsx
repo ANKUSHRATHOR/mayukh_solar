@@ -16,11 +16,18 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, CheckCircle2, XCircle, FileText, Eye,
   ClipboardCheck, CreditCard, Package, Truck, Wrench, Zap,
-  Calendar, Search, Award, PartyPopper, Download, Share2, PhoneCall
+  Calendar, Search, Award, PartyPopper, Download, Share2, PhoneCall, AlertTriangle, MessageCircle,
+  Wallet, Upload, Phone
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import DocumentPoolDialog from '@/components/projects/DocumentPoolDialog';
 import StageChecklist from '@/components/projects/StageChecklist';
 import QuotationButton from '@/components/projects/QuotationButton';
+import ManagePaymentsDialog from '@/components/projects/ManagePaymentsDialog';
+import { sendStatusChangeNotification, sendBillNotification } from '@/lib/whatsapp';
+import { allProjectStageMeta, nextStage, stageIndex } from '@/lib/projectStages';
+import { humanizeStatus } from '@/lib/statusMeta';
 
 import type { Database } from '@/integrations/supabase/types';
 
@@ -45,51 +52,41 @@ const docLabels: Record<DocumentType, string> = {
   bank_passbook: 'Bank Passbook',
   customer_email: 'Customer Email',
   customer_mobile: 'Customer Mobile',
+  pan_card: 'PAN Card',
+  property_papers: 'Property Papers',
+  feasibility: 'Feasibility Report',
+  panel_serial_numbers: 'Panel Serial Numbers',
+  overall_structure: 'Overall Structure Photo',
+  wiring_connection: 'Wiring Connection Photo',
+  netmetering: 'Net Metering Document',
+  subsidy: 'Subsidy Document',
+  invoice: 'Invoice',
+  other: 'Other',
 };
 
-const statusLabels: Record<ProjectStatus, string> = {
-  pending_documents: 'Pending Documents',
-  pending_operator_review: 'Pending Review',
-  registration_pending: 'Registration Pending',
-  registration_done: 'Registration Done',
-  loan_process: 'Loan Process',
-  loan_done: 'Loan Done',
-  cash_file: 'Cash File',
-  material_ordered: 'Material Ordered',
-  material_dispatched: 'Material Dispatched',
-  material_delivered: 'Material Delivered',
-  installation_pending: 'Installation Pending',
-  installation_done: 'Installation Done',
-  wiring_pending: 'Wiring Pending',
-  wiring_done: 'Wiring Done',
-  net_metering_submitted: 'Net Metering Submitted',
-  inspection_scheduled: 'Inspection Scheduled',
-  inspection_completed: 'Inspection Completed',
-  inspection_failed: 'Inspection Failed',
-  net_meter_installed: 'Net Meter Installed',
-  project_completed: 'Project Completed',
-};
+/** Label for any stage value, new or legacy. */
+const labelOf = (status: string | null | undefined): string =>
+  status ? (allProjectStageMeta[status]?.label ?? humanizeStatus(status)) : "—";
 
-// Define allowed next statuses per current status
-const nextStatusMap: Partial<Record<ProjectStatus, ProjectStatus[]>> = {
-  pending_operator_review: ['registration_pending'],
-  registration_pending: ['registration_done'],
-  registration_done: ['loan_process', 'cash_file'],
-  loan_process: ['loan_done'],
-  loan_done: ['material_ordered'],
-  cash_file: ['material_ordered'],
-  material_ordered: ['material_dispatched'],
-  material_dispatched: ['material_delivered'],
-  material_delivered: ['installation_pending'],
-  installation_pending: ['installation_done'],
-  installation_done: ['wiring_pending'],
-  wiring_pending: ['wiring_done'],
-  wiring_done: ['net_metering_submitted'],
-  net_metering_submitted: ['inspection_scheduled'],
-  inspection_scheduled: ['inspection_completed', 'inspection_failed'],
-  inspection_failed: ['inspection_scheduled'],
-  inspection_completed: ['net_meter_installed'],
-  net_meter_installed: ['project_completed'],
+/**
+ * Allowed next statuses on the 12-stage pipeline.
+ *
+ * Derived from the shared definition rather than hardcoded, so cash projects
+ * skip the two loan stages automatically. A project sitting on a legacy stage
+ * is offered the start of the new pipeline so it can never be stranded.
+ */
+const allowedNextStatuses = (
+  current: ProjectStatus,
+  paymentType: string | null | undefined
+): ProjectStatus[] => {
+  const next = nextStage(current, paymentType);
+  if (next) return [next.stage as ProjectStatus];
+
+  const onPipeline = stageIndex(current, paymentType) >= 0;
+  if (onPipeline) return []; // End of the pipeline.
+
+  // Legacy stage: offer the pipeline entry point.
+  return ['documents_pending' as ProjectStatus];
 };
 
 const OperatorProjectDetail = () => {
@@ -116,19 +113,30 @@ const OperatorProjectDetail = () => {
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [statusNote, setStatusNote] = useState('');
   const [statusNotesHistory, setStatusNotesHistory] = useState<any[]>([]);
+  const [isDocOpen, setIsDocOpen] = useState(false);
+  const [isPaymentsOpen, setIsPaymentsOpen] = useState(false);
+  const [payments, setPayments] = useState<any[]>([]);
+  
+  // WhatsApp phone prompt state
+  const [isPhonePromptOpen, setIsPhonePromptOpen] = useState(false);
+  const [targetPhone, setTargetPhone] = useState('');
+  const [pendingDocUrl, setPendingDocUrl] = useState('');
+  const [pendingDocLabel, setPendingDocLabel] = useState('');
 
   const fetchData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const [projRes, docsRes, staffRes] = await Promise.all([
-      supabase.from('projects').select('*').eq('id', projectId).single(),
+    const [projRes, docsRes, staffRes, paymentsRes] = await Promise.all([
+      supabase.from('projects').select('*, leads(*)').eq('id', projectId).single(),
       supabase.from('documents').select('*').eq('project_id', projectId),
       supabase.from('user_roles').select('user_id, role').in('role', ['welder', 'electrician']),
+      supabase.from('project_payments').select('*').eq('project_id', projectId),
     ]);
 
     const proj = projRes.data;
     setProject(proj);
     setDocs((docsRes.data as DocRecord[]) || []);
+    setPayments((paymentsRes.data as any[]) || []);
     setLoanBank(proj?.loan_bank || '');
     setSelectedWelder(proj?.assigned_welder_id || '');
     setSelectedElectrician(proj?.assigned_electrician_id || '');
@@ -210,6 +218,38 @@ const OperatorProjectDetail = () => {
       toast({ title: 'Link copied', description: 'Share link copied to clipboard.' });
     } catch {
       toast({ title: 'Share link', description: url });
+    }
+  };
+
+  const handleSendDocWhatsApp = async (fileUrl: string, label: string, phoneOverride?: string) => {
+    if (!project?.leads?.customer_name) {
+      toast({ title: 'Cannot send WhatsApp', description: 'Customer name is missing.', variant: 'destructive' });
+      return;
+    }
+
+    if (!phoneOverride) {
+      setPendingDocUrl(fileUrl);
+      setPendingDocLabel(label);
+      setTargetPhone(project?.leads?.mobile || '');
+      setIsPhonePromptOpen(true);
+      return;
+    }
+
+    const url = await getSignedUrl(fileUrl);
+    if (!url) return;
+
+    const { success, error } = await sendBillNotification(
+      project.leads.customer_name,
+      phoneOverride,
+      project.project_code,
+      label,
+      url
+    );
+
+    if (success) {
+      toast({ title: `${label} sent on WhatsApp successfully!` });
+    } else {
+      toast({ title: 'Failed to send WhatsApp', description: error, variant: 'destructive' });
     }
   };
 
@@ -343,7 +383,7 @@ const OperatorProjectDetail = () => {
     }
     if (blockers.length > 0) {
       toast({
-        title: `Cannot move to ${statusLabels[newStatus]}`,
+        title: `Cannot move to ${labelOf(newStatus)}`,
         description: blockers.join(' • '),
         variant: 'destructive',
       });
@@ -376,7 +416,23 @@ const OperatorProjectDetail = () => {
           created_by: user.id,
         });
       }
-      toast({ title: 'Status Updated', description: `Project moved to ${statusLabels[newStatus]}` });
+      toast({ title: 'Status Updated', description: `Project moved to ${labelOf(newStatus)}` });
+      
+      if (project?.leads?.customer_name && project?.leads?.mobile) {
+        sendStatusChangeNotification(
+          project.leads.customer_name,
+          project.leads.mobile,
+          project.project_code,
+          labelOf(newStatus)
+        ).then(res => {
+          if (res.success) {
+            console.log('Automated WhatsApp status change notification sent.');
+          } else {
+            console.warn('Failed to send automated WhatsApp status change notification:', res.error);
+          }
+        });
+      }
+
       setStatusNote('');
       fetchData();
     }
@@ -384,7 +440,9 @@ const OperatorProjectDetail = () => {
   };
 
   const allDocsApproved = docs.length > 0 && docs.every(d => d.is_verified === true);
-  const nextStatuses = project ? (nextStatusMap[project.status as ProjectStatus] || []) : [];
+  const nextStatuses = project
+    ? allowedNextStatuses(project.status as ProjectStatus, project.payment_type)
+    : [];
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
   if (!project) return <div className="p-8 text-center text-muted-foreground">Project not found</div>;
@@ -394,6 +452,53 @@ const OperatorProjectDetail = () => {
       <Button variant="ghost" onClick={() => navigate(-1)}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Back
       </Button>
+
+      {project.payment_type === 'loan' && !project.loan_disbursed && (
+        <Card className="border-amber-500/25 bg-amber-500/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="font-semibold text-amber-700 flex items-center gap-1.5 text-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-500" /> Awaiting Loan Disbursal
+            </h3>
+            <p className="text-xs text-amber-600/80">This project is financed via a loan from <strong>{project.loan_bank}</strong>. Procurement and installation will start after the loan is marked as disbursed.</p>
+          </div>
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold self-start sm:self-center shrink-0"
+            onClick={async () => {
+              if (!confirm(`Mark loan as disbursed for ${lead?.customer_name || project.consumer_name}? This will transition project status to material procurement.`)) return;
+              try {
+                const { error } = await supabase
+                  .from('projects')
+                  .update({
+                    loan_disbursed: true,
+                    loan_disbursed_at: new Date().toISOString(),
+                    status: 'material_ordered'
+                  })
+                  .eq('id', project.id);
+                if (error) throw error;
+                toast({ title: 'Loan Disbursed!', description: 'Project shifted to active execution queue.' });
+                
+                // Add status transition history note
+                if (user?.id) {
+                  await supabase.from('project_status_notes').insert({
+                    project_id: project.id,
+                    from_status: project.status as ProjectStatus,
+                    to_status: 'material_ordered',
+                    note: 'Loan disbursed, project activated.',
+                    created_by: user.id,
+                  });
+                }
+                
+                fetchData();
+              } catch (err: any) {
+                toast({ title: 'Error', description: err.message, variant: 'destructive' });
+              }
+            }}
+          >
+            Disburse Loan
+          </Button>
+        </Card>
+      )}
 
       {/* Project Info */}
       <Card className="shadow-card">
@@ -410,7 +515,7 @@ const OperatorProjectDetail = () => {
               >
                 {project.payment_type === 'loan' ? '🏦 LOAN FILE' : '💵 CASH FILE'}
               </Badge>
-              <Badge className="gradient-primary text-primary-foreground">{statusLabels[project.status as ProjectStatus]}</Badge>
+              <Badge className="gradient-primary text-primary-foreground">{labelOf(project.status as ProjectStatus)}</Badge>
             </div>
           </div>
         </CardHeader>
@@ -428,6 +533,14 @@ const OperatorProjectDetail = () => {
                 {project.payment_type === 'loan' ? 'LOAN' : 'CASH'}
               </p>
             </div>
+            {project.payment_type === 'loan' && (
+              <div>
+                <p className="text-muted-foreground text-xs">Loan Status</p>
+                <p className={`font-semibold text-xs ${project.loan_disbursed ? 'text-emerald-600' : 'text-amber-500 animate-pulse'}`}>
+                  {project.loan_disbursed ? '🏦 DISBURSED' : '⏳ AWAITING DISBURSAL'}
+                </p>
+              </div>
+            )}
             <div><p className="text-muted-foreground text-xs">Amount</p><p className="font-medium">₹{Number(project.final_amount).toLocaleString('en-IN')}</p></div>
             <div>
               <p className="text-muted-foreground text-xs">Lead Source</p>
@@ -457,6 +570,154 @@ const OperatorProjectDetail = () => {
 
         </CardContent>
       </Card>
+
+      {/* Payments & Financials Card */}
+      {project.status !== 'pending_documents' && (
+        <Card className="shadow-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-primary" /> Payments & Financials
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/20 rounded-xl border border-border/40 text-xs">
+              <div>
+                <p className="text-[10px] uppercase font-mono tracking-wider text-muted-foreground">Deal Amount</p>
+                <p className="font-bold text-foreground mt-0.5">₹{Number(project.final_amount || 0).toLocaleString('en-IN')}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase font-mono tracking-wider text-muted-foreground">Remaining Balance</p>
+                <p className={`font-bold mt-0.5 ${(project.final_amount - payments.reduce((sum, p) => sum + p.amount, 0)) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  ₹{(project.final_amount - payments.reduce((sum, p) => sum + p.amount, 0)).toLocaleString('en-IN')}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between text-xs border-b pb-2">
+              <span className="text-muted-foreground">Total Payments Recorded:</span>
+              <span className="font-bold text-foreground">{payments.length}</span>
+            </div>
+
+            <Button 
+              size="sm" 
+              className="w-full text-xs font-semibold h-9" 
+              variant="outline" 
+              onClick={() => setIsPaymentsOpen(true)}
+            >
+              <Wallet className="mr-1.5 h-4 w-4" /> Manage Payments
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Utility Connections & Subsidies Card */}
+      {project.status !== 'pending_documents' && project.status !== 'pending_operator_review' && (
+        <Card className="shadow-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5 text-primary" /> Utility Connections, Subsidies & Payments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Net Metering Section */}
+            <div className="border rounded-xl p-3 bg-muted/10 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Net Metering details</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Application File Number</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={netMeteringFileNumber}
+                      onChange={e => setNetMeteringFileNumber(e.target.value)}
+                      placeholder="e.g. RJ-NM-2026-092"
+                      className="h-9 text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-9 text-xs shrink-0"
+                      onClick={async () => {
+                        try {
+                          const { error } = await supabase
+                            .from('projects')
+                            .update({ net_metering_file_number: netMeteringFileNumber.trim() })
+                            .eq('id', project.id);
+                          if (error) throw error;
+                          toast({ title: 'Saved!', description: 'Net metering file number updated.' });
+                        } catch (err: any) {
+                          toast({ title: 'Save failed', description: err.message, variant: 'destructive' });
+                        }
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Installed Net Meter Number</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={netMeterNumber}
+                      onChange={e => setNetMeterNumber(e.target.value)}
+                      placeholder="e.g. MTR-9827-NM"
+                      className="h-9 text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-9 text-xs shrink-0"
+                      onClick={async () => {
+                        try {
+                          const { error } = await supabase
+                            .from('projects')
+                            .update({ net_meter_number: netMeterNumber.trim() })
+                            .eq('id', project.id);
+                          if (error) throw error;
+                          toast({ title: 'Saved!', description: 'Net meter serial number updated.' });
+                        } catch (err: any) {
+                          toast({ title: 'Save failed', description: err.message, variant: 'destructive' });
+                        }
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Subsidy Section
+                The "Subsidy Status" dropdown that used to live here wrote to
+                projects.subsidy_status, a column that was never migrated — it
+                toasted success and silently reverted on the next fetch. Removed
+                until the column exists; the document upload below is real. */}
+            <div className="border rounded-xl p-3 bg-muted/10 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Government Subsidy</p>
+              <div className="flex flex-col sm:flex-row gap-3 items-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 text-xs shrink-0"
+                  onClick={() => setIsDocOpen(true)}
+                >
+                  <Upload className="h-3.5 w-3.5" /> Upload Subsidy/Invoice
+                </Button>
+              </div>
+            </div>
+
+            {/* Document and Invoice Shortcuts */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 text-xs h-9 font-semibold gap-1.5"
+                onClick={() => setIsDocOpen(true)}
+              >
+                <FileText className="h-4 w-4" /> Open Project Document Pool
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <StageChecklist projectId={project.id} isOperator />
 
@@ -496,6 +757,15 @@ const OperatorProjectDetail = () => {
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}>
                       <Download className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Download</span>
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => handleSendDocWhatsApp(doc.file_url!, docLabels[doc.document_type])}
+                      className="border-emerald-100 text-emerald-800 bg-white hover:bg-emerald-50 gap-1 font-semibold"
+                    >
+                      <MessageCircle className="h-4 w-4 text-emerald-600" />
+                      <span className="hidden sm:inline">WhatsApp</span>
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => handleShareDoc(doc.file_url!, docLabels[doc.document_type])}>
                       <Share2 className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Share</span>
@@ -806,7 +1076,7 @@ const OperatorProjectDetail = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Current: <span className="font-semibold text-foreground">{statusLabels[project.status as ProjectStatus]}</span>
+              Current: <span className="font-semibold text-foreground">{labelOf(project.status as ProjectStatus)}</span>
             </p>
             <div className="space-y-1.5">
               <Label className="text-sm">Status Note (required)</Label>
@@ -832,7 +1102,7 @@ const OperatorProjectDetail = () => {
                     variant={ns === 'inspection_failed' ? 'destructive' : 'default'}
                     className={ns !== 'inspection_failed' ? 'gradient-primary text-primary-foreground' : ''}
                   >
-                    {ns === 'inspection_failed' ? '✗ Inspection Failed' : `Move to: ${statusLabels[ns]}`}
+                    {ns === 'inspection_failed' ? '✗ Inspection Failed' : `Move to: ${labelOf(ns)}`}
                   </Button>
                 );
               })}
@@ -880,8 +1150,8 @@ const OperatorProjectDetail = () => {
               <div key={n.id} className="border border-border rounded-lg p-3 space-y-1">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <Badge variant="secondary" className="text-xs">
-                    {n.from_status ? `${statusLabels[n.from_status as ProjectStatus] || n.from_status} → ` : ''}
-                    {statusLabels[n.to_status as ProjectStatus] || n.to_status}
+                    {n.from_status ? `${labelOf(n.from_status as ProjectStatus) || n.from_status} → ` : ''}
+                    {labelOf(n.to_status as ProjectStatus) || n.to_status}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
                     {new Date(n.created_at).toLocaleString('en-IN')}
@@ -893,6 +1163,94 @@ const OperatorProjectDetail = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Document Pool Dialog */}
+      <DocumentPoolDialog
+        open={isDocOpen}
+        onOpenChange={setIsDocOpen}
+        projectId={project.id}
+        leadId={project.lead_id}
+        title={`Project Document Pool: ${project.project_code}`}
+      />
+
+      {/* Manage Payments Dialog */}
+      <ManagePaymentsDialog
+        open={isPaymentsOpen}
+        onOpenChange={(open) => {
+          setIsPaymentsOpen(open);
+          if (!open) {
+            fetchData(); // re-fetch payments list to update summary stats on main page when dialog is closed
+          }
+        }}
+        projectId={project.id}
+        finalAmount={project.final_amount}
+        paymentType={project.payment_type || 'cash'}
+        customerName={project.leads?.customer_name || 'Customer'}
+      />
+
+      {/* WhatsApp Phone Prompt Dialog */}
+      <Dialog open={isPhonePromptOpen} onOpenChange={setIsPhonePromptOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-background border border-border shadow-lg p-6 rounded-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <MessageCircle className="h-4.5 w-4.5 text-emerald-600" /> Send via WhatsApp
+            </DialogTitle>
+            <DialogDescription>
+              Confirm or enter the phone number where you want to send this document.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Option 1: Send to Client's Registered Number</p>
+              <Button
+                type="button"
+                onClick={() => {
+                  setIsPhonePromptOpen(false);
+                  handleSendDocWhatsApp(pendingDocUrl, pendingDocLabel, project?.leads?.mobile);
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center justify-center gap-2 h-11"
+              >
+                <Phone className="h-4 w-4" />
+                Send to {project?.leads?.mobile}
+              </Button>
+            </div>
+
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-border"></div>
+              <span className="flex-shrink mx-3 text-[10px] text-muted-foreground font-bold tracking-widest uppercase">OR</span>
+              <div className="flex-grow border-t border-border"></div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Option 2: Send to an Alternative Number</p>
+              <div className="flex gap-2">
+                <Input 
+                  value={targetPhone} 
+                  onChange={e => setTargetPhone(e.target.value)} 
+                  placeholder="Enter 10-digit alternative number" 
+                  className="h-10 text-sm flex-1" 
+                />
+                <Button 
+                  onClick={() => {
+                    setIsPhonePromptOpen(false);
+                    handleSendDocWhatsApp(pendingDocUrl, pendingDocLabel, targetPhone);
+                  }} 
+                  disabled={!targetPhone.trim()}
+                  size="sm" 
+                  className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold h-10 px-4 shrink-0"
+                >
+                  Send
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="border-t border-border/40 pt-3">
+            <Button variant="ghost" size="sm" onClick={() => setIsPhonePromptOpen(false)} className="w-full">
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -942,7 +1300,7 @@ const ProjectTimeline = ({ currentStatus, paymentType }: { currentStatus: string
               {done ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-3.5 w-3.5" />}
             </div>
             <span className={`text-sm ${active ? 'font-bold text-foreground' : done ? 'text-muted-foreground' : 'text-muted-foreground/60'}`}>
-              {statusLabels[stage.status]}
+              {labelOf(stage.status)}
             </span>
           </div>
         );

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { fetchConsumerDetails } from "@/lib/discom";
 
 type LookupResult = {
   ok: boolean;
@@ -34,12 +35,8 @@ const KNumberLookup = () => {
     setResult(null);
     setLoading(true);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke(
-        "consumer-lookup",
-        { body: { kno: trimmed } },
-      );
-      if (fnError) throw fnError;
-      setResult(data as LookupResult);
+      const response = await fetchConsumerDetails(trimmed);
+      setResult(response as LookupResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lookup failed.");
     } finally {

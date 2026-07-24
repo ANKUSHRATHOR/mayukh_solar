@@ -26,15 +26,15 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
 
   if (!user) return <Navigate to="/login" replace />;
   if (staff?.must_change_password) return <Navigate to="/set-password" replace />;
-  if (!role || !staff) {
+  if (!role || !staff || !staff.is_active) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Account setup incomplete</AlertTitle>
+            <AlertTitle>Pending Approval or Inactive Account</AlertTitle>
             <AlertDescription>
-              This email is not linked to an active staff account yet. Please sign in with your mobile account or ask an admin to attach this email to your staff profile.
+              Your account is pending admin approval, inactive, or has not been assigned a role yet. Please contact your administrator to activate your account and assign your role.
             </AlertDescription>
           </Alert>
         </div>

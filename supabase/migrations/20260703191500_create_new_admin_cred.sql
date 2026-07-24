@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- User seeding removed
+-- ---------------------------------------------------------------------------
+-- This migration originally created admin2@mayukhsolar.com with the password
+-- Admin@9988 as a "backup admin credential". The password is in this
+-- repository's git history, so the account is a public credential. It is not
+-- recreated on the new project.
+--
+-- It would also have failed to apply: `gen_salt()` comes from pgcrypto, which
+-- newer Supabase projects install into the `extensions` schema, so the
+-- unqualified call does not resolve.
+--
+-- Create the first admin manually — see SETUP_NEW_SUPABASE.md.

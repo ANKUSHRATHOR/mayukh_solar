@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,9 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { Eye, XCircle, Download, Check, X as XIcon } from 'lucide-react';
+import { Eye, XCircle, Download, Check, X as XIcon, MapPin } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 import { useStickyState } from '@/hooks/useStickyState';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 const statusColor: Record<string, string> = {
   present: 'bg-success text-success-foreground',
@@ -20,12 +21,13 @@ const statusColor: Record<string, string> = {
   absent: 'bg-destructive text-destructive-foreground',
 };
 
-const AdminAttendance = () => {
+const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const now = new Date();
   const [month, setMonth] = useStickyState<string>('admin-attendance:month', format(now, 'yyyy-MM'));
   const [staffId, setStaffId] = useStickyState<string>('admin-attendance:staffId', 'all');
+  const [activeMapCoords, setActiveMapCoords] = useState<{ lat: number; lng: number; title: string } | null>(null);
 
   const { data: staff } = useQuery({
     queryKey: ['staff-list'],
@@ -126,14 +128,16 @@ const AdminAttendance = () => {
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Attendance Reports</h1>
-          <p className="text-sm text-muted-foreground mt-1">Daily logs, GPS, bike-meter images and rejections</p>
+    <div className={isEmbedded ? 'space-y-6' : 'p-4 lg:p-8 max-w-6xl mx-auto space-y-6'}>
+      {!isEmbedded && (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Attendance Reports</h1>
+            <p className="text-sm text-muted-foreground mt-1">Daily logs, GPS, bike-meter images and rejections</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={exportRows} disabled={!rows?.length}><Download className="h-4 w-4 mr-1" /> Export CSV</Button>
         </div>
-        <Button variant="outline" size="sm" onClick={exportRows} disabled={!rows?.length}><Download className="h-4 w-4 mr-1" /> Export CSV</Button>
-      </div>
+      )}
 
 
       <Card className="border-border shadow-card">
@@ -211,9 +215,23 @@ const AdminAttendance = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       {e.latitude && (
-                        <a className="text-xs text-primary underline" href={`https://www.google.com/maps?q=${e.latitude},${e.longitude}`} target="_blank" rel="noreferrer">
-                          {e.latitude.toFixed(4)}, {e.longitude.toFixed(4)} (±{Math.round(e.accuracy_m || 0)}m)
-                        </a>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2"
+                            onClick={() => setActiveMapCoords({
+                              lat: e.latitude,
+                              lng: e.longitude,
+                              title: `${staffName(e.staff_user_id)} — ${e.kind.replace('_', ' ').toUpperCase()} (${format(new Date(e.captured_at), 'dd MMM HH:mm')})`
+                            })}
+                          >
+                            <MapPin className="h-3 w-3 mr-1 text-primary" /> View Map
+                          </Button>
+                          <span className="text-[10px] text-muted-foreground">
+                            (±{Math.round(e.accuracy_m || 0)}m)
+                          </span>
+                        </div>
                       )}
                       {e.bike_meter_image_path && (
                         <Button size="sm" variant="outline" onClick={() => openImage(e.bike_meter_image_path)}><Eye className="h-3 w-3 mr-1" /> Image</Button>
@@ -248,9 +266,18 @@ const AdminAttendance = () => {
                       <p className="font-medium">{staffName(r.staff_user_id)} <Badge variant="outline" className="ml-2 capitalize">{r.status}</Badge></p>
                       <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(r.created_at), 'dd MMM HH:mm')}</p>
                       <p className="text-sm mt-1"><span className="text-muted-foreground">Reason:</span> {r.reason}</p>
-                      <a className="text-xs text-primary underline" href={`https://www.google.com/maps?q=${r.latitude},${r.longitude}`} target="_blank" rel="noreferrer">
-                        {Number(r.latitude).toFixed(5)}, {Number(r.longitude).toFixed(5)}
-                      </a>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs px-2 mt-1"
+                        onClick={() => setActiveMapCoords({
+                          lat: Number(r.latitude),
+                          lng: Number(r.longitude),
+                          title: `Punch-Out Request — ${staffName(r.staff_user_id)} (${format(new Date(r.created_at), 'dd MMM HH:mm')})`
+                        })}
+                      >
+                        <MapPin className="h-3 w-3 mr-1 text-primary" /> View Map
+                      </Button>
                       {r.review_notes && <p className="text-xs text-muted-foreground mt-1">Notes: {r.review_notes}</p>}
                     </div>
                     {r.status === 'pending' && (
@@ -266,6 +293,39 @@ const AdminAttendance = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Map view Dialog */}
+      <Dialog open={!!activeMapCoords} onOpenChange={(o) => !o && setActiveMapCoords(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{activeMapCoords?.title || 'Location Map'}</DialogTitle>
+          </DialogHeader>
+          {activeMapCoords && (
+            <div className="w-full h-[400px] rounded-lg overflow-hidden border border-border">
+              <iframe
+                title="Location Map"
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                scrolling="no"
+                marginHeight={0}
+                marginWidth={0}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${activeMapCoords.lng - 0.005}%2C${activeMapCoords.lat - 0.003}%2C${activeMapCoords.lng + 0.005}%2C${activeMapCoords.lat + 0.003}&layer=mapnik&marker=${activeMapCoords.lat}%2C${activeMapCoords.lng}`}
+              />
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setActiveMapCoords(null)}>Close</Button>
+            {activeMapCoords && (
+              <Button asChild className="gradient-primary text-primary-foreground">
+                <a href={`https://www.google.com/maps?q=${activeMapCoords.lat},${activeMapCoords.lng}`} target="_blank" rel="noreferrer">
+                  Open in Google Maps
+                </a>
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

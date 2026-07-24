@@ -53,21 +53,23 @@ const adminNav: NavSection[] = [
     title: 'Sales & Leads',
     items: [
       { label: 'All Leads', icon: PhoneCall, path: '/leads' },
+      { label: 'Site Visits', icon: MapPin, path: '/visits' },
+      { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
       { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
     ],
   },
   {
     title: 'Operations',
     items: [
-      { label: 'All Projects', icon: Briefcase, path: '/admin/projects' },
+      { label: 'Projects', icon: Briefcase, path: '/projects' },
+      { label: 'Projects (legacy)', icon: Briefcase, path: '/admin/projects' },
       { label: 'Tasks', icon: CheckSquare, path: '/tasks' },
-      { label: 'Quotations', icon: FileText, path: '/quotations' },
-      { label: 'Import Quote PDF', icon: FileText, path: '/admin/quotation-import' },
     ],
   },
   {
     title: 'People',
     items: [
+      { label: 'Staff Directory', icon: Users, path: '/staff/directory' },
       { label: 'Staff Management', icon: Users, path: '/staff' },
       { label: 'Performance', icon: ShieldCheck, path: '/admin/performance' },
       { label: 'Attendance', icon: CalendarCheck, path: '/admin/attendance' },
@@ -94,6 +96,7 @@ const telecallerNav: NavSection[] = [
     title: 'Leads',
     items: [
       { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
+      { label: 'Site Visits', icon: MapPin, path: '/visits' },
       { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
     ],
   },
@@ -113,7 +116,9 @@ const salesNav: NavSection[] = [
     title: 'Field Work',
     items: [
       { label: 'My Leads', icon: Briefcase, path: '/' },
+      { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
       { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
+      { label: 'Site Visits', icon: MapPin, path: '/visits' },
       { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
       { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
     ],
@@ -133,7 +138,8 @@ const operatorNav: NavSection[] = [
   {
     title: 'Operations',
     items: [
-      { label: 'Projects', icon: ClipboardCheck, path: '/' },
+      { label: 'Projects', icon: ClipboardCheck, path: '/projects' },
+      { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
       { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
     ],
   },

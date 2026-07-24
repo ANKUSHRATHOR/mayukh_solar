@@ -3,7 +3,8 @@ import AppSidebar from './AppSidebar';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Menu } from 'lucide-react';
+import { Menu, Sun, Moon } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -12,6 +13,7 @@ interface AppLayoutProps {
 const AppLayout = ({ children }: AppLayoutProps) => {
   const { staff } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
@@ -32,7 +34,16 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <div className="min-w-0 flex-1 lg:hidden">
             <p className="truncate text-sm font-semibold text-foreground">Mayukh Solar</p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            title="Toggle theme"
+          >
+            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
           <NotificationPanel />
           {staff && (
             <div className="hidden text-right sm:block">

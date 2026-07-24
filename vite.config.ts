@@ -26,6 +26,13 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    proxy: {
+      '/api/discom': {
+        target: 'https://cescrajasthan.co.in',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/discom/, ''),
+      }
+    }
   },
   plugins: [
     react(),

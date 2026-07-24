@@ -84,13 +84,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (session?.user) {
         const uid = session.user.id;
-        setRole(null);
-        setStaff(null);
+        const isDifferentUser = lastUserId.current !== null && lastUserId.current !== uid;
+
+        // Only tear down the cached profile when the signed-in user actually
+        // changes. This handler also fires on TOKEN_REFRESHED and on window
+        // focus; clearing role/staff there made ProtectedRoute either flash
+        // "Pending Approval" (profileResolved left true) or unmount the whole
+        // page mid-interaction (profileResolved set false) — the latter closed
+        // any open dialog and lost its state.
+        if (isDifferentUser) {
+          setRole(null);
+          setStaff(null);
+          setProfileResolved(false);
+        }
+
+        // Always refresh in the background so a role change picked up
+        // server-side lands without a manual reload.
         setTimeout(() => fetchProfile(uid), 0);
+
         if (event === 'SIGNED_IN' && lastUserId.current !== uid) {
           lastUserId.current = uid;
           setTimeout(() => logEvent('login'), 0);
         }
+        lastUserId.current = uid;
       } else {
         if (lastUserId.current) {
           setTimeout(() => logEvent('logout'), 0);

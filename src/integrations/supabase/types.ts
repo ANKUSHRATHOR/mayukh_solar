@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -181,11 +206,13 @@ export type Database = {
       }
       documents: {
         Row: {
+          custom_name: string | null
           document_type: Database["public"]["Enums"]["document_type"]
           file_url: string | null
           id: string
           is_verified: boolean | null
-          project_id: string
+          lead_id: string | null
+          project_id: string | null
           rejection_reason: string | null
           text_value: string | null
           updated_at: string
@@ -193,11 +220,13 @@ export type Database = {
           uploaded_by_user_id: string
         }
         Insert: {
+          custom_name?: string | null
           document_type: Database["public"]["Enums"]["document_type"]
           file_url?: string | null
           id?: string
           is_verified?: boolean | null
-          project_id: string
+          lead_id?: string | null
+          project_id?: string | null
           rejection_reason?: string | null
           text_value?: string | null
           updated_at?: string
@@ -205,11 +234,13 @@ export type Database = {
           uploaded_by_user_id: string
         }
         Update: {
+          custom_name?: string | null
           document_type?: Database["public"]["Enums"]["document_type"]
           file_url?: string | null
           id?: string
           is_verified?: boolean | null
-          project_id?: string
+          lead_id?: string | null
+          project_id?: string | null
           rejection_reason?: string | null
           text_value?: string | null
           updated_at?: string
@@ -217,6 +248,13 @@ export type Database = {
           uploaded_by_user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "documents_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "documents_project_id_fkey"
             columns: ["project_id"]
@@ -326,12 +364,21 @@ export type Database = {
           created_by_user_id: string
           customer_name: string
           district: string
+          email: string | null
           follow_up_date: string | null
           id: string
           is_in_bin: boolean
+          k_number: string | null
+          kno_details: Json | null
           kw_interest: number | null
+          latitude: number | null
+          longitude: number | null
           mobile: string
           notes: string | null
+          plant_details: Json | null
+          quotation_details: Json | null
+          quotation_response_at: string | null
+          quotation_response_message: string | null
           reference_name: string | null
           source: Database["public"]["Enums"]["lead_source"]
           state: string
@@ -351,12 +398,21 @@ export type Database = {
           created_by_user_id: string
           customer_name: string
           district: string
+          email?: string | null
           follow_up_date?: string | null
           id?: string
           is_in_bin?: boolean
+          k_number?: string | null
+          kno_details?: Json | null
           kw_interest?: number | null
+          latitude?: number | null
+          longitude?: number | null
           mobile: string
           notes?: string | null
+          plant_details?: Json | null
+          quotation_details?: Json | null
+          quotation_response_at?: string | null
+          quotation_response_message?: string | null
           reference_name?: string | null
           source: Database["public"]["Enums"]["lead_source"]
           state: string
@@ -376,12 +432,21 @@ export type Database = {
           created_by_user_id?: string
           customer_name?: string
           district?: string
+          email?: string | null
           follow_up_date?: string | null
           id?: string
           is_in_bin?: boolean
+          k_number?: string | null
+          kno_details?: Json | null
           kw_interest?: number | null
+          latitude?: number | null
+          longitude?: number | null
           mobile?: string
           notes?: string | null
+          plant_details?: Json | null
+          quotation_details?: Json | null
+          quotation_response_at?: string | null
+          quotation_response_message?: string | null
           reference_name?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           state?: string
@@ -538,6 +603,80 @@ export type Database = {
         }
         Relationships: []
       }
+      project_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          milestone: string | null
+          notes: string | null
+          payment_date: string
+          payment_mode: string
+          project_id: string
+          reference_number: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          milestone?: string | null
+          notes?: string | null
+          payment_date?: string
+          payment_mode: string
+          project_id: string
+          reference_number?: string | null
+          source: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          milestone?: string | null
+          notes?: string | null
+          payment_date?: string
+          payment_mode?: string
+          project_id?: string
+          reference_number?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_payments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_status_migration_backup: {
+        Row: {
+          migrated_at: string
+          new_status: string
+          old_status: string
+          project_id: string
+        }
+        Insert: {
+          migrated_at?: string
+          new_status: string
+          old_status: string
+          project_id: string
+        }
+        Update: {
+          migrated_at?: string
+          new_status?: string
+          old_status?: string
+          project_id?: string
+        }
+        Relationships: []
+      }
       project_status_notes: {
         Row: {
           created_at: string
@@ -591,6 +730,7 @@ export type Database = {
           discount: number | null
           documents_submitted_at: string | null
           documents_submitted_by_sales: boolean
+          electrician_work_done_at: string | null
           expected_install_date: string | null
           final_amount: number
           home_latitude: number | null
@@ -600,11 +740,14 @@ export type Database = {
           id: string
           inspection_date: string | null
           inspection_notes: string | null
+          installation_scheduled_for: string | null
           inverter_brand: string
           inverter_capacity: number
           k_number: string | null
           lead_id: string
           loan_bank: string | null
+          loan_disbursed: boolean | null
+          loan_disbursed_at: string | null
           net_meter_number: string | null
           net_metering_file_number: string | null
           panel_brand: string
@@ -616,6 +759,7 @@ export type Database = {
           status: Database["public"]["Enums"]["project_status"]
           structure_type: Database["public"]["Enums"]["structure_type"]
           updated_at: string
+          welder_work_done_at: string | null
         }
         Insert: {
           assigned_electrician_id?: string | null
@@ -631,6 +775,7 @@ export type Database = {
           discount?: number | null
           documents_submitted_at?: string | null
           documents_submitted_by_sales?: boolean
+          electrician_work_done_at?: string | null
           expected_install_date?: string | null
           final_amount: number
           home_latitude?: number | null
@@ -640,11 +785,14 @@ export type Database = {
           id?: string
           inspection_date?: string | null
           inspection_notes?: string | null
+          installation_scheduled_for?: string | null
           inverter_brand: string
           inverter_capacity: number
           k_number?: string | null
           lead_id: string
           loan_bank?: string | null
+          loan_disbursed?: boolean | null
+          loan_disbursed_at?: string | null
           net_meter_number?: string | null
           net_metering_file_number?: string | null
           panel_brand: string
@@ -656,6 +804,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["project_status"]
           structure_type: Database["public"]["Enums"]["structure_type"]
           updated_at?: string
+          welder_work_done_at?: string | null
         }
         Update: {
           assigned_electrician_id?: string | null
@@ -671,6 +820,7 @@ export type Database = {
           discount?: number | null
           documents_submitted_at?: string | null
           documents_submitted_by_sales?: boolean
+          electrician_work_done_at?: string | null
           expected_install_date?: string | null
           final_amount?: number
           home_latitude?: number | null
@@ -680,11 +830,14 @@ export type Database = {
           id?: string
           inspection_date?: string | null
           inspection_notes?: string | null
+          installation_scheduled_for?: string | null
           inverter_brand?: string
           inverter_capacity?: number
           k_number?: string | null
           lead_id?: string
           loan_bank?: string | null
+          loan_disbursed?: boolean | null
+          loan_disbursed_at?: string | null
           net_meter_number?: string | null
           net_metering_file_number?: string | null
           panel_brand?: string
@@ -696,6 +849,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["project_status"]
           structure_type?: Database["public"]["Enums"]["structure_type"]
           updated_at?: string
+          welder_work_done_at?: string | null
         }
         Relationships: [
           {
@@ -1044,31 +1198,58 @@ export type Database = {
       }
       site_visits: {
         Row: {
+          assigned_to_user_id: string | null
+          cancelled_reason: string | null
+          completed_at: string | null
           created_at: string
           id: string
+          latitude: number | null
           lead_id: string
+          location_accuracy_m: number | null
+          longitude: number | null
+          outcome: string | null
+          scheduled_for: string | null
           staff_id: string
           status_updated_to: Database["public"]["Enums"]["lead_status"] | null
           visit_date: string
           visit_notes: string | null
+          visit_status: string
         }
         Insert: {
+          assigned_to_user_id?: string | null
+          cancelled_reason?: string | null
+          completed_at?: string | null
           created_at?: string
           id?: string
+          latitude?: number | null
           lead_id: string
+          location_accuracy_m?: number | null
+          longitude?: number | null
+          outcome?: string | null
+          scheduled_for?: string | null
           staff_id: string
           status_updated_to?: Database["public"]["Enums"]["lead_status"] | null
           visit_date?: string
           visit_notes?: string | null
+          visit_status?: string
         }
         Update: {
+          assigned_to_user_id?: string | null
+          cancelled_reason?: string | null
+          completed_at?: string | null
           created_at?: string
           id?: string
+          latitude?: number | null
           lead_id?: string
+          location_accuracy_m?: number | null
+          longitude?: number | null
+          outcome?: string | null
+          scheduled_for?: string | null
           staff_id?: string
           status_updated_to?: Database["public"]["Enums"]["lead_status"] | null
           visit_date?: string
           visit_notes?: string | null
+          visit_status?: string
         }
         Relationships: [
           {
@@ -1125,6 +1306,27 @@ export type Database = {
           temp_password_plain?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      system_configs: {
+        Row: {
+          created_at: string | null
+          key: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string | null
+          key: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          created_at?: string | null
+          key?: string
+          updated_at?: string | null
+          value?: Json
         }
         Relationships: []
       }
@@ -1316,6 +1518,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_delete_staff: { Args: { _staff_id: string }; Returns: boolean }
       admin_list_temp_passwords: {
         Args: never
         Returns: {
@@ -1323,6 +1526,19 @@ export type Database = {
           temp_password_plain: string
           user_id: string
         }[]
+      }
+      admin_reset_staff_password: {
+        Args: { _staff_id: string }
+        Returns: string
+      }
+      admin_update_staff: {
+        Args: {
+          _full_name: string
+          _mobile: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _staff_id: string
+        }
+        Returns: boolean
       }
       bike_km_for_day: {
         Args: { _date: string; _user: string }
@@ -1357,6 +1573,18 @@ export type Database = {
           id: string
           status: Database["public"]["Enums"]["lead_status"]
         }[]
+      }
+      complete_site_visit: {
+        Args: {
+          _accuracy_m: number
+          _latitude: number
+          _lead_status: string
+          _longitude: number
+          _notes?: string
+          _outcome: string
+          _visit_id: string
+        }
+        Returns: Json
       }
       complete_staff_password_setup: { Args: never; Returns: undefined }
       compute_salary: {
@@ -1487,6 +1715,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      mark_trade_work_done: {
+        Args: { _project_id: string; _trade: string }
+        Returns: Json
+      }
+      project_payment_summary: { Args: { _project_id: string }; Returns: Json }
       project_stage_requirements: {
         Args: { _project_id: string }
         Returns: Json
@@ -1564,6 +1797,12 @@ export type Database = {
           user_id: string
         }[]
       }
+      tables_without_rls: {
+        Args: never
+        Returns: {
+          table_name: string
+        }[]
+      }
     }
     Enums: {
       app_role:
@@ -1591,6 +1830,16 @@ export type Database = {
         | "bank_passbook"
         | "customer_email"
         | "customer_mobile"
+        | "pan_card"
+        | "property_papers"
+        | "feasibility"
+        | "panel_serial_numbers"
+        | "overall_structure"
+        | "wiring_connection"
+        | "netmetering"
+        | "subsidy"
+        | "invoice"
+        | "other"
       lead_source: "phone_call" | "walk_in" | "reference" | "camp" | "online"
       lead_status:
         | "new"
@@ -1600,6 +1849,10 @@ export type Database = {
         | "not_interested"
         | "cancelled"
         | "final"
+        | "visit_created"
+        | "quotation_sent"
+        | "quotation_accepted"
+        | "quotation_rejected"
       payment_type: "cash" | "loan"
       project_status:
         | "pending_documents"
@@ -1622,6 +1875,16 @@ export type Database = {
         | "inspection_failed"
         | "net_meter_installed"
         | "project_completed"
+        | "new_project"
+        | "documents_pending"
+        | "documents_approved"
+        | "loan_application_pending"
+        | "loan_approved"
+        | "installation_scheduled"
+        | "installation_completed"
+        | "net_meter_applied"
+        | "payment_pending"
+        | "closed"
       punch_out_request_status: "pending" | "approved" | "rejected" | "consumed"
       structure_type: "rcc_roof" | "tin_shed_roof" | "ground_mount"
       task_priority: "low" | "medium" | "high" | "urgent"
@@ -1759,6 +2022,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: [
@@ -1788,6 +2054,16 @@ export const Constants = {
         "bank_passbook",
         "customer_email",
         "customer_mobile",
+        "pan_card",
+        "property_papers",
+        "feasibility",
+        "panel_serial_numbers",
+        "overall_structure",
+        "wiring_connection",
+        "netmetering",
+        "subsidy",
+        "invoice",
+        "other",
       ],
       lead_source: ["phone_call", "walk_in", "reference", "camp", "online"],
       lead_status: [
@@ -1798,6 +2074,10 @@ export const Constants = {
         "not_interested",
         "cancelled",
         "final",
+        "visit_created",
+        "quotation_sent",
+        "quotation_accepted",
+        "quotation_rejected",
       ],
       payment_type: ["cash", "loan"],
       project_status: [
@@ -1821,6 +2101,16 @@ export const Constants = {
         "inspection_failed",
         "net_meter_installed",
         "project_completed",
+        "new_project",
+        "documents_pending",
+        "documents_approved",
+        "loan_application_pending",
+        "loan_approved",
+        "installation_scheduled",
+        "installation_completed",
+        "net_meter_applied",
+        "payment_pending",
+        "closed",
       ],
       punch_out_request_status: ["pending", "approved", "rejected", "consumed"],
       structure_type: ["rcc_roof", "tin_shed_roof", "ground_mount"],

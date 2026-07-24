@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,11 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import StatCard from '@/components/dashboard/StatCard';
-import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, UserPlus as AssignIcon, Users, ChevronRight } from 'lucide-react';
+import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 import { useStickyState } from '@/hooks/useStickyState';
 import type { Database } from '@/integrations/supabase/types';
+import LeadImportWizard from '@/components/leads/LeadImportWizard';
+import { fetchConsumerDetails } from '@/lib/discom';
+import StageBar from '@/components/common/StageBar';
+import type { StatusTone } from '@/lib/statusMeta';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 type PaymentType = Database['public']['Enums']['payment_type'];
@@ -52,6 +56,8 @@ type LeadRow = {
   projectStatus: ProjectStatus | null;
   projectType: PaymentType | null;
   status: LeadStatus;
+  kNumber: string | null;
+  email: string | null;
 };
 
 
@@ -99,12 +105,39 @@ const startOfMonth = () => {
   return date;
 };
 
-const AdminLeadsList = () => {
+
+/**
+ * Whether a lead matches a stage filter. Shared by the table filter and the
+ * StageBar counts so a count can never disagree with what clicking it shows.
+ */
+const matchesStatusFilter = (lead: LeadRow, filter: StatusFilter): boolean =>
+  filter === 'all'
+  || (filter === 'documents_pending' && lead.projectStatus === 'pending_documents')
+  || (filter === 'quotation_sent' && lead.hasQuotation)
+  || (filter === 'site_visit' && lead.status === 'visited')
+  || lead.status === filter;
+
+/** Stages shown in the pipeline bar, in the order a lead moves through them. */
+const STAGE_BAR_STAGES: { value: StatusFilter; label: string; tone: StatusTone }[] = [
+  { value: 'new', label: 'New', tone: 'info' },
+  { value: 'site_visit', label: 'Contacted', tone: 'progress' },
+  { value: 'follow_up', label: 'Follow Up', tone: 'warning' },
+  { value: 'interested', label: 'Interested', tone: 'success' },
+  { value: 'quotation_sent', label: 'Quoted', tone: 'info' },
+  { value: 'final', label: 'Finalized', tone: 'success' },
+  { value: 'not_interested', label: 'Not Interested', tone: 'danger' },
+  { value: 'cancelled', label: 'Cancelled', tone: 'danger' },
+];
+
+const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const requestIdRef = useRef(0);
 
   const [leadRows, setLeadRows] = useState<LeadRow[]>([]);
+  const [syncingKno, setSyncingKno] = useState<string | null>(null);
+  const [salesTab, setSalesTab] = useState<'my_visits' | 'unassigned_visits'>('my_visits');
+  const { user, role } = useAuth();
   const [staffDirectory, setStaffDirectory] = useState<Record<string, StaffMember>>({});
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
   const [operatorStaff, setOperatorStaff] = useState<StaffMember[]>([]);
@@ -119,8 +152,19 @@ const AdminLeadsList = () => {
   const [customFrom, setCustomFrom] = useStickyState<string>('admin-leads:customFrom', '');
   const [customTo, setCustomTo] = useStickyState<string>('admin-leads:customTo', '');
   const [sortBy, setSortBy] = useStickyState<SortKey>('admin-leads:sort', 'latest_activity_desc');
-  const [assigningId, setAssigningId] = useState<string | null>(null);
   const [editingCreatorId, setEditingCreatorId] = useState<string | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAssignee, setBulkAssignee] = useState<string>('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+
+  const kanbanColumns: { status: LeadStatus; label: string; color: string }[] = [
+    { status: 'new', label: 'New', color: 'border-t-2 border-t-sky-500' },
+    { status: 'visited', label: 'Site Visit', color: 'border-t-2 border-t-purple-500' },
+    { status: 'follow_up', label: 'Follow-up', color: 'border-t-2 border-t-amber-500' },
+    { status: 'interested', label: 'Interested', color: 'border-t-2 border-t-emerald-500' },
+    { status: 'final', label: 'Finalized', color: 'border-t-2 border-t-rose-500' },
+  ];
 
   const fetchData = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
@@ -208,6 +252,8 @@ const AdminLeadsList = () => {
           projectStatus: project?.status || null,
           projectType: project?.payment_type || null,
           status: lead.status,
+          kNumber: lead.k_number,
+          email: lead.email,
         };
       }));
     } catch (error: any) {
@@ -216,6 +262,54 @@ const AdminLeadsList = () => {
       if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [toast]);
+
+  const handleSyncKno = async (leadId: string, kno: string) => {
+    if (!kno || kno.length !== 12) return;
+    setSyncingKno(leadId);
+    try {
+      const response = await fetchConsumerDetails(kno);
+      if (response && response.ok && response.data && response.data.KNO) {
+        const knoData = response.data.KNO;
+        
+        let city = '';
+        let district = '';
+        const addrLower = (knoData.address || '').toLowerCase();
+        if (addrLower.includes('kota')) {
+          city = 'Kota';
+          district = 'Kota';
+        } else if (addrLower.includes('jaipur')) {
+          city = 'Jaipur';
+          district = 'Jaipur';
+        } else {
+          const officeName = (knoData.officename || '').toLowerCase();
+          if (officeName.includes('kota')) {
+            city = 'Kota';
+            district = 'Kota';
+          } else {
+            city = knoData.officename || '';
+            district = knoData.officename || '';
+          }
+        }
+
+        const { error } = await supabase.from('leads').update({
+          kno_details: knoData,
+          latitude: knoData.latitude ? parseFloat(String(knoData.latitude)) : null,
+          longitude: knoData.longitude ? parseFloat(String(knoData.longitude)) : null,
+          kw_interest: knoData.solarloadkw ? parseFloat(String(knoData.solarloadkw)) : (knoData.connload ? parseFloat(String(knoData.connload)) : null)
+        }).eq('id', leadId);
+
+        if (error) throw error;
+        toast({ title: 'Discom Details Synced!', description: `Loaded name: ${knoData.name || 'N/A'}` });
+        void fetchData(true);
+      } else {
+        toast({ title: 'Sync Failed', description: 'Could not fetch details for this K-Number.', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Sync Failed', description: err.message || 'Error occurred.', variant: 'destructive' });
+    } finally {
+      setSyncingKno(null);
+    }
+  };
 
   useEffect(() => {
     void fetchData();
@@ -242,15 +336,26 @@ const AdminLeadsList = () => {
     const toDate = customTo ? new Date(`${customTo}T23:59:59`) : null;
 
     return leadRows.filter((lead) => {
+      // 1. Role-based filtering for sales persons
+      if (role === 'sales_person') {
+        if (salesTab === 'my_visits') {
+          // My leads: assigned to me OR created by me
+          if (lead.assignedToUserId !== user?.id && lead.createdByUserId !== user?.id) {
+            return false;
+          }
+        } else if (salesTab === 'unassigned_visits') {
+          // Unassigned visits: no sales person assigned AND there is an appointment scheduled
+          if (lead.assignedToUserId !== null || !lead.nextFollowUpDate) {
+            return false;
+          }
+        }
+      }
+
       const q = search.trim().toLowerCase();
       const haystack = [lead.leadCode, lead.consumerName, lead.mobile, lead.createdByName, lead.assignedToName, lead.operatorName, lead.lastNote, lead.latestUpdate].join(' ').toLowerCase();
       const activityDate = new Date(lead.lastActivityAt);
 
-      const statusMatch = filterStatus === 'all'
-        || (filterStatus === 'documents_pending' && lead.projectStatus === 'pending_documents')
-        || (filterStatus === 'quotation_sent' && lead.hasQuotation)
-        || (filterStatus === 'site_visit' && lead.status === 'visited')
-        || lead.status === filterStatus;
+      const statusMatch = matchesStatusFilter(lead, filterStatus);
 
       const dateMatch = filterDate === 'all'
         || (filterDate === 'today' && activityDate >= startOfToday())
@@ -282,6 +387,45 @@ const AdminLeadsList = () => {
       }
     });
   }, [customFrom, customTo, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, leadRows, search, sortBy]);
+
+  const kanbanFilteredRows = useMemo(() => {
+    const fromDate = customFrom ? new Date(`${customFrom}T00:00:00`) : null;
+    const toDate = customTo ? new Date(`${customTo}T23:59:59`) : null;
+
+    return leadRows.filter((lead) => {
+      const q = search.trim().toLowerCase();
+      const haystack = [lead.leadCode, lead.consumerName, lead.mobile, lead.createdByName, lead.assignedToName, lead.operatorName, lead.lastNote, lead.latestUpdate].join(' ').toLowerCase();
+      const activityDate = new Date(lead.lastActivityAt);
+
+      const dateMatch = filterDate === 'all'
+        || (filterDate === 'today' && activityDate >= startOfToday())
+        || (filterDate === 'this_week' && activityDate >= startOfWeek())
+        || (filterDate === 'this_month' && activityDate >= startOfMonth())
+        || (filterDate === 'custom' && (!fromDate || activityDate >= fromDate) && (!toDate || activityDate <= toDate));
+
+      return (!q || haystack.includes(q))
+        && (filterCreator === 'all' || lead.createdByUserId === filterCreator)
+        && (filterAssigned === 'all' || lead.assignedToUserId === filterAssigned)
+        && (filterOperator === 'all' || lead.operatorUserId === filterOperator)
+        && (filterProjectType === 'all' || lead.projectType === filterProjectType)
+        && dateMatch;
+    }).sort((a, b) => {
+      switch (sortBy) {
+        case 'created_desc':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'follow_up_asc':
+          return (a.nextFollowUpDate ? new Date(a.nextFollowUpDate).getTime() : Number.POSITIVE_INFINITY)
+            - (b.nextFollowUpDate ? new Date(b.nextFollowUpDate).getTime() : Number.POSITIVE_INFINITY);
+        case 'consumer_asc':
+          return a.consumerName.localeCompare(b.consumerName);
+        case 'status_asc':
+          return statusLabel(a.status).localeCompare(statusLabel(b.status));
+        case 'latest_activity_desc':
+        default:
+          return new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
+      }
+    });
+  }, [customFrom, customTo, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, leadRows, search, sortBy]);
 
   const analytics = useMemo(() => ({
     total: filteredRows.length,
@@ -328,15 +472,29 @@ const AdminLeadsList = () => {
     filterDate !== 'all',
   ].filter(Boolean).length;
 
-  const assignLead = async (leadId: string, userId: string) => {
+
+  const bulkAssign = async () => {
+    if (selectedIds.size === 0 || !bulkAssignee) return;
+    setBulkAssigning(true);
     try {
-      const { error } = await supabase.from('leads').update({ assigned_to_user_id: userId }).eq('id', leadId);
+      const { error } = await supabase.rpc('bulk_assign_leads' as any, {
+        _lead_ids: Array.from(selectedIds),
+        _assignee: bulkAssignee,
+      });
       if (error) throw error;
-      setLeadRows((current) => current.map((lead) => lead.id === leadId ? { ...lead, assignedToUserId: userId, assignedToName: staffDirectory[userId]?.full_name || 'Assigned' } : lead));
-      setAssigningId(null);
-      toast({ title: 'Lead assigned' });
+
+      const name = staffDirectory[bulkAssignee]?.full_name || 'staff member';
+      toast({
+        title: `${selectedIds.size} lead${selectedIds.size > 1 ? 's' : ''} assigned`,
+        description: `Now with ${name}.`,
+      });
+      setSelectedIds(new Set());
+      setBulkAssignee('');
+      fetchData(true);
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Bulk assignment failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setBulkAssigning(false);
     }
   };
 
@@ -373,7 +531,7 @@ const AdminLeadsList = () => {
 
   const exportRows = () => {
     downloadCsv('leads-crm-export.csv', [
-      { header: 'Lead ID', value: (row: LeadRow) => row.leadCode },
+      { header: 'K Number', value: (row: LeadRow) => row.kNumber ?? '' },
       { header: 'Consumer Name', value: (row: LeadRow) => row.consumerName },
       { header: 'Mobile Number', value: (row: LeadRow) => row.mobile },
       { header: 'Created By', value: (row: LeadRow) => row.createdByName },
@@ -390,319 +548,335 @@ const AdminLeadsList = () => {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-in-up">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-display">All Leads</h1>
-          <p className="text-muted-foreground text-sm mt-1">Premium CRM cards with latest activity, follow-ups, staff analytics, and live sync.</p>
+    <div className={isEmbedded ? 'space-y-6' : 'p-4 lg:p-8 max-w-7xl mx-auto space-y-6 animate-in-up'}>
+      {!isEmbedded && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-display text-foreground tracking-tight">Leads</h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)} className="border-primary/20 text-primary hover:bg-primary/5">
+              <Upload className="mr-1.5 h-4 w-4" /> Import Leads
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportRows} disabled={!filteredRows.length}>
+              <Download className="mr-1.5 h-4 w-4" /> Export CSV
+            </Button>
+            <Button onClick={() => navigate('/leads/new')} size="sm" className="bg-primary hover:bg-primary/95 text-primary-foreground shadow-sm">
+              <PhoneCall className="mr-1.5 h-4 w-4" /> Create Lead
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportRows} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Export CSV/Excel</Button>
-          <Button onClick={() => navigate('/leads/new')} className="btn-glow font-semibold"><PhoneCall className="mr-2 h-4 w-4" /> Create Lead</Button>
-        </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Leads" value={analytics.total} icon={Users} accent="primary" change="Filtered" changeType="neutral" />
-        <StatCard title="Interested" value={analytics.interested} icon={Users} accent="success" change="Warm" changeType="up" />
-        <StatCard title="Follow-up" value={analytics.followUp} icon={Users} accent="warning" change="Pending" changeType={analytics.followUp ? 'down' : 'neutral'} />
-        <StatCard title="Not Interested" value={analytics.notInterested} icon={Users} accent="destructive" change="Lost" changeType={analytics.notInterested ? 'down' : 'neutral'} />
-        <StatCard title="Finalized" value={analytics.finalized} icon={Users} accent="success" change="Closed" changeType={analytics.finalized ? 'up' : 'neutral'} />
-        <StatCard title="Converted" value={analytics.converted} icon={Users} accent="info" change="Projects" changeType={analytics.converted ? 'up' : 'neutral'} />
-      </div>
+      {/* Filter and Table Section */}
+      <div className="space-y-4">
+        {/* Sales Person Queues Toggle */}
+        {role === 'sales_person' && (
+          <div className="flex bg-muted/40 p-1 rounded-lg border max-w-sm shadow-inner">
+            <button
+              type="button"
+              onClick={() => {
+                setSalesTab('my_visits');
+                setFilterStatus('all');
+              }}
+              className={`flex-1 text-center py-1.5 text-xs font-semibold rounded-md transition-all ${
+                salesTab === 'my_visits'
+                  ? 'bg-background text-foreground shadow'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              My Visits
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSalesTab('unassigned_visits');
+                setFilterStatus('all');
+              }}
+              className={`flex-1 text-center py-1.5 text-xs font-semibold rounded-md transition-all ${
+                salesTab === 'unassigned_visits'
+                  ? 'bg-background text-foreground shadow'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Unassigned Visits
+            </button>
+          </div>
+        )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4">
-        <Card className="shadow-card border-border">
-          <CardContent className="p-4 flex flex-col lg:flex-row gap-3 lg:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search lead, mobile, staff, note, update, lead ID..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline"><Filter className="mr-2 h-4 w-4" /> Filters {activeFilterCount ? `(${activeFilterCount})` : ''}</Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-[360px] space-y-3">
-                  <div className="space-y-1.5">
-                    <Label>Status</Label>
-                    <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as StatusFilter)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="new">New Lead</SelectItem>
-                        <SelectItem value="follow_up">Follow-up</SelectItem>
-                        <SelectItem value="interested">Interested</SelectItem>
-                        <SelectItem value="not_interested">Not Interested</SelectItem>
-                        <SelectItem value="site_visit">Site Visit</SelectItem>
-                        <SelectItem value="documents_pending">Documents Pending</SelectItem>
-                        <SelectItem value="quotation_sent">Quotation Sent</SelectItem>
-                        <SelectItem value="final">Finalized</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Lead Creator</Label>
-                    <Select value={filterCreator} onValueChange={setFilterCreator}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Creators</SelectItem>
-                        {allStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Assigned Sales Person</Label>
-                    <Select value={filterAssigned} onValueChange={setFilterAssigned}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Sales Persons</SelectItem>
-                        {salesStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Assigned Operator</Label>
-                    <Select value={filterOperator} onValueChange={setFilterOperator}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Operators</SelectItem>
-                        {operatorStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label>Project Type</Label>
-                      <Select value={filterProjectType} onValueChange={(value) => setFilterProjectType(value as 'all' | PaymentType)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Types</SelectItem>
-                          <SelectItem value="cash">Cash</SelectItem>
-                          <SelectItem value="loan">Loan</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Date</Label>
-                      <Select value={filterDate} onValueChange={(value) => setFilterDate(value as DateFilter)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Dates</SelectItem>
-                          <SelectItem value="today">Today</SelectItem>
-                          <SelectItem value="this_week">This Week</SelectItem>
-                          <SelectItem value="this_month">This Month</SelectItem>
-                          <SelectItem value="custom">Custom Range</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  {filterDate === 'custom' && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5"><Label>From</Label><Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} /></div>
-                      <div className="space-y-1.5"><Label>To</Label><Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} /></div>
-                    </div>
-                  )}
-                  <div className="flex justify-between pt-2">
-                    <Button variant="ghost" onClick={resetFilters}>Reset</Button>
-                    <Button variant="outline" onClick={() => void fetchData(true)}>Refresh</Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortKey)}>
-                <SelectTrigger className="w-[210px]"><ArrowUpDown className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue /></SelectTrigger>
+        {selectedIds.size > 0 && (
+          <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-foreground">
+              {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} selected
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={bulkAssignee} onValueChange={setBulkAssignee}>
+                <SelectTrigger className="h-9 w-[220px] text-sm">
+                  <SelectValue placeholder="Assign to…" />
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="latest_activity_desc">Latest activity</SelectItem>
-                  <SelectItem value="created_desc">Newest created</SelectItem>
-                  <SelectItem value="follow_up_asc">Next follow-up</SelectItem>
-                  <SelectItem value="consumer_asc">Consumer name</SelectItem>
-                  <SelectItem value="status_asc">Status</SelectItem>
+                  {allStaff
+                    .filter((m) => m.is_active && (m.role === 'telecaller' || m.role === 'sales_person'))
+                    .map((m) => (
+                      <SelectItem key={m.user_id} value={m.user_id}>
+                        {m.full_name}
+                        {m.role ? ` · ${statusLabel(m.role)}` : ''}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-card border-border">
-          <CardHeader className="pb-3"><CardTitle className="text-base">Staff-wise Analytics</CardTitle></CardHeader>
-          <CardContent>
-            {!staffAnalytics.length ? <p className="text-sm text-muted-foreground">No staff activity in this filter.</p> : (
-              <div className="space-y-3">
-                {staffAnalytics.map((item) => (
-                  <div key={item.name} className="rounded-lg border border-border px-3 py-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium text-foreground truncate">{item.name}</p>
-                      <Badge variant="outline">{item.ratio}%</Badge>
-                    </div>
-                    <div className="mt-2 grid grid-cols-4 gap-2 text-xs text-muted-foreground">
-                      <div><span className="block font-medium text-foreground">{item.created}</span>Created</div>
-                      <div><span className="block font-medium text-foreground">{item.assigned}</span>Assigned</div>
-                      <div><span className="block font-medium text-foreground">{item.converted}</span>Converted</div>
-                      <div><span className="block font-medium text-foreground">{item.followUps}</span>Follow-up</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="shadow-card border-border">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <CardTitle className="text-base">Lead Pipeline</CardTitle>
-              <p className="text-sm text-muted-foreground">{filteredRows.length} lead(s) visible • realtime sync enabled</p>
-            </div>
-            {/* Quick status chip filters */}
-            <div className="flex flex-wrap gap-1.5">
-              {([
-                { v: 'all', l: 'All' },
-                { v: 'new', l: 'New' },
-                { v: 'site_visit', l: 'Site Visit' },
-                { v: 'follow_up', l: 'Follow-up' },
-                { v: 'interested', l: 'Interested' },
-                { v: 'quotation_sent', l: 'Quotation Sent' },
-                { v: 'documents_pending', l: 'Docs Pending' },
-                { v: 'final', l: 'Finalized' },
-                { v: 'not_interested', l: 'Not Interested' },
-              ] as { v: StatusFilter; l: string }[]).map((c) => (
-                <button
-                  key={c.v}
-                  type="button"
-                  onClick={() => setFilterStatus(c.v)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                    filterStatus === c.v
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
-                  }`}
-                >
-                  {c.l}
-                </button>
-              ))}
+              <Button size="sm" onClick={bulkAssign} disabled={!bulkAssignee || bulkAssigning}>
+                {bulkAssigning ? 'Assigning…' : 'Assign'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+                Clear
+              </Button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-muted-foreground text-sm py-12 text-center">Loading lead pipeline...</p>
-          ) : filteredRows.length === 0 ? (
-            <p className="text-muted-foreground text-sm py-12 text-center">No leads match the current filters.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {filteredRows.map((lead) => (
-                <div
-                  key={lead.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate(`/leads/${lead.id}`)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/leads/${lead.id}`); }}
-                  className="group relative rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-elevated hover:border-primary/40 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-mono">#{lead.leadCode}</p>
-                      <p className="font-semibold text-foreground truncate mt-0.5">{lead.consumerName}</p>
-                      <a
-                        href={`tel:${lead.mobile}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5"
-                      >
-                        <PhoneCall className="h-3 w-3" /> {lead.mobile}
-                      </a>
-                    </div>
-                    <Badge className={`shrink-0 ${statusColor[lead.status] || statusColor.new}`}>{statusLabel(lead.status)}</Badge>
-                  </div>
+        )}
 
-                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <p className="text-muted-foreground">Created by</p>
-                      {editingCreatorId === lead.id ? (
-                        <Select onValueChange={(value) => updateCreator(lead.id, value)}>
-                          <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue placeholder="Pick staff..." /></SelectTrigger>
-                          <SelectContent>
-                            {allStaff.map((member) => (
-                              <SelectItem key={member.user_id} value={member.user_id}>
-                                {member.full_name}{member.role ? ` • ${statusLabel(member.role)}` : ''}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setEditingCreatorId(lead.id)}
-                          className="text-left w-full hover:bg-muted/40 rounded px-1 -mx-1 transition-colors"
-                          title="Click to change creator"
-                        >
-                          <p className="font-medium text-foreground truncate">{lead.createdByName}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {lead.createdByRole ? statusLabel(lead.createdByRole) : 'Tap to set creator'}
-                            {lead.createdByMobile ? ` • ${lead.createdByMobile}` : ''}
-                          </p>
-                        </button>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Assigned</p>
-                      <p className="font-medium text-foreground truncate">{lead.assignedToName}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {lead.assignedToRole ? statusLabel(lead.assignedToRole) : '—'}
-                        {lead.assignedToMobile ? ` • ${lead.assignedToMobile}` : ''}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Type</p>
-                      <p className="font-medium text-foreground">{lead.projectType ? statusLabel(lead.projectType) : 'Lead'}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Operator</p>
-                      <p className="font-medium text-foreground truncate">{lead.operatorName}</p>
-                    </div>
-                  </div>
+        {/* Horizontal Status Quick Filter Bar + Search */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-muted/30 border p-3 rounded-xl">
+          {/* Chevron pipeline. Counts come from the loaded rows and the shape
+              conveys stage order, which the previous flat chips did not. */}
+          <StageBar
+            className="flex-1"
+            allLabel="All Statuses"
+            allCount={leadRows.length}
+            value={filterStatus === 'all' ? null : filterStatus}
+            onChange={(v) => setFilterStatus((v ?? 'all') as StatusFilter)}
+            items={STAGE_BAR_STAGES.map((stage) => ({
+              value: stage.value,
+              label: stage.label,
+              tone: stage.tone,
+              count: leadRows.filter((r) => matchesStatusFilter(r, stage.value as StatusFilter)).length,
+            }))}
+          />
 
-                  <div className="mt-3 rounded-md bg-muted/40 p-2.5 text-xs">
-                    <p className="text-muted-foreground">Latest note</p>
-                    <p className="text-foreground line-clamp-2 mt-0.5">{lead.lastNote}</p>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <CalIcon className="h-3 w-3" />
-                      Updated {formatDateTime(lead.lastActivityAt)}
-                    </span>
-                    {lead.nextFollowUpDate && (
-                      <span className="rounded-full bg-warning/10 text-warning-foreground border border-warning/30 px-2 py-0.5">
-                        Follow-up {formatDate(lead.nextFollowUpDate)}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-                    {assigningId === lead.id ? (
-                      <Select onValueChange={(value) => assignLead(lead.id, value)}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Assign sales..." /></SelectTrigger>
-                        <SelectContent>
-                          {salesStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setAssigningId(lead.id)}>
-                        <AssignIcon className="mr-1.5 h-3.5 w-3.5" /> Assign
-                      </Button>
-                    )}
-                    <span className="inline-flex items-center text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                      Open <ChevronRight className="h-3.5 w-3.5" />
-                    </span>
-                  </div>
-                </div>
-              ))}
+          <div className="flex items-center gap-2">
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search leads..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-8.5 text-xs rounded-lg"
+              />
             </div>
-          )}
-        </CardContent>
-      </Card>
+            
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8.5 text-xs gap-1">
+                  <Filter className="h-3.5 w-3.5" /> Filters {activeFilterCount ? `(${activeFilterCount})` : ''}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[300px] space-y-3 p-4">
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Created By</Label>
+                  <Select value={filterCreator} onValueChange={setFilterCreator}>
+                    <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Staff</SelectItem>
+                      {allStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Assigned Sales Person</Label>
+                  <Select value={filterAssigned} onValueChange={setFilterAssigned}>
+                    <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Sales</SelectItem>
+                      {salesStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Operator</Label>
+                  <Select value={filterOperator} onValueChange={setFilterOperator}>
+                    <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Operators</SelectItem>
+                      {operatorStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Sort By</Label>
+                  <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortKey)}>
+                    <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="latest_activity_desc">Latest Activity</SelectItem>
+                      <SelectItem value="created_desc">Newest Created</SelectItem>
+                      <SelectItem value="follow_up_asc">Next Follow-up</SelectItem>
+                      <SelectItem value="consumer_asc">Consumer Name</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button className="w-full text-xs h-8.5 mt-2" variant="ghost" onClick={resetFilters}>Reset Filters</Button>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Table of Leads */}
+        {loading ? (
+          <div className="border rounded-xl p-12 text-center text-muted-foreground bg-card">
+            <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-primary" />
+            Loading leads directory...
+          </div>
+        ) : filteredRows.length === 0 ? (
+          <div className="border rounded-xl p-12 text-center text-muted-foreground bg-card">
+            No leads found matching current filters.
+          </div>
+        ) : (
+          <div className="rounded-xl border overflow-hidden bg-card shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left border-collapse text-muted-foreground">
+                <thead className="text-xs font-mono uppercase bg-muted/40 border-b text-foreground">
+                  <tr>
+                    {/* K-Number is the primary identifier for a connection, so
+                        it leads. The internal lead id is not shown at all. */}
+                    <th className="px-3 py-3.5 w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all leads on this page"
+                        className="h-4 w-4 cursor-pointer rounded border-border"
+                        checked={filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id))}
+                        onChange={(e) =>
+                          setSelectedIds(
+                            e.target.checked ? new Set(filteredRows.map((r) => r.id)) : new Set()
+                          )
+                        }
+                      />
+                    </th>
+                    <th className="px-4 py-3.5 font-semibold">K Number</th>
+                    <th className="px-4 py-3.5 font-semibold">Consumer Details</th>
+                    <th className="px-4 py-3.5 font-semibold">Assigned Staff</th>
+                    <th className="px-4 py-3.5 font-semibold">Status</th>
+                    <th className="px-4 py-3.5 font-semibold">Last Updated</th>
+                    <th className="px-4 py-3.5 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y border-b">
+                  {filteredRows.map((lead) => (
+                    <tr
+                      key={lead.id}
+                      className="hover:bg-muted/10 transition-colors cursor-pointer group"
+                      onClick={() => navigate(`/leads/${lead.id}`)}
+                    >
+                      <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${lead.consumerName}`}
+                          className="h-4 w-4 cursor-pointer rounded border-border"
+                          checked={selectedIds.has(lead.id)}
+                          onChange={(e) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(lead.id);
+                              else next.delete(lead.id);
+                              return next;
+                            });
+                          }}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono text-foreground">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold">
+                            {lead.kNumber || <span className="font-normal text-muted-foreground/60">Not linked</span>}
+                          </span>
+                          {lead.kNumber && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 rounded-md hover:bg-muted shrink-0"
+                              title="Sync with Discom"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSyncKno(lead.id, lead.kNumber);
+                              }}
+                              disabled={syncingKno === lead.id}
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground ${syncingKno === lead.id ? 'animate-spin text-primary' : ''}`} />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-foreground truncate max-w-[200px]" title={lead.consumerName}>
+                          {lead.consumerName}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-2 text-xs mt-0.5">
+                          <a
+                            href={`tel:${lead.mobile}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-primary hover:underline inline-flex items-center gap-1 font-semibold"
+                          >
+                            <Phone className="h-3 w-3 shrink-0" /> {lead.mobile}
+                          </a>
+                          {lead.email && (
+                            <span className="text-muted-foreground/80 truncate max-w-[150px]" title={lead.email}>
+                              • {lead.email}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-foreground text-xs font-medium">{lead.assignedToName}</div>
+                        {lead.assignedToRole && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">{statusLabel(lead.assignedToRole)}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge className={`${statusColor[lead.status] || statusColor.new} font-medium border-0 px-2 py-0.5 text-[11px]`}>
+                          {statusLabel(lead.status)}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <div className="text-foreground">{formatDateTime(lead.lastActivityAt)}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[180px]" title={lead.lastNote}>
+                          Note: {lead.lastNote}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {lead.mobile && (
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 text-primary border-primary/20 bg-primary/5 hover:bg-primary hover:text-primary-foreground"
+                            >
+                              <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.consumerName}`}>
+                                <Phone className="h-3.5 w-3.5" />
+                              </a>
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                            onClick={() => navigate(`/leads/${lead.id}`)}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <LeadImportWizard
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        onImportComplete={() => void fetchData(true)}
+      />
     </div>
   );
 };

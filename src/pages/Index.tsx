@@ -29,15 +29,15 @@ const Index = () => {
     return <Navigate to="/set-password" replace />;
   }
 
-  if (!staff || !role) {
+  if (!staff || !role || !staff.is_active) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-lg">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Account setup incomplete</AlertTitle>
+            <AlertTitle>Pending Approval or Inactive Account</AlertTitle>
             <AlertDescription>
-              Your login succeeded, but this account is not connected to a staff profile yet. Sign in with your mobile account or ask an admin to link this email first.
+              Your account is pending admin approval, inactive, or has not been assigned a role yet. Please contact your administrator to activate your account and assign your role.
             </AlertDescription>
           </Alert>
         </div>

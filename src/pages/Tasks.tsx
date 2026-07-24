@@ -23,7 +23,7 @@ const priorityColor: Record<string, string> = {
   urgent: 'bg-destructive text-destructive-foreground',
 };
 
-const Tasks = () => {
+const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const { staff, role } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -119,21 +119,64 @@ const Tasks = () => {
   const inProgressCount = (tasks || []).filter((x: any) => x.status === 'in_progress').length;
   const doneCount = (tasks || []).filter((x: any) => x.status === 'completed').length;
 
-  return (
-    <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6 animate-in-up">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-display">Tasks</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {isAdminOrOp ? 'Assign and track extra work for sales persons.' : 'Your assigned tasks.'}
+  const renderTaskCard = (task: any) => (
+    <div key={task.id} className="bento p-3.5 space-y-2.5 hover:shadow-elevated transition-shadow text-left">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
+          <p className="font-semibold text-xs text-foreground break-words">{task.title}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {format(new Date(task.created_at), 'dd MMM HH:mm')}
+            {task.due_date ? ` • Due ${format(new Date(task.due_date), 'dd MMM')}` : ''}
           </p>
         </div>
-        {isAdminOrOp && (
-          <Button onClick={() => setCreateOpen(true)} className="btn-glow text-primary-foreground">
-            <Plus className="h-4 w-4 mr-1" /> Assign task
-          </Button>
-        )}
+        <Badge className={`${priorityColor[task.priority]} text-[9px] px-1.5 py-0.5 shrink-0`}>{task.priority}</Badge>
       </div>
+      {task.description && <p className="text-xs text-foreground/80 break-words">{task.description}</p>}
+      {task.staff_notes && <p className="text-[10px] text-muted-foreground bg-muted/40 p-2 rounded border border-border/40">Notes: {task.staff_notes}</p>}
+      
+      {task.proof_image_path && (
+        <div className="pt-1">
+          <a
+            href={supabase.storage.from('attendance-media').getPublicUrl(task.proof_image_path).data.publicUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[10px] text-primary hover:underline inline-flex items-center gap-1 font-semibold"
+          >
+            <Camera className="h-3 w-3" /> View Proof Photo
+          </a>
+        </div>
+      )}
+
+      {!isAdminOrOp && task.status !== 'completed' && (
+        <div className="flex gap-2 pt-1 border-t border-border/50 mt-1">
+          {task.status === 'pending' && (
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
+          )}
+          <Button size="sm" className="btn-glow text-primary-foreground h-7 text-[10px]" onClick={() => { setProofOpen(task); setProofNotes(task.staff_notes || ''); }}>
+            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Complete
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className={isEmbedded ? 'space-y-6' : 'p-4 lg:p-8 max-w-5xl mx-auto space-y-6 animate-in-up'}>
+      {!isEmbedded && (
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-display">Tasks</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isAdminOrOp ? 'Assign and track extra work for sales persons.' : 'Your assigned tasks.'}
+            </p>
+          </div>
+          {isAdminOrOp && (
+            <Button onClick={() => setCreateOpen(true)} className="btn-glow text-primary-foreground">
+              <Plus className="h-4 w-4 mr-1" /> Assign task
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -148,60 +191,60 @@ const Tasks = () => {
         ))}
       </div>
 
-      {/* Status chip filters */}
-      <div className="flex flex-wrap gap-1.5">
-        {([
-          { v: 'all', l: `All (${(tasks || []).length})` },
-          { v: 'pending', l: `Pending (${pendingCount})` },
-          { v: 'in_progress', l: `In Progress (${inProgressCount})` },
-          { v: 'completed', l: `Completed (${doneCount})` },
-        ] as const).map((c) => (
-          <button
-            key={c.v}
-            type="button"
-            onClick={() => setStatusChip(c.v)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-              statusChip === c.v
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
-            }`}
-          >
-            {c.l}
-          </button>
-        ))}
-      </div>
-
       {!tasks?.length ? (
         <div className="bento p-8 text-center text-muted-foreground">No tasks yet.</div>
       ) : (
-        <div className="space-y-3">
-          {tasks.filter((task: any) => statusChip === 'all' || task.status === statusChip).map((task: any) => (
-            <div key={task.id} className="bento p-4 space-y-2 hover:shadow-elevated transition-shadow">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div className="min-w-0">
-                  <p className="font-semibold text-foreground">{task.title}</p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(task.created_at), 'dd MMM HH:mm')}{task.due_date ? ` • Due ${format(new Date(task.due_date), 'dd MMM')}` : ''}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={priorityColor[task.priority]}>{task.priority}</Badge>
-                  <Badge variant={task.status === 'completed' ? 'default' : 'outline'} className="capitalize">{task.status.replace('_', ' ')}</Badge>
-                </div>
-              </div>
-              {task.description && <p className="text-sm text-foreground/80">{task.description}</p>}
-              {task.staff_notes && <p className="text-xs text-muted-foreground">Notes: {task.staff_notes}</p>}
-
-              {!isAdminOrOp && task.status !== 'completed' && (
-                <div className="flex gap-2 pt-1">
-                  {task.status === 'pending' && (
-                    <Button size="sm" variant="outline" onClick={() => updateStatus(task.id, 'in_progress')}>Start</Button>
-                  )}
-                  <Button size="sm" className="btn-glow text-primary-foreground" onClick={() => { setProofOpen(task); setProofNotes(task.staff_notes || ''); }}>
-                    <CheckCircle2 className="h-4 w-4 mr-1" /> Mark complete
-                  </Button>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+          {/* Pending Column */}
+          <div className="space-y-3 bg-muted/10 p-3 rounded-lg border border-border/80">
+            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+              <h3 className="font-semibold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-amber-500" /> Pending
+              </h3>
+              <Badge variant="outline" className="font-mono text-[10px]">{pendingCount}</Badge>
+            </div>
+            <div className="space-y-2.5">
+              {tasks.filter((t: any) => t.status === 'pending').length === 0 ? (
+                <p className="text-[10px] text-muted-foreground py-6 text-center italic bg-card/50 rounded border border-dashed border-border/40">No pending tasks</p>
+              ) : (
+                tasks.filter((t: any) => t.status === 'pending').map((task: any) => renderTaskCard(task))
               )}
             </div>
-          ))}
+          </div>
+
+          {/* In Progress Column */}
+          <div className="space-y-3 bg-muted/10 p-3 rounded-lg border border-border/80">
+            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+              <h3 className="font-semibold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-sky-500" /> In Progress
+              </h3>
+              <Badge variant="outline" className="font-mono text-[10px]">{inProgressCount}</Badge>
+            </div>
+            <div className="space-y-2.5">
+              {tasks.filter((t: any) => t.status === 'in_progress').length === 0 ? (
+                <p className="text-[10px] text-muted-foreground py-6 text-center italic bg-card/50 rounded border border-dashed border-border/40">No tasks in progress</p>
+              ) : (
+                tasks.filter((t: any) => t.status === 'in_progress').map((task: any) => renderTaskCard(task))
+              )}
+            </div>
+          </div>
+
+          {/* Completed Column */}
+          <div className="space-y-3 bg-muted/10 p-3 rounded-lg border border-border/80">
+            <div className="flex items-center justify-between border-b border-border/50 pb-2">
+              <h3 className="font-semibold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Completed
+              </h3>
+              <Badge variant="outline" className="font-mono text-[10px]">{doneCount}</Badge>
+            </div>
+            <div className="space-y-2.5">
+              {tasks.filter((t: any) => t.status === 'completed').length === 0 ? (
+                <p className="text-[10px] text-muted-foreground py-6 text-center italic bg-card/50 rounded border border-dashed border-border/40">No completed tasks</p>
+              ) : (
+                tasks.filter((t: any) => t.status === 'completed').map((task: any) => renderTaskCard(task))
+              )}
+            </div>
+          </div>
         </div>
       )}
 

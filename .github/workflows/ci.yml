@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # vite build uses esbuild, which strips types without checking them —
+      # so undefined identifiers reach production as runtime ReferenceErrors.
+      # This step is what catches them.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Non-blocking: the codebase currently has ~460 pre-existing lint errors,
+      # almost all no-explicit-any. Reported for visibility; flip to blocking
+      # once that backlog is cleared.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

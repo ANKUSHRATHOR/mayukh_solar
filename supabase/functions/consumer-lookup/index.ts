@@ -5,9 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const UPSTREAM_URL =
-  "https://cescrajasthan.co.in/newconnection/nc_online_add_request.jsp?mkr=ONLINE&df=KEDL";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -20,10 +17,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const upstream = await fetch(UPSTREAM_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kno }),
+    const url = `https://cescrajasthan.co.in/newconnection/it_request_handler.jsp?paramStr=service_kno_newcondet|${kno.trim()}`;
+    const upstream = await fetch(url, {
+      method: "GET",
     });
 
     const text = await upstream.text();

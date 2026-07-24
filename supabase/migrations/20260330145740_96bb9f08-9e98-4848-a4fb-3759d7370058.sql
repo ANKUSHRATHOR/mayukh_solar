@@ -1,8 +1,22 @@
+-- Ensure pgcrypto is available (used elsewhere for password hashing).
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-INSERT INTO public.staff (user_id, full_name, mobile, must_change_password)
-VALUES ('cd4844a4-3f0b-4275-95be-6f5c29d40511', 'Admin', '7024976909', false)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO public.user_roles (user_id, role)
-VALUES ('cd4844a4-3f0b-4275-95be-6f5c29d40511', 'admin')
-ON CONFLICT DO NOTHING;
+-- ---------------------------------------------------------------------------
+-- User seeding removed
+-- ---------------------------------------------------------------------------
+-- This migration originally inserted two accounts directly into auth.users:
+--
+--   admin@mayukhsolar.com             password: Admin@123
+--   staff_9251157546@mayukhsolar.com  password: Staff@123
+--
+-- Both passwords are committed to this repository's git history, so the
+-- accounts are effectively public credentials. They are not recreated on the
+-- new project.
+--
+-- It also failed to apply at all: `gen_salt()` is provided by pgcrypto, which
+-- newer Supabase projects install into the `extensions` schema rather than
+-- `public`, so the unqualified call resolved to nothing.
+--
+-- Create the first admin manually instead — see SETUP_NEW_SUPABASE.md. Writing
+-- rows into auth.users by hand also skips GoTrue's own bookkeeping, which is
+-- what the seven "fix_auth_*_nulls" migrations that follow were patching up.
