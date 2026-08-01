@@ -10,13 +10,18 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw } from 'lucide-react';
+import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { downloadCsv } from '@/lib/exportCsv';
 import { useStickyState } from '@/hooks/useStickyState';
 import type { Database } from '@/integrations/supabase/types';
 import LeadImportWizard from '@/components/leads/LeadImportWizard';
 import { fetchConsumerDetails } from '@/lib/discom';
 import StageBar from '@/components/common/StageBar';
+import TablePagination from '@/components/common/TablePagination';
 import type { StatusTone } from '@/lib/statusMeta';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -129,6 +134,48 @@ const STAGE_BAR_STAGES: { value: StatusFilter; label: string; tone: StatusTone }
   { value: 'cancelled', label: 'Cancelled', tone: 'danger' },
 ];
 
+/**
+ * Maps one `leads_list` row to the shape the table renders. The view already
+ * resolved the latest visit, the latest project and whether a quotation exists,
+ * so this is a straight rename rather than the client-side join it replaces.
+ */
+const mapLeadRow = (lead: any, staffMap: Record<string, StaffMember>): LeadRow => ({
+  assignedToName: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.full_name || 'Not assigned' : 'Not assigned',
+  assignedToUserId: lead.assigned_to_user_id,
+  assignedToMobile: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.mobile || null : null,
+  assignedToRole: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.role || null : null,
+  consumerName: lead.customer_name,
+  createdAt: lead.created_at,
+  createdByName: staffMap[lead.created_by_user_id]?.full_name || 'Unknown user',
+  createdByUserId: lead.created_by_user_id,
+  createdByMobile: staffMap[lead.created_by_user_id]?.mobile || null,
+  createdByRole: staffMap[lead.created_by_user_id]?.role || null,
+  hasQuotation: lead.has_quotation === true,
+  id: lead.id,
+  lastActivityAt: lead.last_activity_at || lead.updated_at || lead.created_at,
+  lastNote: lead.last_visit_notes?.trim() || lead.notes?.trim() || '—',
+  latestUpdate: lead.last_visit_status
+    ? statusLabel(lead.last_visit_status)
+    : lead.project_status === 'pending_documents'
+      ? 'Documents Pending'
+      : lead.has_quotation
+        ? 'Quotation Sent'
+        : statusLabel(lead.status),
+  latestUpdatedBy: lead.last_visit_staff_id ? staffMap[lead.last_visit_staff_id]?.full_name || 'Staff member' : 'System',
+  leadCode: lead.id.slice(0, 8).toUpperCase(),
+  mobile: lead.mobile,
+  nextFollowUpDate: lead.follow_up_date,
+  operatorName: lead.assigned_operator_id ? staffMap[lead.assigned_operator_id]?.full_name || 'Unassigned' : 'Unassigned',
+  operatorUserId: lead.assigned_operator_id || null,
+  projectStatus: lead.project_status || null,
+  projectType: lead.project_type || null,
+  status: lead.status,
+  kNumber: lead.k_number,
+  email: lead.email,
+});
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
+
 const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -157,6 +204,13 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAssignee, setBulkAssignee] = useState<string>('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useStickyState<number>('admin-leads:pageSize', 50);
+  const [total, setTotal] = useState(0);
+  const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const kanbanColumns: { status: LeadStatus; label: string; color: string }[] = [
     { status: 'new', label: 'New', color: 'border-t-2 border-t-sky-500' },
@@ -165,6 +219,66 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     { status: 'interested', label: 'Interested', color: 'border-t-2 border-t-emerald-500' },
     { status: 'final', label: 'Finalized', color: 'border-t-2 border-t-rose-500' },
   ];
+
+  /**
+   * Every filter and sort runs in the database against `leads_list`, so only
+   * the rows on screen are fetched. Doing this in the browser meant loading all
+   * leads first, which PostgREST capped at 1000 — leads past that were
+   * unreachable no matter how you filtered.
+   */
+  const buildLeadsQuery = useCallback((options?: { status?: StatusFilter; countOnly?: boolean }) => {
+    const filterStatusValue = options?.status ?? filterStatus;
+    let query = supabase
+      .from('leads_list' as any)
+      .select(options?.countOnly ? 'id' : '*', { count: 'exact', head: options?.countOnly === true })
+      .eq('is_in_bin', false);
+
+    // Commas and parens are PostgREST `or()` syntax, so they are stripped
+    // rather than escaped.
+    const term = search.trim().replace(/[,()*]/g, ' ').trim();
+    if (term) {
+      query = query.or(
+        [`customer_name.ilike.%${term}%`, `mobile.ilike.%${term}%`, `k_number.ilike.%${term}%`].join(','),
+      );
+    }
+
+    if (filterStatusValue === 'documents_pending') query = query.eq('project_status', 'pending_documents');
+    else if (filterStatusValue === 'quotation_sent') query = query.eq('has_quotation', true);
+    else if (filterStatusValue === 'site_visit') query = query.eq('status', 'visited');
+    else if (filterStatusValue !== 'all') query = query.eq('status', filterStatusValue);
+
+    if (filterCreator !== 'all') query = query.eq('created_by_user_id', filterCreator);
+    if (filterAssigned === 'unassigned') query = query.is('assigned_to_user_id', null);
+    else if (filterAssigned !== 'all') query = query.eq('assigned_to_user_id', filterAssigned);
+    if (filterOperator !== 'all') query = query.eq('assigned_operator_id', filterOperator);
+    if (filterProjectType !== 'all') query = query.eq('project_type', filterProjectType);
+
+    if (filterDate === 'today') query = query.gte('last_activity_at', startOfToday().toISOString());
+    else if (filterDate === 'this_week') query = query.gte('last_activity_at', startOfWeek().toISOString());
+    else if (filterDate === 'this_month') query = query.gte('last_activity_at', startOfMonth().toISOString());
+    else if (filterDate === 'custom') {
+      if (customFrom) query = query.gte('last_activity_at', new Date(`${customFrom}T00:00:00`).toISOString());
+      if (customTo) query = query.lte('last_activity_at', new Date(`${customTo}T23:59:59`).toISOString());
+    }
+
+    // The sales rep queues were client-side filters over the full list; as
+    // server filters they now page correctly.
+    if (role === 'sales_person' && user) {
+      if (salesTab === 'my_visits') {
+        query = query.or(`assigned_to_user_id.eq.${user.id},created_by_user_id.eq.${user.id}`);
+      } else if (salesTab === 'unassigned_visits') {
+        query = query.is('assigned_to_user_id', null).not('follow_up_date', 'is', null);
+      }
+    }
+
+    switch (sortBy) {
+      case 'created_desc': return query.order('created_at', { ascending: false });
+      case 'follow_up_asc': return query.order('follow_up_date', { ascending: true, nullsFirst: false });
+      case 'consumer_asc': return query.order('customer_name', { ascending: true });
+      case 'status_asc': return query.order('status', { ascending: true });
+      default: return query.order('last_activity_at', { ascending: false });
+    }
+  }, [customFrom, customTo, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, role, salesTab, search, sortBy, user]);
 
   const fetchData = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
@@ -177,28 +291,17 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       // the same data (active staff only) already used by Staff Contacts.
       const isAdmin = role === 'admin';
 
-      const [leadsRes, staffRes, rolesRes, directoryRes, projectsRes, quotationsRes] = await Promise.all([
-        supabase.from('leads').select('*').eq('is_in_bin', false).order('updated_at', { ascending: false }),
+      const [leadsRes, staffRes, rolesRes, directoryRes] = await Promise.all([
+        buildLeadsQuery().range(page * pageSize, page * pageSize + pageSize - 1),
         isAdmin ? supabase.from('staff').select('user_id, full_name, mobile, is_active') : Promise.resolve({ data: [], error: null }),
         isAdmin ? supabase.from('user_roles').select('user_id, role') : Promise.resolve({ data: [], error: null }),
         isAdmin ? Promise.resolve({ data: [], error: null }) : supabase.rpc('get_staff_directory' as any),
-        supabase.from('projects').select('id, lead_id, assigned_operator_id, payment_type, status, updated_at').not('lead_id', 'is', null),
-        supabase.from('quotations').select('project_id, created_at').not('project_id', 'is', null),
       ]);
 
       if (leadsRes.error) throw leadsRes.error;
       if (staffRes.error) throw staffRes.error;
       if (rolesRes.error) throw rolesRes.error;
       if (directoryRes.error) throw directoryRes.error;
-      if (projectsRes.error) throw projectsRes.error;
-      if (quotationsRes.error) throw quotationsRes.error;
-
-      const siteVisitsRes = await supabase
-        .from('site_visits')
-        .select('lead_id, staff_id, visit_date, visit_notes, status_updated_to')
-        .order('visit_date', { ascending: false });
-
-      if (siteVisitsRes.error) throw siteVisitsRes.error;
       if (requestId !== requestIdRef.current) return;
 
       const rolesByUser = new Map((rolesRes.data || []).map((item) => [item.user_id, item.role]));
@@ -210,70 +313,32 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
             ),
       ) as Record<string, StaffMember>;
 
-      const latestVisitByLead = new Map<string, (typeof siteVisitsRes.data)[number]>();
-      for (const visit of siteVisitsRes.data || []) {
-        if (!latestVisitByLead.has(visit.lead_id)) latestVisitByLead.set(visit.lead_id, visit);
-      }
-
-      const latestProjectByLead = new Map<string, (typeof projectsRes.data)[number]>();
-      for (const project of projectsRes.data || []) {
-        const current = latestProjectByLead.get(project.lead_id!);
-        if (!current || new Date(project.updated_at || 0).getTime() > new Date(current.updated_at || 0).getTime()) {
-          latestProjectByLead.set(project.lead_id!, project);
-        }
-      }
-
-      const quotationProjects = new Set((quotationsRes.data || []).map((quotation) => quotation.project_id));
-
       setStaffDirectory(staffMap);
       setSalesStaff(Object.values(staffMap).filter((item) => item.role === 'sales_person' && item.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name)));
       setOperatorStaff(Object.values(staffMap).filter((item) => item.role === 'operator' && item.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name)));
-      setLeadRows((leadsRes.data || []).map((lead) => {
-        const latestVisit = latestVisitByLead.get(lead.id);
-        const project = latestProjectByLead.get(lead.id);
-        const hasQuotation = project?.id ? quotationProjects.has(project.id) : false;
+      setTotal(leadsRes.count ?? 0);
+      setLeadRows(((leadsRes.data as any[]) || []).map((lead) => mapLeadRow(lead, staffMap)));
 
-        return {
-          assignedToName: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.full_name || 'Not assigned' : 'Not assigned',
-          assignedToUserId: lead.assigned_to_user_id,
-          assignedToMobile: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.mobile || null : null,
-          assignedToRole: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.role || null : null,
-          consumerName: lead.customer_name,
-          createdAt: lead.created_at,
-          createdByName: staffMap[lead.created_by_user_id]?.full_name || 'Unknown user',
-          createdByUserId: lead.created_by_user_id,
-          createdByMobile: staffMap[lead.created_by_user_id]?.mobile || null,
-          createdByRole: staffMap[lead.created_by_user_id]?.role || null,
-          hasQuotation,
-          id: lead.id,
-          lastActivityAt: latestVisit?.visit_date || project?.updated_at || lead.updated_at || lead.created_at,
-          lastNote: latestVisit?.visit_notes?.trim() || lead.notes?.trim() || '—',
-          latestUpdate: latestVisit?.status_updated_to
-            ? statusLabel(latestVisit.status_updated_to)
-            : project?.status === 'pending_documents'
-              ? 'Documents Pending'
-              : hasQuotation
-                ? 'Quotation Sent'
-                : statusLabel(lead.status),
-          latestUpdatedBy: latestVisit?.staff_id ? staffMap[latestVisit.staff_id]?.full_name || 'Staff member' : 'System',
-          leadCode: lead.id.slice(0, 8).toUpperCase(),
-          mobile: lead.mobile,
-          nextFollowUpDate: lead.follow_up_date,
-          operatorName: project?.assigned_operator_id ? staffMap[project.assigned_operator_id]?.full_name || 'Unassigned' : 'Unassigned',
-          operatorUserId: project?.assigned_operator_id || null,
-          projectStatus: project?.status || null,
-          projectType: project?.payment_type || null,
-          status: lead.status,
-          kNumber: lead.k_number,
-          email: lead.email,
-        };
-      }));
+      // Stage counts must reflect the whole filtered set, not the page on
+      // screen, so each is a head-only count query rather than a tally of
+      // loaded rows.
+      const stageResults = await Promise.all(
+        STAGE_BAR_STAGES.map((stage) => buildLeadsQuery({ status: stage.value, countOnly: true })),
+      );
+      if (requestId !== requestIdRef.current) return;
+      setStageCounts(
+        Object.fromEntries(STAGE_BAR_STAGES.map((stage, i) => [stage.value, stageResults[i].count ?? 0])),
+      );
     } catch (error: any) {
       toast({ title: 'Unable to load leads', description: error.message || 'Please try again.', variant: 'destructive' });
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [role, toast]);
+  }, [buildLeadsQuery, page, pageSize, role, toast]);
+
+  // Any filter change re-queries from the first page; staying on page 7 of a
+  // result set that just shrank to two pages would show an empty table.
+  useEffect(() => { setPage(0); }, [buildLeadsQuery]);
 
   const handleSyncKno = async (leadId: string, kno: string) => {
     if (!kno || kno.length !== 12) return;
@@ -352,101 +417,16 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
    */
   const canManageLeads = role === 'admin';
 
-  const filteredRows = useMemo(() => {
-    const fromDate = customFrom ? new Date(`${customFrom}T00:00:00`) : null;
-    const toDate = customTo ? new Date(`${customTo}T23:59:59`) : null;
+  /** Anyone a lead can sit with — telecallers and sales reps. */
+  const assignableStaff = useMemo(
+    () => allStaff.filter((m) => m.is_active && (m.role === 'telecaller' || m.role === 'sales_person')),
+    [allStaff],
+  );
 
-    return leadRows.filter((lead) => {
-      // 1. Role-based filtering for sales persons
-      if (role === 'sales_person') {
-        if (salesTab === 'my_visits') {
-          // My leads: assigned to me OR created by me
-          if (lead.assignedToUserId !== user?.id && lead.createdByUserId !== user?.id) {
-            return false;
-          }
-        } else if (salesTab === 'unassigned_visits') {
-          // Unassigned visits: no sales person assigned AND there is an appointment scheduled
-          if (lead.assignedToUserId !== null || !lead.nextFollowUpDate) {
-            return false;
-          }
-        }
-      }
-
-      const q = search.trim().toLowerCase();
-      const haystack = [lead.leadCode, lead.consumerName, lead.mobile, lead.createdByName, lead.assignedToName, lead.operatorName, lead.lastNote, lead.latestUpdate].join(' ').toLowerCase();
-      const activityDate = new Date(lead.lastActivityAt);
-
-      const statusMatch = matchesStatusFilter(lead, filterStatus);
-
-      const dateMatch = filterDate === 'all'
-        || (filterDate === 'today' && activityDate >= startOfToday())
-        || (filterDate === 'this_week' && activityDate >= startOfWeek())
-        || (filterDate === 'this_month' && activityDate >= startOfMonth())
-        || (filterDate === 'custom' && (!fromDate || activityDate >= fromDate) && (!toDate || activityDate <= toDate));
-
-      return (!q || haystack.includes(q))
-        && statusMatch
-        && (filterCreator === 'all' || lead.createdByUserId === filterCreator)
-        && (filterAssigned === 'all' || lead.assignedToUserId === filterAssigned)
-        && (filterOperator === 'all' || lead.operatorUserId === filterOperator)
-        && (filterProjectType === 'all' || lead.projectType === filterProjectType)
-        && dateMatch;
-    }).sort((a, b) => {
-      switch (sortBy) {
-        case 'created_desc':
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        case 'follow_up_asc':
-          return (a.nextFollowUpDate ? new Date(a.nextFollowUpDate).getTime() : Number.POSITIVE_INFINITY)
-            - (b.nextFollowUpDate ? new Date(b.nextFollowUpDate).getTime() : Number.POSITIVE_INFINITY);
-        case 'consumer_asc':
-          return a.consumerName.localeCompare(b.consumerName);
-        case 'status_asc':
-          return statusLabel(a.status).localeCompare(statusLabel(b.status));
-        case 'latest_activity_desc':
-        default:
-          return new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
-      }
-    });
-  }, [customFrom, customTo, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, leadRows, search, sortBy]);
-
-  const kanbanFilteredRows = useMemo(() => {
-    const fromDate = customFrom ? new Date(`${customFrom}T00:00:00`) : null;
-    const toDate = customTo ? new Date(`${customTo}T23:59:59`) : null;
-
-    return leadRows.filter((lead) => {
-      const q = search.trim().toLowerCase();
-      const haystack = [lead.leadCode, lead.consumerName, lead.mobile, lead.createdByName, lead.assignedToName, lead.operatorName, lead.lastNote, lead.latestUpdate].join(' ').toLowerCase();
-      const activityDate = new Date(lead.lastActivityAt);
-
-      const dateMatch = filterDate === 'all'
-        || (filterDate === 'today' && activityDate >= startOfToday())
-        || (filterDate === 'this_week' && activityDate >= startOfWeek())
-        || (filterDate === 'this_month' && activityDate >= startOfMonth())
-        || (filterDate === 'custom' && (!fromDate || activityDate >= fromDate) && (!toDate || activityDate <= toDate));
-
-      return (!q || haystack.includes(q))
-        && (filterCreator === 'all' || lead.createdByUserId === filterCreator)
-        && (filterAssigned === 'all' || lead.assignedToUserId === filterAssigned)
-        && (filterOperator === 'all' || lead.operatorUserId === filterOperator)
-        && (filterProjectType === 'all' || lead.projectType === filterProjectType)
-        && dateMatch;
-    }).sort((a, b) => {
-      switch (sortBy) {
-        case 'created_desc':
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        case 'follow_up_asc':
-          return (a.nextFollowUpDate ? new Date(a.nextFollowUpDate).getTime() : Number.POSITIVE_INFINITY)
-            - (b.nextFollowUpDate ? new Date(b.nextFollowUpDate).getTime() : Number.POSITIVE_INFINITY);
-        case 'consumer_asc':
-          return a.consumerName.localeCompare(b.consumerName);
-        case 'status_asc':
-          return statusLabel(a.status).localeCompare(statusLabel(b.status));
-        case 'latest_activity_desc':
-        default:
-          return new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
-      }
-    });
-  }, [customFrom, customTo, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, leadRows, search, sortBy]);
+  // Filtering, sorting and paging all happen in the database now, so the rows
+  // that come back are exactly the rows to render.
+  const filteredRows = leadRows;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   const analytics = useMemo(() => ({
     total: filteredRows.length,
@@ -516,6 +496,29 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       toast({ title: 'Bulk assignment failed', description: err.message, variant: 'destructive' });
     } finally {
       setBulkAssigning(false);
+    }
+  };
+
+  /**
+   * "Delete" moves the lead to the Cancelled Bin rather than destroying it, so
+   * it stays recoverable there. Permanent removal remains a separate, explicit
+   * action on the bin page.
+   */
+  const binLeads = async (ids: string[], label: string) => {
+    if (ids.length === 0) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.rpc('bulk_bin_leads' as any, { _lead_ids: ids });
+      if (error) throw error;
+      toast({ title: `${label} moved to Cancelled Bin`, description: 'You can restore it from the bin.' });
+      setSelectedIds(new Set());
+      setDeleteTarget(null);
+      setConfirmBulkDelete(false);
+      await fetchData(true);
+    } catch (err: any) {
+      toast({ title: 'Delete failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -648,6 +651,15 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                     ))}
                 </SelectContent>
               </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={() => setConfirmBulkDelete(true)}
+                disabled={deleting}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" /> Delete
+              </Button>
               <Button size="sm" onClick={bulkAssign} disabled={!bulkAssignee || bulkAssigning}>
                 {bulkAssigning ? 'Assigning…' : 'Assign'}
               </Button>
@@ -665,14 +677,14 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           <StageBar
             className="flex-1"
             allLabel="All Statuses"
-            allCount={leadRows.length}
+            allCount={total}
             value={filterStatus === 'all' ? null : filterStatus}
             onChange={(v) => setFilterStatus((v ?? 'all') as StatusFilter)}
             items={STAGE_BAR_STAGES.map((stage) => ({
               value: stage.value,
               label: stage.label,
               tone: stage.tone,
-              count: leadRows.filter((r) => matchesStatusFilter(r, stage.value as StatusFilter)).length,
+              count: stageCounts[stage.value] ?? 0,
             }))}
           />
 
@@ -705,12 +717,17 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold">Assigned Sales Person</Label>
+                  <Label className="text-xs font-bold">Assigned To</Label>
                   <Select value={filterAssigned} onValueChange={setFilterAssigned}>
                     <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Sales</SelectItem>
-                      {salesStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
+                      <SelectItem value="all">Anyone</SelectItem>
+                      <SelectItem value="unassigned">Not assigned</SelectItem>
+                      {assignableStaff.map((member) => (
+                        <SelectItem key={member.user_id} value={member.user_id}>
+                          {member.full_name}{member.role === 'telecaller' ? ' (Telecaller)' : ''}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -754,9 +771,12 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           </div>
         ) : (
           <div className="rounded-xl border overflow-hidden bg-card shadow-sm">
-            <div className="overflow-x-auto">
+            {/* The body scrolls inside a viewport-height box instead of growing
+                the page, so the toolbar above and the pager below stay put and
+                the column headers remain visible while scrolling. */}
+            <div className="overflow-auto max-h-[calc(100vh-22rem)] min-h-[16rem]">
               <table className="w-full text-sm text-left border-collapse text-muted-foreground">
-                <thead className="text-xs font-mono uppercase bg-muted/40 border-b text-foreground">
+                <thead className="sticky top-0 z-10 text-xs font-mono uppercase bg-muted border-b text-foreground shadow-sm">
                   <tr>
                     {/* K-Number is the primary identifier for a connection, so
                         it leads. The internal lead id is not shown at all. */}
@@ -880,6 +900,18 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                               </a>
                             </Button>
                           )}
+                          {canManageLeads && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              title="Move to Cancelled Bin"
+                              aria-label={`Delete ${lead.consumerName}`}
+                              onClick={(e) => { e.stopPropagation(); setDeleteTarget(lead); }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -897,6 +929,22 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
             </div>
           </div>
         )}
+
+        {!loading && total > 0 && (
+          <TablePagination
+            entityLabel="leads"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            table={{
+              page,
+              pageCount,
+              pageSize,
+              setPage,
+              setPageSize: (size: number) => { setPageSize(size); setPage(0); },
+              total,
+              rows: filteredRows,
+            } as any}
+          />
+        )}
       </div>
 
       <LeadImportWizard
@@ -904,6 +952,61 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         onOpenChange={setIsImportOpen}
         onImportComplete={() => void fetchData(true)}
       />
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Move this lead to the Cancelled Bin?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.consumerName} will be removed from the leads list. You can restore it
+              from the Cancelled Bin, or delete it permanently from there.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteTarget) void binLeads([deleteTarget.id], deleteTarget.consumerName);
+              }}
+            >
+              {deleting ? 'Moving…' : 'Move to Bin'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Move {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} to the Cancelled Bin?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              They will be removed from the leads list. You can restore them from the Cancelled Bin,
+              or delete them permanently from there.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                void binLeads(
+                  Array.from(selectedIds),
+                  `${selectedIds.size} lead${selectedIds.size > 1 ? 's' : ''}`,
+                );
+              }}
+            >
+              {deleting ? 'Moving…' : 'Move to Bin'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
