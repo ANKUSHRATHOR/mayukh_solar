@@ -171,10 +171,17 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     if (!background) setLoading(true);
 
     try {
-      const [leadsRes, staffRes, rolesRes, projectsRes, quotationsRes] = await Promise.all([
+      // staff and user_roles are admin-only under RLS, so a non-admin reading
+      // them directly gets just their own row and every name on the list renders
+      // as "Unknown user". get_staff_directory() is the SECURITY DEFINER view of
+      // the same data (active staff only) already used by Staff Contacts.
+      const isAdmin = role === 'admin';
+
+      const [leadsRes, staffRes, rolesRes, directoryRes, projectsRes, quotationsRes] = await Promise.all([
         supabase.from('leads').select('*').eq('is_in_bin', false).order('updated_at', { ascending: false }),
-        supabase.from('staff').select('user_id, full_name, mobile, is_active'),
-        supabase.from('user_roles').select('user_id, role'),
+        isAdmin ? supabase.from('staff').select('user_id, full_name, mobile, is_active') : Promise.resolve({ data: [], error: null }),
+        isAdmin ? supabase.from('user_roles').select('user_id, role') : Promise.resolve({ data: [], error: null }),
+        isAdmin ? Promise.resolve({ data: [], error: null }) : supabase.rpc('get_staff_directory' as any),
         supabase.from('projects').select('id, lead_id, assigned_operator_id, payment_type, status, updated_at').not('lead_id', 'is', null),
         supabase.from('quotations').select('project_id, created_at').not('project_id', 'is', null),
       ]);
@@ -182,6 +189,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       if (leadsRes.error) throw leadsRes.error;
       if (staffRes.error) throw staffRes.error;
       if (rolesRes.error) throw rolesRes.error;
+      if (directoryRes.error) throw directoryRes.error;
       if (projectsRes.error) throw projectsRes.error;
       if (quotationsRes.error) throw quotationsRes.error;
 
@@ -195,7 +203,11 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
       const rolesByUser = new Map((rolesRes.data || []).map((item) => [item.user_id, item.role]));
       const staffMap = Object.fromEntries(
-        (staffRes.data || []).map((item) => [item.user_id, { ...item, role: rolesByUser.get(item.user_id) }]),
+        isAdmin
+          ? (staffRes.data || []).map((item) => [item.user_id, { ...item, role: rolesByUser.get(item.user_id) }])
+          : ((directoryRes.data as { user_id: string; full_name: string; mobile: string; role: string }[]) || []).map(
+              (item) => [item.user_id, { ...item, is_active: true }],
+            ),
       ) as Record<string, StaffMember>;
 
       const latestVisitByLead = new Map<string, (typeof siteVisitsRes.data)[number]>();
@@ -261,7 +273,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [toast]);
+  }, [role, toast]);
 
   const handleSyncKno = async (leadId: string, kno: string) => {
     if (!kno || kno.length !== 12) return;
@@ -330,6 +342,15 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   }, [fetchData]);
 
   const allStaff = useMemo(() => Object.values(staffDirectory).sort((a, b) => a.full_name.localeCompare(b.full_name)), [staffDirectory]);
+
+  /**
+   * Reassigning, importing and changing a lead's creator are ownership
+   * operations reserved for admins — `bulk_assign_leads` rejects anyone else
+   * server-side, so showing these to a telecaller would only produce errors.
+   * Everything else on this page is scoped by RLS and safe for any role that
+   * has the CRM module.
+   */
+  const canManageLeads = role === 'admin';
 
   const filteredRows = useMemo(() => {
     const fromDate = customFrom ? new Date(`${customFrom}T00:00:00`) : null;
@@ -555,9 +576,11 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
             <h1 className="text-2xl font-bold text-display text-foreground tracking-tight">Leads</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)} className="border-primary/20 text-primary hover:bg-primary/5">
-              <Upload className="mr-1.5 h-4 w-4" /> Import Leads
-            </Button>
+            {canManageLeads && (
+              <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)} className="border-primary/20 text-primary hover:bg-primary/5">
+                <Upload className="mr-1.5 h-4 w-4" /> Import Leads
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={exportRows} disabled={!filteredRows.length}>
               <Download className="mr-1.5 h-4 w-4" /> Export CSV
             </Button>
@@ -604,7 +627,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           </div>
         )}
 
-        {selectedIds.size > 0 && (
+        {canManageLeads && selectedIds.size > 0 && (
           <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-foreground">
               {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} selected
@@ -737,19 +760,21 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                   <tr>
                     {/* K-Number is the primary identifier for a connection, so
                         it leads. The internal lead id is not shown at all. */}
-                    <th className="px-3 py-3.5 w-10">
-                      <input
-                        type="checkbox"
-                        aria-label="Select all leads on this page"
-                        className="h-4 w-4 cursor-pointer rounded border-border"
-                        checked={filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id))}
-                        onChange={(e) =>
-                          setSelectedIds(
-                            e.target.checked ? new Set(filteredRows.map((r) => r.id)) : new Set()
-                          )
-                        }
-                      />
-                    </th>
+                    {canManageLeads && (
+                      <th className="px-3 py-3.5 w-10">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all leads on this page"
+                          className="h-4 w-4 cursor-pointer rounded border-border"
+                          checked={filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id))}
+                          onChange={(e) =>
+                            setSelectedIds(
+                              e.target.checked ? new Set(filteredRows.map((r) => r.id)) : new Set()
+                            )
+                          }
+                        />
+                      </th>
+                    )}
                     <th className="px-4 py-3.5 font-semibold">K Number</th>
                     <th className="px-4 py-3.5 font-semibold">Consumer Details</th>
                     <th className="px-4 py-3.5 font-semibold">Assigned Staff</th>
@@ -765,22 +790,24 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                       className="hover:bg-muted/10 transition-colors cursor-pointer group"
                       onClick={() => navigate(`/leads/${lead.id}`)}
                     >
-                      <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${lead.consumerName}`}
-                          className="h-4 w-4 cursor-pointer rounded border-border"
-                          checked={selectedIds.has(lead.id)}
-                          onChange={(e) => {
-                            setSelectedIds((prev) => {
-                              const next = new Set(prev);
-                              if (e.target.checked) next.add(lead.id);
-                              else next.delete(lead.id);
-                              return next;
-                            });
-                          }}
-                        />
-                      </td>
+                      {canManageLeads && (
+                        <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${lead.consumerName}`}
+                            className="h-4 w-4 cursor-pointer rounded border-border"
+                            checked={selectedIds.has(lead.id)}
+                            onChange={(e) => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(lead.id);
+                                else next.delete(lead.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-xs font-mono text-foreground">
                         <div className="flex items-center gap-1">
                           <span className="font-bold">

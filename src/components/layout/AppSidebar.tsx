@@ -98,8 +98,12 @@ const buildNav = (hasModule: (m: ModuleKey) => boolean): NavSection[] => {
     { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
   ];
 
+  // "My Leads" is the same list the admin sees at /leads; RLS scopes the rows to
+  // the ones this user created or was assigned, so the label reflects what they
+  // actually get rather than the admin's "All Leads".
   const crm: NavItem[] = hasModule('crm')
     ? [
+        { label: 'My Leads', icon: PhoneCall, path: '/leads' },
         { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
         { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
         { label: 'Field Visit', icon: MapPin, path: '/field-visit' },

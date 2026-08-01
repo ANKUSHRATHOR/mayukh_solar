@@ -123,7 +123,7 @@ const App = () => (
             <Route
               path="/leads"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute module="crm">
                   <AdminLeadsList />
                 </ProtectedRoute>
               }
