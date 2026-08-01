@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2, KeyRound, History, Users, Phone, Briefcase, Wrench, Settings2 } from 'lucide-react';
+import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2, KeyRound, History, Users, Phone, Briefcase, Wrench, Settings2, UserCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -34,9 +34,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Database } from '@/integrations/supabase/types';
-
-type AppRole = Database['public']['Enums']['app_role'];
+import type { AppRole } from '@/lib/modules';
+import { ALL_ROLES, roleLabel } from '@/lib/modules';
 
 interface StaffWithRole {
   id: string;
@@ -62,18 +61,7 @@ const roleColors: Record<AppRole, string> = {
   electrician: 'bg-secondary text-secondary-foreground',
 };
 
-const roles: { value: AppRole; label: string }[] = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'telecaller', label: 'Telecaller' },
-  { value: 'sales_person', label: 'Sales Person' },
-  { value: 'operator', label: 'Operator' },
-  { value: 'welder', label: 'Welder' },
-  { value: 'electrician', label: 'Electrician' },
-];
-
-const roleName = (r: AppRole) => r.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
-const StaffManagement = () => {
+const UsersPanel = () => {
   const [staffList, setStaffList] = useState<StaffWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -135,7 +123,7 @@ const StaffManagement = () => {
         .update({ is_active: !staff.is_active })
         .eq('id', staff.id);
       if (error) throw error;
-      toast({ title: staff.is_active ? 'Staff deactivated' : 'Staff activated' });
+      toast({ title: staff.is_active ? 'User deactivated' : 'User activated' });
       fetchStaff();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -169,7 +157,7 @@ const StaffManagement = () => {
         _role: editRole,
       });
       if (error) throw error;
-      toast({ title: 'Staff updated successfully' });
+      toast({ title: 'User updated successfully' });
       setEditStaff(null);
       fetchStaff();
     } catch (err: any) {
@@ -177,22 +165,6 @@ const StaffManagement = () => {
     } finally {
       setEditLoading(false);
     }
-  };
-
-  const ensureSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
-    if (session.expires_at && session.expires_at * 1000 < Date.now() + 30_000) {
-      const { data: refreshed } = await supabase.auth.refreshSession();
-      return refreshed.session ?? null;
-    }
-    return session;
-  };
-
-  const handleAuthFailure = async () => {
-    toast({ title: 'Session expired', description: 'Please sign in again.', variant: 'destructive' });
-    await supabase.auth.signOut().catch(() => {});
-    navigate('/login', { replace: true });
   };
 
   const handleDelete = async () => {
@@ -203,7 +175,7 @@ const StaffManagement = () => {
         _staff_id: deleteStaff.id,
       });
       if (error) throw error;
-      toast({ title: 'Staff deleted successfully' });
+      toast({ title: 'User deleted successfully' });
       setDeleteStaff(null);
       fetchStaff();
     } catch (err: any) {
@@ -231,15 +203,15 @@ const StaffManagement = () => {
     }
   };
 
-
   const matchesSearch = (s: StaffWithRole) =>
     s.full_name.toLowerCase().includes(search.toLowerCase()) ||
     s.mobile.includes(search) ||
     (s.email?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
-    (s.role && roleName(s.role).toLowerCase().includes(search.toLowerCase()));
+    (s.role && roleLabel(s.role).toLowerCase().includes(search.toLowerCase()));
 
   const categories = useMemo(() => ([
     { key: 'all', label: 'All', icon: Users, roles: null as AppRole[] | null },
+    { key: 'pending', label: 'Pending', icon: UserCheck, roles: [] as AppRole[] },
     { key: 'admin', label: 'Admin', icon: Shield, roles: ['admin'] as AppRole[] },
     { key: 'sales_person', label: 'Sales', icon: Briefcase, roles: ['sales_person'] as AppRole[] },
     { key: 'telecaller', label: 'Telecaller', icon: Phone, roles: ['telecaller'] as AppRole[] },
@@ -249,22 +221,22 @@ const StaffManagement = () => {
 
   const [tab, setTab] = useState<string>('all');
 
-  const visible = staffList.filter((s) => {
-    if (!matchesSearch(s)) return false;
-    const cat = categories.find((c) => c.key === tab);
-    if (!cat || cat.roles === null) return true;
-    return s.role ? cat.roles.includes(s.role) : false;
-  });
-
-  const countFor = (key: string) => {
+  const inCategory = (s: StaffWithRole, key: string) => {
     const cat = categories.find((c) => c.key === key);
-    if (!cat || cat.roles === null) return staffList.length;
-    return staffList.filter((s) => s.role && cat.roles!.includes(s.role)).length;
+    if (!cat || cat.roles === null) return true;
+    if (key === 'pending') return !s.role; // no role assigned yet
+    return s.role ? cat.roles.includes(s.role) : false;
   };
+
+  const visible = staffList.filter((s) => matchesSearch(s) && inCategory(s, tab));
+
+  const countFor = (key: string) => staffList.filter((s) => inCategory(s, key)).length;
+
+  const pendingUsers = staffList.filter((s) => !s.role);
 
   const renderList = () => {
     if (loading) {
-      return <div className="text-center py-12 text-muted-foreground">Loading staff...</div>;
+      return <div className="text-center py-12 text-muted-foreground">Loading users...</div>;
     }
     if (visible.length === 0) {
       return (
@@ -272,7 +244,7 @@ const StaffManagement = () => {
           <CardContent className="py-12 text-center">
             <Shield className="mx-auto h-12 w-12 text-muted-foreground/40 mb-4" />
             <p className="text-muted-foreground">
-              {search ? 'No staff found matching your search.' : 'No staff members in this category yet.'}
+              {search ? 'No users found matching your search.' : 'No users in this category yet.'}
             </p>
           </CardContent>
         </Card>
@@ -289,9 +261,13 @@ const StaffManagement = () => {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-sm text-foreground">{s.full_name}</p>
-                  {s.role && (
+                  {s.role ? (
                     <Badge className={`text-xs ${roleColors[s.role]}`}>
-                      {roleName(s.role)}
+                      {roleLabel(s.role)}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs border-warning/50 text-warning">
+                      No role
                     </Badge>
                   )}
                   <Badge variant={s.is_active ? 'default' : 'secondary'} className="text-xs">
@@ -302,6 +278,11 @@ const StaffManagement = () => {
                   {s.mobile} {s.last_login ? `• Last login: ${new Date(s.last_login).toLocaleDateString()}` : '• Never logged in'}
                 </p>
               </div>
+              {!s.role && (
+                <Button size="sm" variant="outline" className="shrink-0 gap-1" onClick={() => openEdit(s)}>
+                  <UserCheck className="h-4 w-4" /> Assign role
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="shrink-0">
@@ -311,7 +292,7 @@ const StaffManagement = () => {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => openEdit(s)}>
                     <Pencil className="mr-2 h-4 w-4" />
-                    Edit
+                    {s.role ? 'Edit / change role' : 'Assign role'}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { setResetStaff(s); setTempPassword(''); }}>
                     <KeyRound className="mr-2 h-4 w-4" />
@@ -335,21 +316,33 @@ const StaffManagement = () => {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Staff Management</h1>
-          <p className="text-muted-foreground text-sm mt-1">{staffList.length} staff members</p>
-        </div>
+        <p className="text-muted-foreground text-sm">{staffList.length} users</p>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/staff/reset-logs')}>
+          <Button variant="outline" onClick={() => navigate('/users/reset-logs')}>
             <History className="mr-2 h-4 w-4" /> Reset Logs
           </Button>
-          <Button onClick={() => navigate('/staff/new')} className="gradient-primary text-primary-foreground font-semibold">
-            <UserPlus className="mr-2 h-4 w-4" /> Add Staff
+          <Button onClick={() => navigate('/users/new')} className="gradient-primary text-primary-foreground font-semibold">
+            <UserPlus className="mr-2 h-4 w-4" /> Add User
           </Button>
         </div>
       </div>
+
+      {/* Pending approval — new sign-ups awaiting a role. Assign a role to activate. */}
+      {pendingUsers.length > 0 && tab === 'all' && (
+        <Card className="border-warning/40 bg-warning/5 shadow-card">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <UserCheck className="h-4 w-4 text-warning" />
+              <p className="font-semibold text-sm text-foreground">Pending approval ({pendingUsers.length})</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              These users have signed up but have no role yet. Assign a role to approve and activate them.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -381,7 +374,7 @@ const StaffManagement = () => {
         ))}
       </Tabs>
 
-      {/* Admin Credentials Panel — shows any staff with a pending temp PIN */}
+      {/* Admin Credentials Panel — shows any user with a pending temp PIN */}
       {(() => {
         const pending = staffList.filter((s) => s.temp_password_plain && s.must_change_password);
         if (pending.length === 0) return null;
@@ -393,7 +386,7 @@ const StaffManagement = () => {
                 <p className="font-semibold text-sm text-foreground">Pending Temporary PINs ({pending.length})</p>
               </div>
               <p className="text-xs text-muted-foreground">
-                These staff have not changed their password yet. Share the PIN privately — it disappears once they set a new password.
+                These users have not changed their password yet. Share the PIN privately — it disappears once they set a new password.
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {pending.map((s) => (
@@ -413,15 +406,12 @@ const StaffManagement = () => {
         );
       })()}
 
-
-
-
       {/* Edit Dialog */}
       <Dialog open={!!editStaff} onOpenChange={(open) => !open && setEditStaff(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Staff Member</DialogTitle>
-            <DialogDescription>Update staff details and role.</DialogDescription>
+            <DialogTitle>{editStaff?.role ? 'Edit User' : 'Assign Role'}</DialogTitle>
+            <DialogDescription>Update details and assign a role. Assigning a role activates the user.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -444,8 +434,8 @@ const StaffManagement = () => {
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {roles.map((r) => (
-                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  {ALL_ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>{roleLabel(r)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -464,7 +454,7 @@ const StaffManagement = () => {
       <AlertDialog open={!!deleteStaff} onOpenChange={(open) => !open && setDeleteStaff(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Staff Member</AlertDialogTitle>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to permanently delete <strong>{deleteStaff?.full_name}</strong>? This will remove their account, role, and all access. This action cannot be undone.
             </AlertDialogDescription>
@@ -492,7 +482,7 @@ const StaffManagement = () => {
                 <span className="space-y-2 block">
                   <span className="block">Temporary 6-digit PIN for <strong>{resetStaff?.full_name}</strong>:</span>
                   <span className="block bg-muted p-3 rounded-md font-mono text-2xl tracking-widest text-foreground text-center select-all">{tempPassword}</span>
-                  <span className="block text-xs">Share this PIN with the staff member. They will be forced to set a new password on next login. All their data (leads, projects, attendance, notes) is preserved.</span>
+                  <span className="block text-xs">Share this PIN with the user. They will be forced to set a new password on next login. All their data (leads, projects, attendance, notes) is preserved.</span>
                 </span>
               ) : (
                 <>Reset password for <strong>{resetStaff?.full_name}</strong>? A secure 6-digit PIN will be generated. All their data is kept intact.</>
@@ -517,4 +507,4 @@ const StaffManagement = () => {
   );
 };
 
-export default StaffManagement;
+export default UsersPanel;

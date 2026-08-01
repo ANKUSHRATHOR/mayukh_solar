@@ -10,10 +10,7 @@ import {
   PhoneCall,
   Briefcase,
   ClipboardCheck,
-  Wrench,
-  Zap,
   Trash2,
-  FileText,
   ShieldCheck,
   CalendarCheck,
   Wallet,
@@ -27,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import logo from '@/assets/mayukh-solar-logo.png';
+import type { ModuleKey } from '@/lib/modules';
 
 interface AppSidebarProps {
   mobileOpen?: boolean;
@@ -69,8 +67,7 @@ const adminNav: NavSection[] = [
   {
     title: 'People',
     items: [
-      { label: 'Staff Directory', icon: Users, path: '/staff/directory' },
-      { label: 'Staff Management', icon: Users, path: '/staff' },
+      { label: 'User Management', icon: Users, path: '/users' },
       { label: 'Performance', icon: ShieldCheck, path: '/admin/performance' },
       { label: 'Attendance', icon: CalendarCheck, path: '/admin/attendance' },
     ],
@@ -90,135 +87,57 @@ const adminNav: NavSection[] = [
   },
 ];
 
-const telecallerNav: NavSection[] = [
-  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
-  {
-    title: 'Leads',
-    items: [
-      { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
-      { label: 'Site Visits', icon: MapPin, path: '/visits' },
-      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-    ],
-  },
-  {
-    title: 'Attendance',
-    items: [
-      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
-    ],
-  },
-  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
-];
+/**
+ * Non-admin navigation is derived from the role's configurable module access
+ * (hasModule), so the sidebar always reflects the Roles & Access settings.
+ * Overview + Account are always shown; feature sections appear only when the
+ * matching module is granted. Empty sections are dropped.
+ */
+const buildNav = (hasModule: (m: ModuleKey) => boolean): NavSection[] => {
+  const sections: NavSection[] = [
+    { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
+  ];
 
-const salesNav: NavSection[] = [
-  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
-  {
-    title: 'Field Work',
-    items: [
-      { label: 'My Leads', icon: Briefcase, path: '/' },
-      { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
-      { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
-      { label: 'Site Visits', icon: MapPin, path: '/visits' },
-      { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
-      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-    ],
-  },
-  {
-    title: 'Attendance',
-    items: [
-      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
-    ],
-  },
-  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
-];
+  const crm: NavItem[] = hasModule('crm')
+    ? [
+        { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
+        { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
+        { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
+      ]
+    : [];
+  if (hasModule('site_visits')) crm.push({ label: 'Site Visits', icon: MapPin, path: '/visits' });
+  if (crm.length) sections.push({ title: 'Sales & Leads', items: crm });
 
-const operatorNav: NavSection[] = [
-  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
-  {
-    title: 'Operations',
-    items: [
-      { label: 'Projects', icon: ClipboardCheck, path: '/projects' },
-      { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
-      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-    ],
-  },
-  {
-    title: 'Attendance',
-    items: [
-      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
-    ],
-  },
-  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
-];
+  const ops: NavItem[] = [];
+  if (hasModule('projects')) ops.push({ label: 'Projects', icon: ClipboardCheck, path: '/projects' });
+  if (hasModule('tasks')) ops.push({ label: 'My Tasks', icon: CheckSquare, path: '/tasks' });
+  if (ops.length) sections.push({ title: 'Work', items: ops });
 
-const welderNav: NavSection[] = [
-  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
-  {
-    title: 'Field Work',
-    items: [
-      { label: 'Installations', icon: Wrench, path: '/' },
-      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-    ],
-  },
-  {
-    title: 'Attendance',
-    items: [
-      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
-    ],
-  },
-  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
-];
-
-const electricianNav: NavSection[] = [
-  { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
-  {
-    title: 'Field Work',
-    items: [
-      { label: 'Wiring Jobs', icon: Zap, path: '/' },
-      { label: 'My Tasks', icon: CheckSquare, path: '/tasks' },
-    ],
-  },
-  {
-    title: 'Attendance',
-    items: [
-      { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-      { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
-    ],
-  },
-  { title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] },
-];
-
-const teamSection: NavSection = {
-  title: 'Team',
-  items: [{ label: 'Staff Contacts', icon: Contact, path: '/contacts' }],
-};
-
-const withTeam = (sections: NavSection[]): NavSection[] => {
-  // Insert before any final 'Account' section, otherwise at the end
-  const accountIdx = sections.findIndex(s => s.title === 'Account');
-  if (accountIdx >= 0) {
-    return [...sections.slice(0, accountIdx), teamSection, ...sections.slice(accountIdx)];
+  if (hasModule('attendance')) {
+    sections.push({
+      title: 'Attendance',
+      items: [
+        { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
+        { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
+      ],
+    });
   }
-  return [...sections, teamSection];
+
+  if (hasModule('contacts')) {
+    sections.push({ title: 'Team', items: [{ label: 'Staff Contacts', icon: Contact, path: '/contacts' }] });
+  }
+
+  sections.push({ title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] });
+  return sections;
 };
 
 const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
-  const { staff, role, signOut } = useAuth();
+  const { staff, role, signOut, hasModule } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navSections: NavSection[] = withTeam(
-    role === 'admin' ? adminNav :
-    role === 'telecaller' ? telecallerNav :
-    role === 'sales_person' ? salesNav :
-    role === 'operator' ? operatorNav :
-    role === 'welder' ? welderNav :
-    role === 'electrician' ? electricianNav : []
-  );
+  const navSections: NavSection[] = role === 'admin' ? adminNav : role ? buildNav(hasModule) : [];
 
 
 

@@ -134,7 +134,7 @@ const StaffFormPage = () => {
         duration: !isEdit && data?.temp_pin ? 30000 : undefined,
       });
 
-      navigate(isEdit ? `/staff/${id}` : '/staff');
+      navigate(isEdit ? `/users/${id}` : '/users');
     } catch (err) {
       // Held on the form rather than only in a toast, so it stays visible
       // beside the submit button while the user corrects the problem.
@@ -154,7 +154,7 @@ const StaffFormPage = () => {
   if (isEdit && existingQuery.error) {
     return (
       <PageContainer width="narrow">
-        <PageHeader title="Edit staff" back="/staff" />
+        <PageHeader title="Edit staff" back="/users" />
         <ErrorState error={existingQuery.error} onRetry={() => existingQuery.refetch()} />
       </PageContainer>
     );
@@ -165,14 +165,14 @@ const StaffFormPage = () => {
       <PageHeader
         title={isEdit ? 'Edit staff member' : 'Add staff member'}
         icon={isEdit ? UserCog : UserPlus}
-        back={isEdit ? `/staff/${id}` : '/staff'}
+        back={isEdit ? `/users/${id}` : '/users'}
       />
 
       <FormShell
         form={form}
         onSubmit={onSubmit}
         submitLabel={isEdit ? 'Save changes' : 'Create staff member'}
-        cancelTo={isEdit ? `/staff/${id}` : '/staff'}
+        cancelTo={isEdit ? `/users/${id}` : '/users'}
         submitError={submitError}
       >
         <SectionCard title="Details">

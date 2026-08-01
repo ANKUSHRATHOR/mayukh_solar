@@ -72,7 +72,7 @@ const AddStaff = () => {
       setFullName('');
       setMobile('');
       setRole('');
-      navigate('/staff');
+      navigate('/users');
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -82,7 +82,7 @@ const AddStaff = () => {
 
   return (
     <div className="p-6 lg:p-8 max-w-lg mx-auto space-y-6">
-      <Button variant="ghost" onClick={() => navigate('/staff')} className="mb-2">
+      <Button variant="ghost" onClick={() => navigate('/users')} className="mb-2">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Staff
       </Button>
 

@@ -5,16 +5,23 @@ import AppLayout from '@/components/layout/AppLayout';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import type { ModuleKey } from '@/lib/modules';
 
 type AppRole = Database['public']['Enums']['app_role'];
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  allowedRoles: AppRole[];
+  /** Coarse role gate. Use for admin-only management routes. */
+  allowedRoles?: AppRole[];
+  /**
+   * Feature-module gate driven by the role's configurable access. When set, the
+   * route is allowed only if the current role has this module (admin bypasses).
+   */
+  module?: ModuleKey;
 }
 
-const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const { user, role, loading, staff, profileResolved } = useAuth();
+const ProtectedRoute = ({ children, allowedRoles, module }: ProtectedRouteProps) => {
+  const { user, role, loading, staff, profileResolved, hasModule } = useAuth();
 
   if (loading || (user && !profileResolved)) {
     return (
@@ -41,7 +48,8 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
       </div>
     );
   }
-  if (!allowedRoles.includes(role)) return <Navigate to="/" replace />;
+  if (allowedRoles && !allowedRoles.includes(role)) return <Navigate to="/" replace />;
+  if (module && !hasModule(module)) return <Navigate to="/" replace />;
 
   return <AppLayout>{children}</AppLayout>;
 };

@@ -82,7 +82,7 @@ const StaffDetailPage = () => {
       <DetailShell
         title={staff?.full_name ?? 'Staff member'}
         icon={User}
-        backTo="/staff"
+        backTo="/users"
         isLoading={staffQuery.isLoading}
         error={staffQuery.error}
         onRetry={() => staffQuery.refetch()}
@@ -116,7 +116,7 @@ const StaffDetailPage = () => {
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                onClick={() => navigate(`/staff/${staff.id}/edit`)}
+                onClick={() => navigate(`/users/${staff.id}/edit`)}
               >
                 <Pencil className="h-4 w-4" /> Edit
               </Button>

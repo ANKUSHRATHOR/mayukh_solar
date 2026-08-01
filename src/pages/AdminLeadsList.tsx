@@ -185,10 +185,10 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       if (projectsRes.error) throw projectsRes.error;
       if (quotationsRes.error) throw quotationsRes.error;
 
-      const leadIds = (leadsRes.data || []).map((lead) => lead.id);
-      const siteVisitsRes = leadIds.length
-        ? await supabase.from('site_visits').select('lead_id, staff_id, visit_date, visit_notes, status_updated_to').in('lead_id', leadIds).order('visit_date', { ascending: false })
-        : { data: [], error: null };
+      const siteVisitsRes = await supabase
+        .from('site_visits')
+        .select('lead_id, staff_id, visit_date, visit_notes, status_updated_to')
+        .order('visit_date', { ascending: false });
 
       if (siteVisitsRes.error) throw siteVisitsRes.error;
       if (requestId !== requestIdRef.current) return;

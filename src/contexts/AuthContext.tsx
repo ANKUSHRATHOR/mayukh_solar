@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { DEFAULT_ROLE_MODULES, type ModuleKey } from '@/lib/modules';
 
 type AppRole = Database['public']['Enums']['app_role'];
 
@@ -21,11 +22,37 @@ interface AuthContextType {
   user: User | null;
   role: AppRole | null;
   staff: StaffProfile | null;
+  permissions: Set<ModuleKey>;
+  hasModule: (module: ModuleKey) => boolean;
   loading: boolean;
   profileResolved: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
+
+/**
+ * Load the allowed modules for a role from role_permissions, falling back to the
+ * in-code defaults when the table is missing/empty (e.g. migration not applied).
+ * Admin always gets every module regardless of table contents.
+ */
+const loadPermissions = async (role: AppRole): Promise<Set<ModuleKey>> => {
+  const fallback = () => new Set<ModuleKey>(DEFAULT_ROLE_MODULES[role] ?? []);
+  try {
+    // Cast: role_permissions postdates the last types.ts generation.
+    const { data, error } = await (supabase as any)
+      .from('role_permissions')
+      .select('module, allowed')
+      .eq('role', role);
+    if (error || !data || data.length === 0) return fallback();
+    return new Set<ModuleKey>(
+      (data as { module: ModuleKey; allowed: boolean }[])
+        .filter((r) => r.allowed)
+        .map((r) => r.module)
+    );
+  } catch {
+    return fallback();
+  }
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -51,6 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [staff, setStaff] = useState<StaffProfile | null>(null);
+  const [permissions, setPermissions] = useState<Set<ModuleKey>>(new Set());
   const [loading, setLoading] = useState(true);
   const [profileResolved, setProfileResolved] = useState(false);
   const lastUserId = useRef<string | null>(null);
@@ -59,17 +87,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setProfileResolved(false);
       const { data: roleData } = await supabase.rpc('get_user_role', { _user_id: userId });
-      setRole(roleData as AppRole);
+      const resolvedRole = (roleData as AppRole) ?? null;
+      setRole(resolvedRole);
       const { data: staffData } = await supabase
         .from('staff')
         .select('id, user_id, full_name, mobile, email, is_active, must_change_password, last_login')
         .eq('user_id', userId)
         .maybeSingle();
       setStaff(staffData ?? null);
+      setPermissions(resolvedRole ? await loadPermissions(resolvedRole) : new Set());
     } catch (err) {
       console.error('Error fetching profile:', err);
       setRole(null);
       setStaff(null);
+      setPermissions(new Set());
     } finally {
       setProfileResolved(true);
     }
@@ -95,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isDifferentUser) {
           setRole(null);
           setStaff(null);
+          setPermissions(new Set());
           setProfileResolved(false);
         }
 
@@ -114,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setRole(null);
         setStaff(null);
+        setPermissions(new Set());
         setProfileResolved(true);
       }
       setLoading(false);
@@ -126,6 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastUserId.current = session.user.id;
         setRole(null);
         setStaff(null);
+        setPermissions(new Set());
         fetchProfile(session.user.id);
       } else {
         setProfileResolved(true);
@@ -140,11 +174,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try { await logEvent('logout'); } catch { /* noop */ }
     await supabase.auth.signOut();
     lastUserId.current = null;
-    setSession(null); setUser(null); setRole(null); setStaff(null); setProfileResolved(true);
+    setSession(null); setUser(null); setRole(null); setStaff(null); setPermissions(new Set()); setProfileResolved(true);
   };
 
+  const hasModule = (module: ModuleKey): boolean => role === 'admin' || permissions.has(module);
+
   return (
-    <AuthContext.Provider value={{ session, user, role, staff, loading, profileResolved, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, role, staff, permissions, hasModule, loading, profileResolved, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,9 +8,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index.tsx";
 import Login from "./pages/Login.tsx";
 import SetPassword from "./pages/SetPassword.tsx";
-import StaffManagement from "./pages/StaffManagement.tsx";
+import UserManagementPage from "./pages/users/UserManagementPage.tsx";
 import AddStaff from "./pages/AddStaff.tsx";
-import StaffListPage from "./pages/staff/StaffListPage.tsx";
 import StaffDetailPage from "./pages/staff/StaffDetailPage.tsx";
 import StaffFormPage from "./pages/staff/StaffFormPage.tsx";
 import AdminLeadsList from "./pages/AdminLeadsList.tsx";
@@ -51,6 +50,12 @@ import ErrorBoundary from "./components/ErrorBoundary.tsx";
 
 const queryClient = new QueryClient();
 
+// Preserve the :id when redirecting the old /staff/:id[/edit] URLs to /users/:id.
+const StaffRedirect = ({ edit = false }: { edit?: boolean }) => {
+  const { id } = useParams();
+  return <Navigate to={`/users/${id}${edit ? '/edit' : ''}`} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
@@ -65,16 +70,19 @@ const App = () => (
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/install" element={<InstallApp />} />
             <Route path="/" element={<Index />} />
+            {/* Unified User Management module. Every signed-up user shows here;
+                admin assigns a role (which activates them) and configures each
+                role's module access under the Roles & Access tab. */}
             <Route
-              path="/staff"
+              path="/users"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <StaffManagement />
+                  <UserManagementPage />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/staff/new"
+              path="/users/new"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AddStaff />
@@ -82,26 +90,15 @@ const App = () => (
               }
             />
             <Route
-              path="/staff/reset-logs"
+              path="/users/reset-logs"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <PasswordResetLogs />
                 </ProtectedRoute>
               }
             />
-            {/* Browsable staff directory with routed detail + form.
-                /staff/manage keeps the existing console (password resets,
-                pending approvals) until those actions move onto the detail page. */}
             <Route
-              path="/staff/directory"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <StaffListPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/staff/:id"
+              path="/users/:id"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <StaffDetailPage />
@@ -109,13 +106,20 @@ const App = () => (
               }
             />
             <Route
-              path="/staff/:id/edit"
+              path="/users/:id/edit"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <StaffFormPage />
                 </ProtectedRoute>
               }
             />
+            {/* Backwards-compatible redirects from the old /staff/* URLs. */}
+            <Route path="/staff" element={<Navigate to="/users" replace />} />
+            <Route path="/staff/directory" element={<Navigate to="/users" replace />} />
+            <Route path="/staff/new" element={<Navigate to="/users/new" replace />} />
+            <Route path="/staff/reset-logs" element={<Navigate to="/users/reset-logs" replace />} />
+            <Route path="/staff/:id/edit" element={<StaffRedirect edit />} />
+            <Route path="/staff/:id" element={<StaffRedirect />} />
             <Route
               path="/leads"
               element={
@@ -135,7 +139,7 @@ const App = () => (
             <Route
               path="/leads/new"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person']}>
+                <ProtectedRoute module="crm">
                   <CreateLead />
                 </ProtectedRoute>
               }
@@ -143,7 +147,7 @@ const App = () => (
             <Route
               path="/leads/:id"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person']}>
+                <ProtectedRoute module="crm">
                   <LeadDetail />
                 </ProtectedRoute>
               }
@@ -151,7 +155,7 @@ const App = () => (
             <Route
               path="/projects"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'operator', 'sales_person']}>
+                <ProtectedRoute module="projects">
                   <ProjectsListPage />
                 </ProtectedRoute>
               }
@@ -167,7 +171,7 @@ const App = () => (
             <Route
               path="/projects/:projectId"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'operator', 'sales_person']}>
+                <ProtectedRoute module="projects">
                   <ProjectDetailPage />
                 </ProtectedRoute>
               }
@@ -183,7 +187,7 @@ const App = () => (
             <Route
               path="/projects/:projectId/documents"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}>
+                <ProtectedRoute module="projects">
                   <ProjectDocuments />
                 </ProtectedRoute>
               }
@@ -191,7 +195,7 @@ const App = () => (
             <Route
               path="/operator/projects/:projectId"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'operator']}>
+                <ProtectedRoute module="projects">
                   <OperatorProjectDetail />
                 </ProtectedRoute>
               }
@@ -199,7 +203,7 @@ const App = () => (
             <Route
               path="/projects/:projectId/material-dispatch"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'operator', 'sales_person']}>
+                <ProtectedRoute module="projects">
                   <MaterialDispatch />
                 </ProtectedRoute>
               }
@@ -215,7 +219,7 @@ const App = () => (
             <Route
               path="/deals"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}>
+                <ProtectedRoute module="crm">
                   <DealsDashboard />
                 </ProtectedRoute>
               }
@@ -239,7 +243,7 @@ const App = () => (
             <Route
               path="/attendance"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}>
+                <ProtectedRoute module="attendance">
                   <Attendance />
                 </ProtectedRoute>
               }
@@ -263,23 +267,23 @@ const App = () => (
             <Route
               path="/my-attendance"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}>
+                <ProtectedRoute module="attendance">
                   <MyAttendance />
                 </ProtectedRoute>
               }
             />
             <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
             <Route path="/admin/performance" element={<ProtectedRoute allowedRoles={['admin']}><StaffPerformance /></ProtectedRoute>} />
-            <Route path="/field-visit" element={<ProtectedRoute allowedRoles={['admin', 'sales_person']}><FieldVisit /></ProtectedRoute>} />
-            <Route path="/tasks" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><Tasks /></ProtectedRoute>} />
-            <Route path="/projects/:projectId/home-location" element={<ProtectedRoute allowedRoles={['admin', 'sales_person', 'operator']}><ProjectHomeLocation /></ProtectedRoute>} />
+            <Route path="/field-visit" element={<ProtectedRoute module="crm"><FieldVisit /></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute module="tasks"><Tasks /></ProtectedRoute>} />
+            <Route path="/projects/:projectId/home-location" element={<ProtectedRoute module="projects"><ProjectHomeLocation /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><StaffProfile /></ProtectedRoute>} />
             <Route path="/k-lookup" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator']}><KNumberLookup /></ProtectedRoute>} />
-            <Route path="/contacts" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><StaffContacts /></ProtectedRoute>} />
+            <Route path="/contacts" element={<ProtectedRoute module="contacts"><StaffContacts /></ProtectedRoute>} />
             <Route
               path="/visits"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'sales_person', 'telecaller', 'operator']}>
+                <ProtectedRoute module="site_visits">
                   <VisitsListPage />
                 </ProtectedRoute>
               }
@@ -287,7 +291,7 @@ const App = () => (
             <Route
               path="/visits/:visitId"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'sales_person', 'telecaller', 'operator']}>
+                <ProtectedRoute module="site_visits">
                   <VisitDetailPage />
                 </ProtectedRoute>
               }
