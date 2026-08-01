@@ -236,11 +236,11 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
    * leads first, which PostgREST capped at 1000 — leads past that were
    * unreachable no matter how you filtered.
    */
-  const buildLeadsQuery = useCallback((options?: { status?: StatusFilter; countOnly?: boolean }) => {
-    const filterStatusValue = options?.status ?? filterStatus;
+  const buildLeadsQuery = useCallback(() => {
+    const filterStatusValue = filterStatus;
     let query = supabase
       .from('leads_list' as any)
-      .select(options?.countOnly ? 'id' : '*', { count: 'exact', head: options?.countOnly === true })
+      .select('*', { count: 'exact' })
       .eq('is_in_bin', false);
 
     // Commas and parens are PostgREST `or()` syntax, so they are stripped
@@ -339,19 +339,53 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     return () => { cancelled = true; };
   }, [role, toast]);
 
+  /**
+   * Arguments for `leads_stage_counts`, which replaces the eight per-stage
+   * `count: 'exact'` queries the stage bar used to issue. Nine scans of
+   * `leads_list` per render was enough to push queries past the 8s
+   * statement_timeout and starve unrelated endpoints.
+   *
+   * These must stay in step with buildLeadsQuery above — every filter there
+   * except the stage itself belongs here, or a count will disagree with the
+   * list clicking it produces.
+   */
+  const buildStageCountArgs = useCallback(() => {
+    const term = debouncedSearch.trim().replace(/[,()*]/g, ' ').trim();
+
+    let from: string | null = null;
+    let to: string | null = null;
+    if (filterDate === 'today') from = startOfToday().toISOString();
+    else if (filterDate === 'this_week') from = startOfWeek().toISOString();
+    else if (filterDate === 'this_month') from = startOfMonth().toISOString();
+    else if (filterDate === 'custom') {
+      if (customFrom) from = new Date(`${customFrom}T00:00:00`).toISOString();
+      if (customTo) to = new Date(`${customTo}T23:59:59`).toISOString();
+    }
+
+    return {
+      _search: term || null,
+      _creator: filterCreator !== 'all' ? filterCreator : null,
+      _assigned: filterAssigned !== 'all' && filterAssigned !== 'unassigned' ? filterAssigned : null,
+      _unassigned: filterAssigned === 'unassigned',
+      _operator: filterOperator !== 'all' ? filterOperator : null,
+      _project_type: filterProjectType !== 'all' ? filterProjectType : null,
+      _from: from,
+      _to: to,
+      _scope: role === 'sales_person' && user ? salesTab : 'all',
+      _scope_user: role === 'sales_person' && user ? user.id : null,
+    };
+  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, role, salesTab, user]);
+
   const fetchData = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
     if (!background) setLoading(true);
 
     try {
-      // The page and the stage counts are independent queries, so they go out
-      // together rather than the counts waiting on the page to come back.
-      const [leadsRes, ...stageResults] = await Promise.all([
+      // Two queries per render: the page itself, and one grouped count for the
+      // whole stage bar. They are independent, so they go out together.
+      const [leadsRes, stageRes] = await Promise.all([
         buildLeadsQuery().range(page * pageSize, page * pageSize + pageSize - 1),
-        // Stage counts must reflect the whole filtered set, not the page on
-        // screen, so each is a head-only count query rather than a tally of
-        // loaded rows.
-        ...STAGE_BAR_STAGES.map((stage) => buildLeadsQuery({ status: stage.value, countOnly: true })),
+        supabase.rpc('leads_stage_counts' as any, buildStageCountArgs()),
       ]);
 
       if (leadsRes.error) throw leadsRes.error;
@@ -359,15 +393,17 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
       setTotal(leadsRes.count ?? 0);
       setRawLeads((leadsRes.data as unknown as Record<string, unknown>[]) || []);
-      setStageCounts(
-        Object.fromEntries(STAGE_BAR_STAGES.map((stage, i) => [stage.value, stageResults[i].count ?? 0])),
-      );
+
+      // The stage bar is decoration around the list; if only its count fails,
+      // show the list rather than failing the whole page.
+      if (stageRes.error) setStageCounts({});
+      else setStageCounts((stageRes.data as Record<string, number>) || {});
     } catch (error: any) {
       toast({ title: 'Unable to load leads', description: error.message || 'Please try again.', variant: 'destructive' });
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [buildLeadsQuery, page, pageSize, toast]);
+  }, [buildLeadsQuery, buildStageCountArgs, page, pageSize, toast]);
 
   // Any filter change re-queries from the first page; staying on page 7 of a
   // result set that just shrank to two pages would show an empty table.
