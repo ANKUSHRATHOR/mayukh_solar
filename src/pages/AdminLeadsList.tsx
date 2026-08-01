@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { downloadCsv } from '@/lib/exportCsv';
 import { useStickyState } from '@/hooks/useStickyState';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { Database } from '@/integrations/supabase/types';
 import LeadImportWizard from '@/components/leads/LeadImportWizard';
 import { fetchConsumerDetails } from '@/lib/discom';
@@ -181,7 +182,9 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const { toast } = useToast();
   const requestIdRef = useRef(0);
 
-  const [leadRows, setLeadRows] = useState<LeadRow[]>([]);
+  // Raw `leads_list` rows, mapped to LeadRow at render time. The view is not in
+  // the generated types, hence the loose row shape.
+  const [rawLeads, setRawLeads] = useState<Record<string, unknown>[]>([]);
   const [syncingKno, setSyncingKno] = useState<string | null>(null);
   const [salesTab, setSalesTab] = useState<'my_visits' | 'unassigned_visits'>('my_visits');
   const { user, role } = useAuth();
@@ -190,6 +193,10 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [operatorStaff, setOperatorStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useStickyState<string>('admin-leads:search', '');
+  // The query keys off the debounced value, not the raw one: `search` changes on
+  // every keystroke, and buildLeadsQuery's identity drives both the fetch effect
+  // and the realtime subscription.
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [filterStatus, setFilterStatus] = useStickyState<StatusFilter>('admin-leads:status', 'all');
   const [filterCreator, setFilterCreator] = useStickyState<string>('admin-leads:creator', 'all');
   const [filterAssigned, setFilterAssigned] = useStickyState<string>('admin-leads:assigned', 'all');
@@ -238,7 +245,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
     // Commas and parens are PostgREST `or()` syntax, so they are stripped
     // rather than escaped.
-    const term = search.trim().replace(/[,()*]/g, ' ').trim();
+    const term = debouncedSearch.trim().replace(/[,()*]/g, ' ').trim();
     if (term) {
       query = query.or(
         [`customer_name.ilike.%${term}%`, `mobile.ilike.%${term}%`, `k_number.ilike.%${term}%`].join(','),
@@ -281,54 +288,77 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       case 'status_asc': return query.order('status', { ascending: true });
       default: return query.order('last_activity_at', { ascending: false });
     }
-  }, [customFrom, customTo, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, role, salesTab, search, sortBy, user]);
+  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, role, salesTab, sortBy, user]);
+
+  /**
+   * The staff directory changes on its own schedule, not with the filters, so it
+   * loads once per role rather than riding along on every lead fetch. Keeping it
+   * out of fetchData also keeps fetchData independent of staffDirectory — names
+   * are resolved when the rows are rendered, not when they are fetched.
+   */
+  useEffect(() => {
+    if (!role) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        // staff and user_roles are admin-only under RLS, so a non-admin reading
+        // them directly gets just their own row and every name on the list renders
+        // as "Unknown user". get_staff_directory() is the SECURITY DEFINER view of
+        // the same data (active staff only) already used by Staff Contacts.
+        const isAdmin = role === 'admin';
+
+        const [staffRes, rolesRes, directoryRes] = await Promise.all([
+          isAdmin ? supabase.from('staff').select('user_id, full_name, mobile, is_active') : Promise.resolve({ data: [], error: null }),
+          isAdmin ? supabase.from('user_roles').select('user_id, role') : Promise.resolve({ data: [], error: null }),
+          isAdmin ? Promise.resolve({ data: [], error: null }) : supabase.rpc('get_staff_directory' as any),
+        ]);
+
+        if (staffRes.error) throw staffRes.error;
+        if (rolesRes.error) throw rolesRes.error;
+        if (directoryRes.error) throw directoryRes.error;
+        if (cancelled) return;
+
+        const rolesByUser = new Map((rolesRes.data || []).map((item) => [item.user_id, item.role]));
+        const staffMap = Object.fromEntries(
+          isAdmin
+            ? (staffRes.data || []).map((item) => [item.user_id, { ...item, role: rolesByUser.get(item.user_id) }])
+            : ((directoryRes.data as { user_id: string; full_name: string; mobile: string; role: string }[]) || []).map(
+                (item) => [item.user_id, { ...item, is_active: true }],
+              ),
+        ) as Record<string, StaffMember>;
+
+        setStaffDirectory(staffMap);
+        setSalesStaff(Object.values(staffMap).filter((item) => item.role === 'sales_person' && item.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name)));
+        setOperatorStaff(Object.values(staffMap).filter((item) => item.role === 'operator' && item.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name)));
+      } catch (error: any) {
+        if (!cancelled) toast({ title: 'Unable to load staff', description: error.message || 'Please try again.', variant: 'destructive' });
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [role, toast]);
 
   const fetchData = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
     if (!background) setLoading(true);
 
     try {
-      // staff and user_roles are admin-only under RLS, so a non-admin reading
-      // them directly gets just their own row and every name on the list renders
-      // as "Unknown user". get_staff_directory() is the SECURITY DEFINER view of
-      // the same data (active staff only) already used by Staff Contacts.
-      const isAdmin = role === 'admin';
-
-      const [leadsRes, staffRes, rolesRes, directoryRes] = await Promise.all([
+      // The page and the stage counts are independent queries, so they go out
+      // together rather than the counts waiting on the page to come back.
+      const [leadsRes, ...stageResults] = await Promise.all([
         buildLeadsQuery().range(page * pageSize, page * pageSize + pageSize - 1),
-        isAdmin ? supabase.from('staff').select('user_id, full_name, mobile, is_active') : Promise.resolve({ data: [], error: null }),
-        isAdmin ? supabase.from('user_roles').select('user_id, role') : Promise.resolve({ data: [], error: null }),
-        isAdmin ? Promise.resolve({ data: [], error: null }) : supabase.rpc('get_staff_directory' as any),
+        // Stage counts must reflect the whole filtered set, not the page on
+        // screen, so each is a head-only count query rather than a tally of
+        // loaded rows.
+        ...STAGE_BAR_STAGES.map((stage) => buildLeadsQuery({ status: stage.value, countOnly: true })),
       ]);
 
       if (leadsRes.error) throw leadsRes.error;
-      if (staffRes.error) throw staffRes.error;
-      if (rolesRes.error) throw rolesRes.error;
-      if (directoryRes.error) throw directoryRes.error;
       if (requestId !== requestIdRef.current) return;
 
-      const rolesByUser = new Map((rolesRes.data || []).map((item) => [item.user_id, item.role]));
-      const staffMap = Object.fromEntries(
-        isAdmin
-          ? (staffRes.data || []).map((item) => [item.user_id, { ...item, role: rolesByUser.get(item.user_id) }])
-          : ((directoryRes.data as { user_id: string; full_name: string; mobile: string; role: string }[]) || []).map(
-              (item) => [item.user_id, { ...item, is_active: true }],
-            ),
-      ) as Record<string, StaffMember>;
-
-      setStaffDirectory(staffMap);
-      setSalesStaff(Object.values(staffMap).filter((item) => item.role === 'sales_person' && item.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name)));
-      setOperatorStaff(Object.values(staffMap).filter((item) => item.role === 'operator' && item.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name)));
       setTotal(leadsRes.count ?? 0);
-      setLeadRows(((leadsRes.data as any[]) || []).map((lead) => mapLeadRow(lead, staffMap)));
-
-      // Stage counts must reflect the whole filtered set, not the page on
-      // screen, so each is a head-only count query rather than a tally of
-      // loaded rows.
-      const stageResults = await Promise.all(
-        STAGE_BAR_STAGES.map((stage) => buildLeadsQuery({ status: stage.value, countOnly: true })),
-      );
-      if (requestId !== requestIdRef.current) return;
+      setRawLeads((leadsRes.data as unknown as Record<string, unknown>[]) || []);
       setStageCounts(
         Object.fromEntries(STAGE_BAR_STAGES.map((stage, i) => [stage.value, stageResults[i].count ?? 0])),
       );
@@ -337,7 +367,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [buildLeadsQuery, page, pageSize, role, toast]);
+  }, [buildLeadsQuery, page, pageSize, toast]);
 
   // Any filter change re-queries from the first page; staying on page 7 of a
   // result set that just shrank to two pages would show an empty table.
@@ -424,19 +454,42 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     void fetchData();
   }, [fetchData]);
 
+  // Held in a ref so the subscription below can mount once. Depending on
+  // fetchData directly tore the channel down and re-subscribed it on every
+  // keystroke and filter change.
+  const fetchDataRef = useRef(fetchData);
+  useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
+
   useEffect(() => {
+    // A single write touches several of these tables, and an import touches them
+    // in a burst, so refreshes are coalesced onto a trailing timer rather than
+    // firing one full reload per event.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void fetchDataRef.current(true); }, 400);
+    };
+
     const channel = supabase
       .channel('admin-leads-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => void fetchData(true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_visits' }, () => void fetchData(true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => void fetchData(true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'quotations' }, () => void fetchData(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_visits' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quotations' }, scheduleRefresh)
       .subscribe();
 
     return () => {
+      if (timer) clearTimeout(timer);
       void supabase.removeChannel(channel);
     };
-  }, [fetchData]);
+  }, []);
+
+  // Names are resolved at render time, so the directory arriving after the rows
+  // fills them in without refetching the leads.
+  const leadRows = useMemo(
+    () => rawLeads.map((lead) => mapLeadRow(lead, staffDirectory)),
+    [rawLeads, staffDirectory],
+  );
 
   const allStaff = useMemo(() => Object.values(staffDirectory).sort((a, b) => a.full_name.localeCompare(b.full_name)), [staffDirectory]);
 
@@ -558,14 +611,10 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     try {
       const { error } = await supabase.from('leads').update({ created_by_user_id: userId }).eq('id', leadId);
       if (error) throw error;
-      const staff = staffDirectory[userId];
-      setLeadRows((current) => current.map((lead) => lead.id === leadId ? {
-        ...lead,
-        createdByUserId: userId,
-        createdByName: staff?.full_name || 'Updated',
-        createdByMobile: staff?.mobile || null,
-        createdByRole: staff?.role || null,
-      } : lead));
+      // Patch the raw row; mapLeadRow resolves the name from the directory.
+      setRawLeads((current) => current.map((lead) => lead.id === leadId
+        ? { ...lead, created_by_user_id: userId }
+        : lead));
       setEditingCreatorId(null);
       toast({ title: 'Creator updated' });
     } catch (err: any) {

@@ -22,7 +22,8 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     host: "::",
-    port: 8080,
+    // Honour PORT when the harness assigns one; 8080 stays the default.
+    port: Number(process.env.PORT) || 8080,
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
     },
