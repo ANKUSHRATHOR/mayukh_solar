@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2, Pencil } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -210,6 +210,9 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<LeadRow | null>(null);
+  const [knoTarget, setKnoTarget] = useState<LeadRow | null>(null);
+  const [knoDraft, setKnoDraft] = useState('');
+  const [savingKno, setSavingKno] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const kanbanColumns: { status: LeadStatus; label: string; color: string }[] = [
@@ -339,6 +342,35 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   // Any filter change re-queries from the first page; staying on page 7 of a
   // result set that just shrank to two pages would show an empty table.
   useEffect(() => { setPage(0); }, [buildLeadsQuery]);
+
+  /**
+   * Corrects a lead's K Number. The previously synced Discom payload belonged
+   * to the old number, so it is cleared rather than left to describe a
+   * different connection — re-sync to repopulate it.
+   */
+  const saveKno = async () => {
+    if (!knoTarget) return;
+    const next = knoDraft.trim();
+    if (!/^\d{12}$/.test(next)) {
+      toast({ title: 'Invalid K Number', description: 'Must be exactly 12 digits.', variant: 'destructive' });
+      return;
+    }
+    setSavingKno(true);
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ k_number: next, kno_details: null })
+        .eq('id', knoTarget.id);
+      if (error) throw error;
+      toast({ title: 'K Number updated', description: 'Sync with Discom to refresh the consumer details.' });
+      setKnoTarget(null);
+      await fetchData(true);
+    } catch (err: any) {
+      toast({ title: 'Could not update K Number', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingKno(false);
+    }
+  };
 
   const handleSyncKno = async (leadId: string, kno: string) => {
     if (!kno || kno.length !== 12) return;
@@ -848,6 +880,20 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                               <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground ${syncingKno === lead.id ? 'animate-spin text-primary' : ''}`} />
                             </Button>
                           )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 rounded-md hover:bg-muted shrink-0"
+                            title={lead.kNumber ? 'Edit K Number' : 'Add K Number'}
+                            aria-label={`Edit K Number for ${lead.consumerName}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setKnoTarget(lead);
+                              setKnoDraft(lead.kNumber ?? '');
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -952,6 +998,36 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         onOpenChange={setIsImportOpen}
         onImportComplete={() => void fetchData(true)}
       />
+
+      <AlertDialog open={knoTarget !== null} onOpenChange={(open) => !open && setKnoTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{knoTarget?.kNumber ? 'Edit' : 'Add'} K Number</AlertDialogTitle>
+            <AlertDialogDescription>
+              For {knoTarget?.consumerName}. Must be 12 digits. Any Discom details already synced
+              against the old number are cleared, so re-sync afterwards to pull the correct ones.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={knoDraft}
+            onChange={(e) => setKnoDraft(e.target.value.replace(/\D/g, '').slice(0, 12))}
+            placeholder="210721033383"
+            inputMode="numeric"
+            className="font-mono"
+            autoFocus
+          />
+          <p className="text-xs text-muted-foreground">{knoDraft.length}/12 digits</p>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingKno}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={savingKno || knoDraft.length !== 12}
+              onClick={(e) => { e.preventDefault(); void saveKno(); }}
+            >
+              {savingKno ? 'Saving…' : 'Save'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
