@@ -59,11 +59,16 @@ const TelecallerDashboard = () => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
+    // A telecaller works the leads they created *and* the ones an admin assigned
+    // to them. Filtering on created_by alone hid every assigned lead, even
+    // though RLS grants access to both.
+    const ownScope = `created_by_user_id.eq.${user.id},assigned_to_user_id.eq.${user.id}`;
+
     const [allRes, totalRes, monthRes, todayRes, salesRes] = await Promise.all([
-      supabase.from('leads').select('*').eq('created_by_user_id', user.id).order('created_at', { ascending: false }).limit(500),
-      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id),
-      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id).gte('created_at', startOfMonth),
-      supabase.from('leads').select('id', { count: 'exact', head: true }).eq('created_by_user_id', user.id).gte('created_at', startOfDay),
+      supabase.from('leads').select('*').or(ownScope).order('created_at', { ascending: false }).limit(500),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).or(ownScope),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).or(ownScope).gte('created_at', startOfMonth),
+      supabase.from('leads').select('id', { count: 'exact', head: true }).or(ownScope).gte('created_at', startOfDay),
       supabase.rpc('get_assignable_sales_persons'),
     ]);
 
@@ -81,9 +86,13 @@ const TelecallerDashboard = () => {
 
   useEffect(() => {
     if (!user) return;
+    // postgres_changes takes a single equality filter, so assigned and created
+    // leads need one subscription each — without the second, a lead assigned to
+    // this telecaller would not appear until a manual reload.
     const channel = supabase
       .channel(`telecaller-leads-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `created_by_user_id=eq.${user.id}` }, () => fetchLeads())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `assigned_to_user_id=eq.${user.id}` }, () => fetchLeads())
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [user]);
