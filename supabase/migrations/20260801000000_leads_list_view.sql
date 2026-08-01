@@ -97,5 +97,12 @@ BEGIN
   RETURN jsonb_build_object('updated', updated);
 END $$;
 
-REVOKE EXECUTE ON FUNCTION public.bulk_bin_leads(uuid[]) FROM anon;
+-- FROM PUBLIC, not just anon: Postgres grants EXECUTE to PUBLIC by default and
+-- anon inherits it, so revoking from anon alone leaves the function callable
+-- without a session.
+REVOKE EXECUTE ON FUNCTION public.bulk_bin_leads(uuid[]) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.bulk_bin_leads(uuid[]) TO authenticated;
+
+-- Same defect on the pre-existing assignment RPC, fixed here alongside it.
+REVOKE EXECUTE ON FUNCTION public.bulk_assign_leads(uuid[], uuid) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.bulk_assign_leads(uuid[], uuid) TO authenticated;

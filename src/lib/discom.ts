@@ -12,7 +12,7 @@ export async function fetchConsumerDetails(kno: string): Promise<DiscomLookupRes
   // 1. In local development, prefer using the Vite proxy directly (avoids CORS & local supabase serve setup)
   if (import.meta.env.DEV) {
     try {
-      const url = `/api/discom/newconnection/it_request_handler.jsp?paramStr=service_kno_newcondet|${trimmed}`;
+      const url = `https://cescrajasthan.co.in/newconnection/it_request_handler.jsp?paramStr=service_kno_newcondet|${trimmed}`;
       const res = await fetch(url);
       if (res.ok) {
         const text = await res.text();
