@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeApi } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { FileText, Loader2, ExternalLink, Printer, Download, Share2 } from 'lucide-react';
@@ -81,7 +82,7 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-quotation', {
+      const { data, error } = await invokeApi('generate-quotation', {
         body: { projectId, quotationType: qType, bankAccountId: bankId || null },
       });
       if (error) throw error;
@@ -105,7 +106,7 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
   const openViewer = async (q: any) => {
     setViewerQ(q); setViewerHtml(''); setViewerLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-quotation', { body: { quotationId: q.id } });
+      const { data, error } = await invokeApi('generate-quotation', { body: { quotationId: q.id } });
       if (error) throw error;
       setViewerHtml(data?.html || '');
     } catch (e: any) {

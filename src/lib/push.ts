@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { invokeApi } from "@/lib/apiClient";
 
 const PUSH_SW_URL = "/push-sw.js";
 
@@ -32,10 +33,11 @@ export async function getPushPermission(): Promise<NotificationPermission> {
 }
 
 async function getPublicKey(): Promise<string> {
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`;
-  const res = await fetch(url, { method: "GET" });
-  const json = await res.json();
-  if (!json.publicKey) throw new Error("Push notifications not configured");
+  const { data: json, error } = await invokeApi<{ publicKey?: string }>("send-push", {
+    method: "GET",
+  });
+  if (error) throw error;
+  if (!json?.publicKey) throw new Error("Push notifications not configured");
   return json.publicKey;
 }
 

@@ -749,10 +749,22 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
         {canManageLeads && selectedIds.size > 0 && (
           <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-semibold text-foreground">
-              {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} selected
-            </p>
+            {/* Clear sits with the count — both describe the selection itself. */}
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-foreground">
+                {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} selected
+              </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Picker and its Assign button stay adjacent so the flow reads left to right. */}
               <Select value={bulkAssignee} onValueChange={setBulkAssignee}>
                 <SelectTrigger className="h-9 w-[220px] text-sm">
                   <SelectValue placeholder="Assign to…" />
@@ -768,6 +780,12 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                     ))}
                 </SelectContent>
               </Select>
+              <Button size="sm" onClick={bulkAssign} disabled={!bulkAssignee || bulkAssigning}>
+                {bulkAssigning ? 'Assigning…' : 'Assign'}
+              </Button>
+
+              {/* Delete is held apart from Assign — a mis-click there is unrecoverable. */}
+              <span aria-hidden className="mx-1 hidden h-6 w-px bg-border sm:block" />
               <Button
                 size="sm"
                 variant="outline"
@@ -776,12 +794,6 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                 disabled={deleting}
               >
                 <Trash2 className="mr-1.5 h-4 w-4" /> Delete
-              </Button>
-              <Button size="sm" onClick={bulkAssign} disabled={!bulkAssignee || bulkAssigning}>
-                {bulkAssigning ? 'Assigning…' : 'Assign'}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-                Clear
               </Button>
             </div>
           </div>
