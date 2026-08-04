@@ -24,15 +24,6 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # The backend has its own tsconfig and isn't covered by the app typecheck
-      # above. It ships to production as a Vercel Function, so break the build here
-      # rather than at deploy time.
-      - name: Install server deps
-        run: npm ci --prefix server
-
-      - name: Typecheck server
-        run: npm run typecheck:server
-
       # Non-blocking: the codebase currently has ~460 pre-existing lint errors,
       # almost all no-explicit-any. Reported for visibility; flip to blocking
       # once that backlog is cleared.

@@ -31,17 +31,11 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
     proxy: {
-      // Keep this ahead of the '/api' rule below — Vite matches prefixes in order.
       '/api/discom': {
         target: 'https://cescrajasthan.co.in',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/discom/, ''),
-      },
-      // Everything else under /api is the Node backend in ./server.
-      '/api': {
-        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:8787',
-        changeOrigin: true,
-      },
+      }
     }
   },
   plugins: [

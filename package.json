@@ -9,7 +9,6 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -54,10 +53,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "cors": "^2.8.6",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
-    "express": "^4.22.2",
     "html2pdf.js": "^0.14.0",
     "input-otp": "^1.4.2",
     "jszip": "^3.10.1",
@@ -77,8 +74,6 @@
     "three": "^0.160.0",
     "vaul": "^0.9.9",
     "vite-plugin-pwa": "^1.2.0",
-    "web-push": "^3.6.7",
-    "ws": "^8.21.2",
     "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },

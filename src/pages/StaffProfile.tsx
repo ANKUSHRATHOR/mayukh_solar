@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { invokeApi } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,7 +34,7 @@ const StaffProfile = () => {
     }
     setSaving(true);
     try {
-      const { data, error } = await invokeApi('update-staff-email', { body: { email } });
+      const { data, error } = await supabase.functions.invoke('update-staff-email', { body: { email } });
       if (error) throw new Error(error.message);
       if ((data as any)?.error) throw new Error((data as any).error);
       await refreshProfile();

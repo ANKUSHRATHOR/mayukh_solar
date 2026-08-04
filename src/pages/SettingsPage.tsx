@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { invokeApi } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -100,7 +99,7 @@ const SettingsPage = () => {
       const newEmail = (editEmail || '').trim();
       if (newEmail !== (staff.email || '')) {
         if (newEmail) {
-          const { data, error } = await invokeApi('update-staff-email', { body: { email: newEmail } });
+          const { data, error } = await supabase.functions.invoke('update-staff-email', { body: { email: newEmail } });
           if (error) throw new Error(error.message);
           if ((data as any)?.error) throw new Error((data as any).error);
         }

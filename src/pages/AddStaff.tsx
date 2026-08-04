@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStickyState } from '@/hooks/useStickyState';
 import { useNavigate } from 'react-router-dom';
-import { invokeApi } from '@/lib/apiClient';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,7 +48,7 @@ const AddStaff = () => {
 
     setLoading(true);
     try {
-      const response = await invokeApi('create-staff', {
+      const response = await supabase.functions.invoke('create-staff', {
         body: { full_name: fullName.trim(), mobile, role },
       });
 

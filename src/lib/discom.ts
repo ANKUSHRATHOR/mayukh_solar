@@ -1,4 +1,4 @@
-import { invokeApi } from "@/lib/apiClient";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface DiscomLookupResult {
   ok: boolean;
@@ -29,12 +29,12 @@ export async function fetchConsumerDetails(kno: string): Promise<DiscomLookupRes
         };
       }
     } catch (err) {
-      console.warn("Dev proxy lookup failed, falling back to the backend API...", err);
+      console.warn("Dev proxy lookup failed, falling back to Supabase function...", err);
     }
   }
 
-  // 2. Production or fallback: call the backend lookup proxy
-  const { data, error } = await invokeApi<DiscomLookupResult>("consumer-lookup", {
+  // 2. Production or fallback: invoke the Supabase Edge Function
+  const { data, error } = await supabase.functions.invoke("consumer-lookup", {
     body: { kno: trimmed },
   });
 

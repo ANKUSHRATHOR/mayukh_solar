@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import { MapPin, FileText, Building2, Plus, Trash2, Save, Landmark, Star, Settings, MessageCircle, Copy, Link, Shield } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchSystemConfig } from '@/lib/systemConfig';
-import { apiEndpointUrl } from '@/lib/apiClient';
 
 const AdminSettings = () => {
   const { toast } = useToast();
@@ -590,7 +589,7 @@ const AdminSettings = () => {
                   <div className="flex gap-2">
                     <Input
                       readOnly
-                      value={apiEndpointUrl('whatsapp-webhook')}
+                      value={`${import.meta.env.VITE_SUPABASE_URL || 'https://YOUR_PROJECT.supabase.co'}/functions/v1/whatsapp-webhook`}
                       className="font-mono text-xs bg-muted/50 flex-1"
                     />
                     <Button
@@ -598,7 +597,7 @@ const AdminSettings = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        navigator.clipboard.writeText(apiEndpointUrl('whatsapp-webhook'));
+                        navigator.clipboard.writeText(`${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/whatsapp-webhook`);
                         toast({ title: 'Webhook URL copied to clipboard!' });
                       }}
                       className="shrink-0"

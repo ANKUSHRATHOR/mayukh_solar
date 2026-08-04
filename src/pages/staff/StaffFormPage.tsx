@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { UserPlus, UserCog } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { invokeApi } from '@/lib/apiClient';
 import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import SectionCard from '@/components/common/SectionCard';
@@ -87,10 +86,10 @@ const StaffFormPage = () => {
   const onSubmit = async (values: StaffFormValues) => {
     setSubmitError(null);
     try {
-      // These routes accept only name, mobile and role — they provision the auth
-      // user and write user_roles, both of which need the service key.
+      // The edge functions accept only name, mobile and role — they provision
+      // the auth user and write user_roles, both of which need the service key.
       const { data, error } = isEdit
-        ? await invokeApi('update-staff', {
+        ? await supabase.functions.invoke('update-staff', {
             body: {
               action: 'update',
               staff_id: id,
@@ -100,7 +99,7 @@ const StaffFormPage = () => {
               role: values.role,
             },
           })
-        : await invokeApi('create-staff', {
+        : await supabase.functions.invoke('create-staff', {
             body: {
               full_name: values.full_name,
               mobile: values.mobile,
