@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2, Pencil } from 'lucide-react';
 import {
@@ -749,39 +750,65 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
         {canManageLeads && selectedIds.size > 0 && (
           <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-semibold text-foreground">
-              {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} selected
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={bulkAssignee} onValueChange={setBulkAssignee}>
-                <SelectTrigger className="h-9 w-[220px] text-sm">
-                  <SelectValue placeholder="Assign to…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allStaff
-                    .filter((m) => m.is_active && (m.role === 'telecaller' || m.role === 'sales_person'))
-                    .map((m) => (
-                      <SelectItem key={m.user_id} value={m.user_id}>
-                        {m.full_name}
-                        {m.role ? ` · ${statusLabel(m.role)}` : ''}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+            {/* Selection state: the count is the thing to read first, so it carries
+                the emphasis. Clear sits with it — both concern the selection, not the leads. */}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold tabular-nums text-primary-foreground">
+                {selectedIds.size}
+              </span>
+              <p className="text-sm font-semibold text-foreground">
+                lead{selectedIds.size > 1 ? 's' : ''} selected
+              </p>
               <Button
                 size="sm"
-                variant="outline"
-                className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                variant="ghost"
+                className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Picker and its action are joined into one segmented control, so the
+                  assign flow reads as a single thing rather than two loose buttons. */}
+              <div className="flex flex-1 sm:flex-none">
+                <Select value={bulkAssignee} onValueChange={setBulkAssignee}>
+                  <SelectTrigger className="h-9 w-full rounded-r-none text-sm sm:w-[220px]">
+                    <SelectValue placeholder="Assign to…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allStaff
+                      .filter((m) => m.is_active && (m.role === 'telecaller' || m.role === 'sales_person'))
+                      .map((m) => (
+                        <SelectItem key={m.user_id} value={m.user_id}>
+                          {m.full_name}
+                          {m.role ? ` · ${statusLabel(m.role)}` : ''}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  className="h-9 shrink-0 rounded-l-none"
+                  onClick={bulkAssign}
+                  disabled={!bulkAssignee || bulkAssigning}
+                >
+                  {bulkAssigning ? 'Assigning…' : 'Assign'}
+                </Button>
+              </div>
+
+              {/* Delete is held apart from Assign at every width — a mis-click here is
+                  unrecoverable, and the two must never sit shoulder to shoulder. */}
+              <Separator orientation="vertical" className="mx-1 h-6 shrink-0" />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => setConfirmBulkDelete(true)}
                 disabled={deleting}
               >
                 <Trash2 className="mr-1.5 h-4 w-4" /> Delete
-              </Button>
-              <Button size="sm" onClick={bulkAssign} disabled={!bulkAssignee || bulkAssigning}>
-                {bulkAssigning ? 'Assigning…' : 'Assign'}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-                Clear
               </Button>
             </div>
           </div>
