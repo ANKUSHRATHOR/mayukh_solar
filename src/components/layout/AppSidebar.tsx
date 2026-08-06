@@ -210,11 +210,15 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
                   className={cn(
                     'w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all',
                     isActive
-                      ? 'bg-gradient-to-r from-primary/20 to-primary/5 text-primary border border-primary/30 shadow-[0_4px_14px_-6px_hsl(22_96%_55%/0.5)]'
+                      // `brand`, not `primary`: the sidebar is dark in both
+                      // themes, and the deep interactive orange only reaches
+                      // 3.65:1 here. The bright brand is 5.94:1 on this slate —
+                      // this is exactly the split DESIGN-SYSTEM.md §2 describes.
+                      ? 'bg-gradient-to-r from-brand/20 to-brand/5 text-brand border border-brand/30 shadow-[0_4px_14px_-6px_hsl(var(--brand)/0.5)]'
                       : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground'
                   )}
                 >
-                  <item.icon className={cn('h-5 w-5 shrink-0', isActive && 'text-primary')} />
+                  <item.icon className={cn('h-5 w-5 shrink-0', isActive && 'text-brand')} />
                   <span className={cn(collapsed && 'lg:hidden')}>{item.label}</span>
                 </button>
               );

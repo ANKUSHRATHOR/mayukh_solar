@@ -40,13 +40,20 @@ All color is HSL custom properties defined in [`src/index.css`](src/index.css) a
 
 Dark surfaces must keep a real lightness gap from the background. Cards sit at `14%` and popovers at `15%` against a `10%` canvas; an earlier 1% gap made panels invisible. Do not flatten these.
 
-### Brand
+### Brand vs interactive — two different jobs
 
 | Token | Value | Use |
 |---|---|---|
-| `--primary` | `24 95% 50%` | Solar orange. The single accent. |
-| `--primary-foreground` | `0 0% 100%` | Text on primary |
-| `--ring` | `24 95% 50%` | Focus ring — on-brand, not browser blue |
+| `--brand` | `24 95% 50%` | Solar orange. **Fills, chart series, large text and the sidebar chip only.** |
+| `--primary` | `21 90% 40%` | The interactive fill: buttons, active controls |
+| `--primary-foreground` | `0 0% 100%` | Label on primary |
+| `--ring` | `21 90% 40%` | Focus ring |
+
+These are split because one colour cannot do both jobs. The bright brand orange carries a white label at only **3.01:1** and its own edge sits at **2.88:1** against the light canvas — under the 3:1 WCAG 1.4.11 requires for a UI component boundary. Making the label near-black fixes the text but not the edge. `--primary` is deep enough for both (4.90:1 label, 4.69:1 edge).
+
+**Never use `--brand` for body text.** `text-brand` on a light card is 3.01:1 — legible as a shape, not as a sentence. It is valid for ≥24px / ≥18.66px-bold text, for fills, and on the dark sidebar.
+
+**The sidebar is the one place `--brand` is the *correct* choice for text.** It is dark in both themes: `text-brand` reads 5.94:1 on that slate, while `text-primary` — tuned for light canvases — drops to 3.65:1. `AppSidebar`'s active item uses `brand` utilities for exactly this reason. The rule generalises: `primary` for light surfaces, `brand` on the dark chrome.
 
 **One accent, used sparingly.** Orange marks the primary action and the active nav state. Nothing else competes with it. If two things on a screen are orange, one of them is wrong.
 
@@ -54,10 +61,14 @@ Dark surfaces must keep a real lightness gap from the background. Cards sit at `
 
 | Token | Light | Dark |
 |---|---|---|
-| `--success` | `142.1 76.2% 36.3%` | `142.1 70.6% 45.3%` |
-| `--warning` | `38 92% 50%` | `47.9 95.8% 53.1%` |
-| `--info` | `199 89% 48%` | `199 89% 48%` |
-| `--destructive` | `0 84.2% 60.2%` | `0 62.8% 30.6%` |
+| `--success` | `142.1 76.2% 30%` | `142.1 70.6% 45.3%` |
+| `--warning` | `38 92% 33.5%` | `47.9 95.8% 53.1%` |
+| `--info` | `199 89% 37%` | `199 89% 48%` |
+| `--destructive` | `0 84.2% 50.5%` | `0 75% 61.5%` |
+
+Every one of these clears 4.5:1 as text on its own theme's card. The light values are deliberately darker than a typical palette because they are used as `text-*` at 9–11px in badges and inline hints.
+
+**`--destructive` inverts between themes.** A colour cannot simultaneously contrast with a dark card *and* carry a white label, so in dark mode the token is light and `--destructive-foreground` flips to near-black. Do not "fix" the dark value back to a deep red: `text-destructive` has 106 call sites, including the destructive `Alert`, and the old value rendered them at 1.66:1.
 
 ### Sidebar
 
@@ -70,6 +81,7 @@ The sidebar runs its own dark-slate scale (`--sidebar-background`, `--sidebar-fo
 3. **`statusMeta.ts`'s `toneClasses` is the one sanctioned place** literal palette colors may appear. It is centralized, light/dark paired, and reviewed as a unit. Adding a tone there is correct; inlining `bg-blue-100` at a call site is not.
 4. **Print/PDF is the only other exception.** [`QuotationPreviewDialog.tsx`](src/components/leads/QuotationPreviewDialog.tsx) and [`lib/quotationPdf.ts`](src/lib/quotationPdf.ts) render output through `html2pdf.js`, where CSS custom properties don't reliably resolve. Literal colors are allowed there, and only there.
 5. **Status is never color alone.** Always label + color, for accessibility and for grayscale printing.
+6. **`.gradient-primary` tracks `--primary`, not `--brand`.** 70 call sites across 25 files use it as a button fill instead of `bg-primary`, so both gradient stops must keep a white label above 4.5:1. Prefer `bg-primary`; the gradient exists for legacy call sites.
 
 ---
 
@@ -214,7 +226,7 @@ Every interactive element implements the full set. A state you didn't design is 
 - Focus: `focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/35` — a soft halo, not a hard outline.
 - Disabled: `disabled:cursor-not-allowed disabled:opacity-50`.
 - **Error is automatic.** Base styles react to `aria-[invalid=true]` with `border-destructive` and a red ring. `FormControl` already sets `aria-invalid` from validation state, so **every field turns red with zero per-field code**. Never hand-color an errored input.
-- Placeholders are `muted-foreground/70` so real input reads darker than the hint.
+- Placeholders are full-opacity `muted-foreground`. They were `/70`, which is **2.72:1** — placeholder text is still text and needs 4.5:1. At full opacity it is 4.75:1 and still reads lighter than entered text (~16:1), so the hierarchy survives.
 - Select triggers match inputs exactly — same border, hover and focus language.
 
 **Checkbox / switch** — [`ui/checkbox.tsx`](src/components/ui/checkbox.tsx), [`fields/SwitchField.tsx`](src/components/common/fields/SwitchField.tsx)
