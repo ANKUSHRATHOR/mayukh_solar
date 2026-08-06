@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Primary token options — Mayukh Solar</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:210 20% 98%; --fg:222 47% 11%; --card:0 0% 100%;
+    --muted:210 40% 96.1%; --muted-fg:215.4 16.3% 46.9%;
+    --border:214.3 31.8% 89%; --input:214.3 26% 84%;
+    --brand:24 95% 50%;                 /* unchanged, non-text / large-text only */
+    --radius:.625rem;
+    /* Option A */
+    --a-fill:24 95% 50%; --a-label:222 47% 11%; --a-hover:24 95% 45%;
+    /* Option B */
+    --b-fill:21 90% 40%; --b-label:0 0% 100%; --b-hover:21 90% 35%;
+  }
+  .dark{
+    --bg:222 47% 10%; --fg:210 40% 98%; --card:222 40% 14%;
+    --muted:217.2 32.6% 17.5%; --muted-fg:215 20.2% 65.1%;
+    --border:216 28% 21%; --input:216 28% 24%;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+    background:hsl(var(--bg));color:hsl(var(--fg));-webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;transition:background .2s}
+  h1,h2,h3,h4{letter-spacing:-.011em;margin:0}
+  .wrap{max-width:1400px;margin:0 auto;padding:32px 24px 72px}
+  header{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
+  h1{font-size:24px;font-weight:800}
+  .sub{color:hsl(var(--muted-fg));font-size:14px;margin-top:6px;max-width:62ch;line-height:1.55}
+  .toggle{display:flex;gap:8px}
+  .tbtn{font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:calc(var(--radius) - 2px);
+    border:1px solid hsl(var(--input));background:hsl(var(--card));color:hsl(var(--fg));cursor:pointer;
+    box-shadow:0 1px 3px rgb(0 0 0/.08);transition:all .15s}
+  .tbtn:hover{border-color:hsl(var(--muted-fg)/.35)}
+  .tbtn[aria-pressed=true]{background:hsl(var(--fg));color:hsl(var(--bg));border-color:hsl(var(--fg))}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:24px;margin-top:28px}
+  .col{background:hsl(var(--card));border:1px solid hsl(var(--border));border-radius:16px;
+    box-shadow:0 1px 3px rgb(0 0 0/.1);overflow:hidden}
+  .colhead{padding:20px 22px 18px;border-bottom:1px solid hsl(var(--border))}
+  .tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.16em;color:hsl(var(--muted-fg))}
+  .colhead h2{font-size:17px;font-weight:800;margin-top:8px}
+  .swatches{display:flex;gap:8px;margin-top:14px;align-items:center}
+  .sw{width:34px;height:34px;border-radius:9px;border:1px solid hsl(var(--border))}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:hsl(var(--muted-fg))}
+
+  .metrics{display:flex;flex-direction:column;gap:7px;margin-top:16px}
+  .m{display:flex;align-items:center;gap:9px;font-size:12.5px}
+  .pill{font-size:10px;font-weight:800;letter-spacing:.06em;padding:3px 7px;border-radius:999px;text-transform:uppercase}
+  .ok{background:#059669;color:#fff}
+  .bad{background:#dc2626;color:#fff}
+  .m .lbl{color:hsl(var(--muted-fg))}
+  .m .val{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:12px}
+
+  .body{padding:22px}
+  .sect{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.16em;
+    color:hsl(var(--muted-fg));margin:22px 0 12px}
+  .sect:first-child{margin-top:0}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .stateline{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center;margin-bottom:10px}
+  .stateline .n{font-size:11px;font-weight:700;color:hsl(var(--muted-fg));text-transform:uppercase;letter-spacing:.08em}
+
+  /* real button, mirroring src/components/ui/button.tsx */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;
+    border-radius:calc(var(--radius) - 2px);font-size:14px;font-weight:600;height:40px;padding:0 16px;
+    border:1px solid transparent;cursor:pointer;font-family:inherit;
+    transition:all .15s;box-shadow:0 1px 2px rgb(0 0 0/.08)}
+  .btn:active{transform:scale(.98)}
+  .btn svg{width:16px;height:16px}
+  .btn.sm{height:36px;padding:0 12px}
+  .btn.lg{height:44px;padding:0 32px}
+
+  .A .btn-primary{background:hsl(var(--a-fill));color:hsl(var(--a-label))}
+  .A .btn-primary.is-hover,.A .btn-primary:hover{background:hsl(var(--a-hover));box-shadow:0 4px 6px -1px rgb(0 0 0/.12)}
+  .A .btn-primary.is-focus{outline:none;box-shadow:0 0 0 2px hsl(var(--card)),0 0 0 4px hsl(var(--a-fill)/.55)}
+  .A .btn-outline{background:hsl(var(--card));border-color:hsl(var(--input));color:hsl(var(--fg))}
+  .A .link{color:hsl(var(--a-fill))}
+
+  .B .btn-primary{background:hsl(var(--b-fill));color:hsl(var(--b-label))}
+  .B .btn-primary.is-hover,.B .btn-primary:hover{background:hsl(var(--b-hover));box-shadow:0 4px 6px -1px rgb(0 0 0/.12)}
+  .B .btn-primary.is-focus{outline:none;box-shadow:0 0 0 2px hsl(var(--card)),0 0 0 4px hsl(var(--b-fill)/.55)}
+  .B .btn-outline{background:hsl(var(--card));border-color:hsl(var(--input));color:hsl(var(--fg))}
+  .B .link{color:hsl(var(--b-fill))}
+
+  .btn.is-disabled{opacity:.5;pointer-events:none}
+  .spin{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;
+    border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .ctx{border:1px solid hsl(var(--border));border-radius:12px;padding:16px;background:hsl(var(--bg))}
+  .ctx h4{font-size:13px;font-weight:800;margin-bottom:3px}
+  .ctx p{margin:0 0 13px;font-size:12.5px;color:hsl(var(--muted-fg));line-height:1.5}
+  .field{height:40px;border-radius:calc(var(--radius) - 2px);border:1px solid hsl(var(--input));
+    background:hsl(var(--card));display:flex;align-items:center;padding:0 12px;font-size:14px;
+    color:hsl(var(--muted-fg)/.7);margin-bottom:10px}
+  .badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:10px;
+    font-weight:800;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+
+  .verdict{margin-top:28px;border-radius:16px;padding:20px 22px;border:1px solid hsl(var(--border));
+    background:hsl(var(--muted)/.55)}
+  .verdict h3{font-size:14px;font-weight:800;margin-bottom:9px}
+  .verdict p{margin:0 0 9px;font-size:13.5px;line-height:1.6;color:hsl(var(--fg))}
+  .verdict strong{font-weight:800}
+  .note{font-size:12.5px;color:hsl(var(--muted-fg));line-height:1.6}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:hsl(var(--muted));
+    padding:1.5px 5px;border-radius:4px}
+  .brandbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  .chip{height:30px;border-radius:8px;display:flex;align-items:center;padding:0 12px;
+    font-size:12px;font-weight:700;background:hsl(var(--brand));color:hsl(222 47% 11%)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Primary button — two token options</h1>
+      <p class="sub">Both keep <code>--brand: hsl(24 95% 50%)</code> unchanged for fills, charts and large text.
+      They differ only in the interactive pair <code>--primary</code> / <code>--primary-foreground</code>.
+      Ratios below are computed, not estimated. Toggle the theme and hover the live buttons.</p>
+    </div>
+    <div class="toggle">
+      <button class="tbtn" id="lt" aria-pressed="true">Light</button>
+      <button class="tbtn" id="dk" aria-pressed="false">Dark</button>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ OPTION A ============ -->
+    <section class="col A">
+      <div class="colhead">
+        <div class="tag">Option A</div>
+        <h2>Bright fill, near-black label</h2>
+        <div class="swatches">
+          <div class="sw" style="background:hsl(24 95% 50%)"></div>
+          <div class="sw" style="background:hsl(222 47% 11%)"></div>
+          <span class="mono">fill hsl(24 95% 50%) · label hsl(222 47% 11%)</span>
+        </div>
+        <div class="metrics">
+          <div class="m"><span class="pill ok">Pass</span><span class="lbl">Label on fill</span><span class="val">5.94:1</span></div>
+          <div class="m"><span class="pill bad">Fail</span><span class="lbl">Fill vs light page bg (needs 3:1)</span><span class="val">2.88:1</span></div>
+          <div class="m"><span class="pill ok">Pass</span><span class="lbl">Fill vs dark card</span><span class="val">5.51:1</span></div>
+          <div class="m"><span class="pill ok">Pass</span><span class="lbl">Hover label on hsl(24 95% 45%)</span><span class="val">4.88:1</span></div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="sect">All states — 40px default</div>
+        <div class="stateline"><span class="n">Default</span><div><button class="btn btn-primary">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Hover</span><div><button class="btn btn-primary is-hover">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Focus</span><div><button class="btn btn-primary is-focus">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Active</span><div><button class="btn btn-primary" style="transform:scale(.98)">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Disabled</span><div><button class="btn btn-primary is-disabled">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Loading</span><div><button class="btn btn-primary is-disabled"><span class="spin"></span>Saving…</button></div></div>
+
+        <div class="sect">Sizes</div>
+        <div class="row">
+          <button class="btn btn-primary sm">Small 36</button>
+          <button class="btn btn-primary">Default 40</button>
+          <button class="btn btn-primary lg">Large 44</button>
+        </div>
+
+        <div class="sect">Alongside other variants</div>
+        <div class="row">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-outline">Cancel</button>
+          <button class="btn link" style="background:none;box-shadow:none;border:none">Learn more</button>
+        </div>
+
+        <div class="sect">In context</div>
+        <div class="ctx">
+          <h4>Assign lead</h4>
+          <p>Bright orange reads as the brand, but the button edge is weak on the near-white canvas.</p>
+          <div class="field">Search staff…</div>
+          <div class="row">
+            <button class="btn btn-primary">Assign 6 leads</button>
+            <button class="btn btn-outline">Cancel</button>
+            <span class="badge" style="background:hsl(24 95% 50%);color:hsl(222 47% 11%)">Active</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ OPTION B ============ -->
+    <section class="col B">
+      <div class="colhead">
+        <div class="tag">Option B</div>
+        <h2>Deep fill, white label</h2>
+        <div class="swatches">
+          <div class="sw" style="background:hsl(21 90% 40%)"></div>
+          <div class="sw" style="background:#fff"></div>
+          <span class="mono">fill hsl(21 90% 40%) · label #fff</span>
+        </div>
+        <div class="metrics">
+          <div class="m"><span class="pill ok">Pass</span><span class="lbl">Label on fill</span><span class="val">4.90:1</span></div>
+          <div class="m"><span class="pill ok">Pass</span><span class="lbl">Fill vs light page bg (needs 3:1)</span><span class="val">4.69:1</span></div>
+          <div class="m"><span class="pill ok">Pass</span><span class="lbl">Fill vs dark card</span><span class="val">3.39:1</span></div>
+          <div class="m"><span class="pill ok">Pass</span><span class="lbl">Hover label on hsl(21 90% 35%)</span><span class="val">6.06:1</span></div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="sect">All states — 40px default</div>
+        <div class="stateline"><span class="n">Default</span><div><button class="btn btn-primary">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Hover</span><div><button class="btn btn-primary is-hover">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Focus</span><div><button class="btn btn-primary is-focus">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Active</span><div><button class="btn btn-primary" style="transform:scale(.98)">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Disabled</span><div><button class="btn btn-primary is-disabled">Save changes</button></div></div>
+        <div class="stateline"><span class="n">Loading</span><div><button class="btn btn-primary is-disabled"><span class="spin"></span>Saving…</button></div></div>
+
+        <div class="sect">Sizes</div>
+        <div class="row">
+          <button class="btn btn-primary sm">Small 36</button>
+          <button class="btn btn-primary">Default 40</button>
+          <button class="btn btn-primary lg">Large 44</button>
+        </div>
+
+        <div class="sect">Alongside other variants</div>
+        <div class="row">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-outline">Cancel</button>
+          <button class="btn link" style="background:none;box-shadow:none;border:none">Learn more</button>
+        </div>
+
+        <div class="sect">In context</div>
+        <div class="ctx">
+          <h4>Assign lead</h4>
+          <p>Deeper orange holds its edge against the canvas and still reads as the same brand family.</p>
+          <div class="field">Search staff…</div>
+          <div class="row">
+            <button class="btn btn-primary">Assign 6 leads</button>
+            <button class="btn btn-outline">Cancel</button>
+            <span class="badge" style="background:hsl(21 90% 40%);color:#fff">Active</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="verdict">
+    <h3>What the numbers say</h3>
+    <p><strong>Option A fixes the label but fails a different rule.</strong> Near-black on bright orange is comfortably
+    readable at 5.94:1, but the fill itself sits at <strong>2.88:1</strong> against the near-white canvas — under the
+    3:1 that WCAG 1.4.11 requires for a UI component's boundary. The button becomes hard to locate rather than hard to read.
+    It also inverts the convention that a filled primary carries light text, so it reads as a highlight or a warning chip.</p>
+    <p><strong>Option B clears every threshold</strong> — 4.90:1 label, 4.69:1 against the light canvas, 3.39:1 on the dark card,
+    6.06:1 on hover. It is the recommendation.</p>
+    <p class="note">Both options keep <code>--brand: hsl(24 95% 50%)</code> untouched for non-text and large-text use —
+    the active nav chip, stat accents, chart series and the sidebar highlight below. Only the interactive pair changes,
+    so the brand's presence on screen is preserved.</p>
+    <div class="brandbar">
+      <span class="mono">--brand unchanged:</span>
+      <span class="chip">Active nav</span>
+      <span class="chip">12 leads</span>
+      <span class="chip">Stat accent</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const root=document.documentElement, lt=document.getElementById('lt'), dk=document.getElementById('dk');
+  const set=d=>{root.classList.toggle('dark',d);lt.setAttribute('aria-pressed',String(!d));dk.setAttribute('aria-pressed',String(d));};
+  lt.onclick=()=>set(false); dk.onclick=()=>set(true);
+</script>
+</body>
+</html>
