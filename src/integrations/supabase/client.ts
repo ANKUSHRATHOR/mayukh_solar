@@ -13,5 +13,15 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    // PKCE rather than the implicit default. The native app finishes Google
+    // sign-in in a Chrome Custom Tab and gets the result back over a custom
+    // URL scheme, which any app on the device can claim — so the callback must
+    // carry a single-use code, never real tokens. See src/native/deepLink.ts.
+    //
+    // Trade-off: this makes email magic links single-browser-bound, because the
+    // code verifier lives in the browser that requested the link. Requesting on
+    // one device and opening on another no longer works. OTP (verifyOtp) and
+    // password sign-in are unaffected.
+    flowType: 'pkce',
   }
 });

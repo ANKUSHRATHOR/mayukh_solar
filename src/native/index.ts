@@ -14,6 +14,7 @@ import { App } from '@capacitor/app';
 import { supabase } from '@/integrations/supabase/client';
 
 import { initBackButton } from './backButton';
+import { initDeepLinks } from './deepLink';
 import { initNetwork } from './network';
 import { isNative } from './platform';
 import { initSafeArea } from './safeArea';
@@ -21,6 +22,7 @@ import { initSplash } from './splash';
 import { initStatusBar } from './statusBar';
 
 export { isNative, nativePlatform } from './platform';
+export { NATIVE_AUTH_REDIRECT } from './authRedirect';
 
 /**
  * Wires up native chrome and lifecycle. Returns a teardown function; the app
@@ -35,6 +37,7 @@ export const initNative = (): (() => void) => {
     initSplash(),
     initNetwork(),
     initBackButton(),
+    initDeepLinks(),
   ];
 
   // supabase-js drives its refresh timer off `visibilitychange`, which a

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
+import { Browser } from '@capacitor/browser';
 import { supabase } from '@/integrations/supabase/client';
+import { isNative, NATIVE_AUTH_REDIRECT } from '@/native';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -157,6 +159,29 @@ const Login = () => {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
+      // In the native shell the WebView cannot host this flow: Google rejects
+      // OAuth inside embedded WebViews (disallowed_useragent), and a plain
+      // redirect completes in the system browser, leaving the app signed out.
+      // So hand Google to a Chrome Custom Tab and take the result back over a
+      // deep link, which src/native/deepLink.ts exchanges for a session.
+      if (isNative()) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: NATIVE_AUTH_REDIRECT,
+            // Return the authorize URL instead of navigating to it. This still
+            // writes the PKCE verifier to this WebView's storage, which is what
+            // lets the deep-link handler complete the exchange here.
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error) throw error;
+        if (!data?.url) throw new Error('Could not start Google sign-in.');
+
+        await Browser.open({ url: data.url });
+        return;
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
