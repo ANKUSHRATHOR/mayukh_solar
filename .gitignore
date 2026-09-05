@@ -26,3 +26,11 @@ dist-ssr
 # Local tooling / cache
 .claude/
 supabase/.temp/
+
+# Playwright session state for scripts/capture-baselines.mjs.
+# Contains a live Supabase auth token — must never be committed.
+.auth/
+
+# Visual-regression reference shots. Local scratch for the UI refactor,
+# regenerated with scripts/capture-baselines.mjs — deliberately not an asset.
+/baselines

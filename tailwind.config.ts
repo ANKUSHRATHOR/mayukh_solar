@@ -26,6 +26,12 @@ export default {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
         },
+        // Brand orange. Fills, chart series and large text only — see
+        // DESIGN-SYSTEM.md §2. For anything interactive, use `primary`.
+        brand: {
+          DEFAULT: "hsl(var(--brand))",
+          glow: "hsl(var(--brand-glow))",
+        },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",

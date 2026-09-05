@@ -16,7 +16,16 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 24 95% 50%;
+    /* Brand orange. Fills, chart series and large text ONLY — at 3.01:1 on a
+       light card it is legible as a shape but not as body text. Never use it
+       via text-brand for anything under 24px / 18.66px bold. */
+    --brand: 24 95% 50%;
+    --brand-glow: 24 95% 60%;
+
+    /* The interactive pair. Deep enough that a white label clears 4.5:1 and the
+       button's own edge clears 3:1 against the canvas — the bright brand orange
+       failed the second test, so it cannot be the button fill. */
+    --primary: 21 90% 40%;
     --primary-foreground: 0 0% 100%;
     --primary-glow: 24 95% 60%;
 
@@ -29,12 +38,12 @@
     --accent: 210 40% 96.1%;
     --accent-foreground: 222 47% 11.2%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84.2% 50.5%;
+    --destructive-foreground: 0 0% 100%;
 
     --border: 214.3 31.8% 89%;
     --input: 214.3 26% 84%;
-    --ring: 24 95% 50%;
+    --ring: 21 90% 40%;
 
     --radius: 0.625rem;
 
@@ -48,14 +57,21 @@
     --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 24 95% 50%;
 
-    --success: 142.1 76.2% 36.3%;
+    /* Darkened so `text-success` / `text-warning` / `text-info` clear 4.5:1 on a
+       card. The previous values were 3.29 / 2.14 / 2.85 — warning in particular
+       was unreadable, and it is used at 9–11px. Tinted backgrounds
+       (`bg-warning/15`) are unaffected. */
+    --success: 142.1 76.2% 30%;
     --success-foreground: 355.7 100% 97.3%;
-    --warning: 38 92% 50%;
+    --warning: 38 92% 33.5%;
     --warning-foreground: 48 96% 89%;
-    --info: 199 89% 48%;
+    --info: 199 89% 37%;
     --info-foreground: 199 89% 96%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(24 95% 50%), hsl(32 95% 58%));
+    /* Both stops must keep a white label at 4.5:1 — the old light stop
+       (32 95% 58%) sat at 2.98:1, and 70 buttons across 25 files use this
+       gradient instead of bg-primary. */
+    --gradient-primary: linear-gradient(135deg, hsl(21 90% 40%), hsl(14 88% 36%));
     --gradient-card: none;
     --gradient-app: none;
 
@@ -76,7 +92,10 @@
     --popover: 222 40% 15%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 24 95% 50%;
+    --brand: 24 95% 50%;
+    --brand-glow: 24 95% 60%;
+
+    --primary: 21 90% 40%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 217.2 32.6% 17.5%;
@@ -88,12 +107,16 @@
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    /* Inverted. The old value read 1.66:1 as text on a dark card — the worst
+       contrast in the app, and `text-destructive` (106 uses) includes the
+       destructive Alert shown on the lockout screen. A colour cannot both
+       contrast with a dark card and carry a white label, so the label flips. */
+    --destructive: 0 75% 61.5%;
+    --destructive-foreground: 222 47% 11%;
 
     --border: 216 28% 21%;
     --input: 216 28% 24%;
-    --ring: 24 95% 50%;
+    --ring: 21 90% 40%;
 
     --sidebar-background: 222 47% 9%;
     --sidebar-foreground: 210 40% 98%;
@@ -111,7 +134,10 @@
     --info: 199 89% 48%;
     --info-foreground: 199 89% 96%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(24 95% 50%), hsl(32 95% 58%));
+    /* Both stops must keep a white label at 4.5:1 — the old light stop
+       (32 95% 58%) sat at 2.98:1, and 70 buttons across 25 files use this
+       gradient instead of bg-primary. */
+    --gradient-primary: linear-gradient(135deg, hsl(21 90% 40%), hsl(14 88% 36%));
     --gradient-card: none;
     --gradient-app: none;
 
