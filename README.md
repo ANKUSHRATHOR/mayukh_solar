@@ -138,6 +138,47 @@ frontend talks to is baked into the deployed bundle by `VITE_API_URL`, so a
 staging shell reaches the staging API only if the staging deploy was built
 against it — there is no separate switch on the native side.
 
+### Building a signed release APK
+
+One-time: generate a signing keystore. It is the app's permanent identity —
+**back the `.jks` file up somewhere off this machine**, because it cannot be
+regenerated and without it you can never update an already-installed app.
+
+```bash
+mkdir -p ~/keystores
+keytool -genkeypair -v -keystore ~/keystores/mayukh-solar-release.jks \
+  -alias mayukh-solar -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Then `cp android/keystore.properties.example android/keystore.properties` and
+fill it in. That file is gitignored; this repo is public, so never commit it.
+
+Build:
+
+```bash
+npm run cap:sync
+cd android && ./gradlew :app:assembleRelease
+```
+
+Output: `android/app/build/outputs/apk/release/app-release.apk`. Without
+`keystore.properties` the same command still works but emits
+`app-release-unsigned.apk`, which Android will refuse to install.
+
+Publish it where staff can reach it — the repo is public, so a GitHub release
+gives a permanent link without committing a binary on every build:
+
+```bash
+gh release create v1.0.0 \
+  android/app/build/outputs/apk/release/app-release.apk#mayukh-solar.apk
+```
+
+Staff then open
+`https://github.com/ANKUSHRATHOR/mayukh_solar/releases/latest/download/mayukh-solar.apk`
+in Chrome on Android, tap the download, and allow installs from Chrome once.
+
+Bump `versionCode` in `android/app/build.gradle` before every release, or
+Android refuses to install the update over an existing copy.
+
 ### App icon and splash screen
 
 The current artwork is a **placeholder** generated from
