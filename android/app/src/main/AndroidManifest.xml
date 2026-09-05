@@ -18,6 +18,21 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+                OAuth callback. Google sign-in finishes in a Chrome Custom Tab
+                and Supabase redirects to this scheme, which brings the app back
+                to the front so src/native/deepLink.ts can exchange the code for
+                a session. The scheme must match NATIVE_AUTH_REDIRECT in
+                src/native/authRedirect.ts and the redirect allow-list in the
+                Supabase dashboard.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="@string/custom_url_scheme" />
+            </intent-filter>
         </activity>
 
         <provider

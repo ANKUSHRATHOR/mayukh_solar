@@ -81,26 +81,33 @@ export const initNetwork = (): (() => void) => {
   let overlay: HTMLElement | null = null;
   let settleTimer: number | undefined;
 
+  // Only true once the user has actually been shown the offline state. The
+  // recovery reload is gated on this: Android emits networkStatusChange on
+  // wifi/cellular handover and on resume, and reloading on every one of those
+  // would throw away whatever a field tech was halfway through typing.
+  let wasOffline = false;
+
   const hide = () => {
     overlay?.remove();
     overlay = null;
   };
 
   const show = () => {
+    wasOffline = true;
     if (overlay) return;
-    overlay = buildOverlay(() => void refresh());
+    overlay = buildOverlay(() => void recover());
     document.body.appendChild(overlay);
   };
 
-  const refresh = async () => {
+  const recover = async () => {
     try {
       const { connected } = await Network.getStatus();
-      if (connected) {
-        hide();
-        // The SPA may be holding failed queries; a reload is the cheapest way
-        // to get back to a known-good state without touching app code.
-        window.location.reload();
-      }
+      if (!connected) return;
+      hide();
+      // The SPA is holding queries that failed while offline; a reload is the
+      // cheapest way back to a known-good state without touching app code.
+      // Safe here precisely because we only get here after a real outage.
+      window.location.reload();
     } catch {
       // Plugin unavailable — leave the overlay up; the listener still fires.
     }
@@ -113,9 +120,10 @@ export const initNetwork = (): (() => void) => {
       show();
       return;
     }
+    if (!wasOffline) return;
     // Android reports "connected" the moment an interface comes up, often
     // before it can actually route — give it a moment before reloading.
-    settleTimer = window.setTimeout(() => void refresh(), RECONNECT_SETTLE_MS);
+    settleTimer = window.setTimeout(() => void recover(), RECONNECT_SETTLE_MS);
   }).then((listener) => {
     handle = listener;
   });
