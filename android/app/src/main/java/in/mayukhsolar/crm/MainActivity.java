@@ -1,4 +1,4 @@
-package app.lovable.c6be717048af4662bf44afd41c37d1f1;
+package in.mayukhsolar.crm;
 
 import com.getcapacitor.BridgeActivity;
 

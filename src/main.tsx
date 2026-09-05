@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
+import { initNative } from "./native";
 import "./index.css";
 
 // Unregister stale service workers (sw.js / service-worker.js) and clear caches
@@ -33,6 +34,10 @@ const cleanupStaleServiceWorkers = async () => {
 };
 
 cleanupStaleServiceWorkers();
+
+// Capacitor shell wiring (splash, status bar, back button, offline state).
+// No-op in the browser and in the PWA — see src/native/index.ts.
+initNative();
 
 createRoot(document.getElementById("root")!).render(
   <HelmetProvider>

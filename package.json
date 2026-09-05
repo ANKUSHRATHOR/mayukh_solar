@@ -12,12 +12,23 @@
     "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "cap:sync": "npm run build && node scripts/sync-offline-url.mjs && npx cap sync",
+    "cap:sync:staging": "CAP_ENV=staging npm run cap:sync",
+    "cap:sync:dev": "CAP_ENV=development CAP_ALLOW_CLEARTEXT=1 npm run cap:sync",
+    "cap:android": "npm run cap:sync && npx cap run android",
+    "cap:ios": "npm run cap:sync && npx cap run ios",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
+    "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.3.1",
     "@capacitor/ios": "^8.3.1",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -84,6 +95,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.3.1",
     "@eslint/js": "^9.32.0",
     "@playwright/test": "^1.57.0",
