@@ -34,3 +34,15 @@ supabase/.temp/
 # Visual-regression reference shots. Local scratch for the UI refactor,
 # regenerated with scripts/capture-baselines.mjs — deliberately not an asset.
 /baselines
+
+# Android release signing. The keystore is the one artifact that cannot be
+# regenerated — lose it and existing installs can never be updated — and
+# keystore.properties holds its passwords in plain text. This repo is public.
+android/keystore.properties
+*.jks
+*.keystore
+
+# Built app binaries. Releases are published as GitHub release assets, not
+# committed, so the repo does not grow by ~6 MB per build.
+*.apk
+*.aab
