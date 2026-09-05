@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "app.lovable.c6be717048af4662bf44afd41c37d1f1"
+    namespace = "in.mayukhsolar.crm"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.lovable.c6be717048af4662bf44afd41c37d1f1"
+        applicationId "in.mayukhsolar.crm"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
