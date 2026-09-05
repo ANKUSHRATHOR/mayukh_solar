@@ -1,5 +1,13 @@
 apply plugin: 'com.android.application'
 
+// Release signing credentials, kept out of git (see .gitignore). Absent on CI
+// and on any machine without the keystore.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace = "in.mayukhsolar.crm"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -40,6 +48,16 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+}
+
+if (keystorePropertiesFile.exists()) {
+    android.signingConfigs.create("release") {
+        storeFile file(keystoreProperties['storeFile'])
+        storePassword keystoreProperties['storePassword']
+        keyAlias keystoreProperties['keyAlias']
+        keyPassword keystoreProperties['keyPassword']
+    }
+    android.buildTypes.release.signingConfig = android.signingConfigs.release
 }
 
 apply from: 'capacitor.build.gradle'
