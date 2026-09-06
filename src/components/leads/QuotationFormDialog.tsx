@@ -236,8 +236,11 @@ const QuotationFormDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[550px]">
-        <DialogHeader>
+      {/* Only the fields scroll. The title says which quotation is being edited
+          and the footer holds Save — scrolling either out of view on a form this
+          tall left the user hunting for the button. */}
+      <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[550px]">
+        <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-4">
           <DialogTitle className="text-base font-bold">
             {editQuote ? 'Edit Quotation Details' : 'Create Quotation'}
           </DialogTitle>
@@ -246,7 +249,7 @@ const QuotationFormDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-3 text-xs">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 text-xs">
           <div className="space-y-1.5">
             <Label className="font-semibold text-foreground">Quotation Name *</Label>
             <Input
@@ -362,7 +365,7 @@ const QuotationFormDialog = ({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 border-t pt-3 sm:gap-0">
+        <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:gap-2">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>

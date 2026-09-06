@@ -291,6 +291,10 @@ const LeadDetail = () => {
     }
   }, [lead]);
 
+  const hasPlantDetails = Boolean(
+    lead?.plant_details && Object.keys(lead.plant_details as any).length > 0
+  );
+
   // The quotations live in a JSONB array, so the page tracks the row by index;
   // the shared dialog takes the quotation itself.
   const leadQuotations: any[] = Array.isArray(lead?.quotation_details)
@@ -506,106 +510,6 @@ const LeadDetail = () => {
   const handleOpenCreateQuote = (index: number | null = null) => {
     setEditingQuoteIndex(index);
     setIsCreateQuoteOpen(true);
-  };
-
-  /**
-   * Creates a quotation straight from the lead's plant details — no form.
-   *
-   * A quotation is just the plant specs and pricing already captured under
-   * "Plant Details", so re-asking for them in a dialog was redundant. This
-   * validates that the fields a quotation needs are present, names the ones
-   * that aren't, and otherwise runs the same save as the manual flow.
-   */
-  const handleCreateQuotationFromPlant = async () => {
-    if (!lead || !user) return;
-
-    const pd = (lead.plant_details as any) || {};
-    const capacity = Number(pd.required_capacity || lead.kw_interest || 0);
-    const panelWatt = Number(String(pd.panel_wt || '').replace(/\D/g, '')) || 0;
-    const totalCost = Number(pd.total_cost) || 0;
-
-    // Every field a quotation document needs, with the label the user sees.
-    const missing: string[] = [];
-    if (!capacity) missing.push('Interested Capacity');
-    if (!pd.phase) missing.push('Phase');
-    if (!pd.panel_make) missing.push('Panel Make');
-    if (!panelWatt) missing.push('Panel Wattage');
-    if (!pd.inverter) missing.push('Inverter Make');
-    if (!totalCost) missing.push('Total Cost');
-
-    if (missing.length > 0) {
-      const hasAnyPlant = Object.keys(pd).length > 0;
-      toast({
-        title: 'Fill plant details before quoting',
-        description: `${hasAnyPlant ? 'Missing' : 'Add plant details first — missing'}: ${missing.join(', ')}. Use ${hasAnyPlant ? 'Edit' : 'Add'} Plant Details above.`,
-        variant: 'destructive',
-        duration: 10000,
-      });
-      return;
-    }
-
-    try {
-      const quotes = Array.isArray(lead.quotation_details)
-        ? [...lead.quotation_details]
-        : lead.quotation_details && typeof lead.quotation_details === 'object'
-        ? [lead.quotation_details]
-        : [];
-
-      const idxStr = String(quotes.length + 1).padStart(2, '0');
-      const quoteNo = `MS-Q-${Math.floor(100000 + Math.random() * 900000)}-${idxStr}`;
-      const panelQty = Math.ceil((capacity * 1000) / panelWatt);
-      const subsidyAmt = pd.subsidy
-        ? Number(pd.subsidy_amount) || calculateSubsidy(capacity, subsidySlabs)
-        : 0;
-      const netCost = Math.max(0, totalCost - subsidyAmt);
-
-      const quoteObj = {
-        quotation_number: quoteNo,
-        name: `${lead.customer_name} - ${idxStr} - ${capacity}kW`,
-        capacity_kw: capacity,
-        phase: pd.phase || null,
-        panel_brand: pd.panel_make || null,
-        panel_watt: panelWatt || null,
-        panel_qty: panelQty || null,
-        inverter_brand: pd.inverter || null,
-        inverter_capacity: Number(String(pd.inverter_wt || '').replace(/\D/g, '')) || null,
-        structure_type: pd.structure_type_gauge_make || null,
-        total_cost: totalCost,
-        subsidy_amount: subsidyAmt,
-        net_cost: netCost,
-        quote_price: netCost,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        created_by: staffName(user.id),
-        updated_at: new Date().toISOString(),
-      };
-
-      quotes.push(quoteObj);
-
-      const { data, error } = await supabase
-        .from('leads')
-        .update({ quotation_details: quotes })
-        .eq('id', lead.id)
-        .select();
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        toast({
-          title: 'Permission Denied',
-          description: 'No rows were updated under Row Level Security.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      toast({
-        title: 'Quotation generated',
-        description: `${quoteNo} — ₹${netCost.toLocaleString('en-IN')} after subsidy. Send it from the row menu.`,
-      });
-      fetchLead();
-    } catch (e: any) {
-      toast({ title: 'Failed to create quotation', description: e.message, variant: 'destructive' });
-    }
   };
 
   const handleDeleteQuotation = async (index: number) => {
@@ -1272,22 +1176,25 @@ const LeadDetail = () => {
 
           {/* ══════════════ PLANT DETAILS TAB ══════════════ */}
           <TabsContent value="plant" className="mt-0 space-y-4">
-            <Section title="Plant & Quotation Details" icon={<TrendingUp className="h-4 w-4" />}>
+            <Section
+              title="Plant & Quotation Details"
+              icon={<TrendingUp className="h-4 w-4" />}
+              action={(role === 'sales_person' || role === 'admin') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsPlantDetailsOpen(true)}
+                  className="h-8 gap-1.5 text-xs font-semibold"
+                >
+                  {hasPlantDetails ? <Edit className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{hasPlantDetails ? 'Edit' : 'Add'} plant details</span>
+                  <span className="sm:hidden">Plant</span>
+                </Button>
+              )}
+            >
               <div className="p-5 space-y-4">
-                {lead.plant_details && Object.keys(lead.plant_details).length > 0 ? (
+                {hasPlantDetails ? (
                   <div className="space-y-4">
-                    {(role === 'sales_person' || role === 'admin') && (
-                      <div className="flex justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setIsPlantDetailsOpen(true)}
-                          className="h-8 gap-1 text-xs font-semibold"
-                        >
-                          <Edit className="h-3.5 w-3.5" /> Edit Plant Details
-                        </Button>
-                      </div>
-                    )}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       <InfoRow label="Phase" value={(lead.plant_details as any).phase} />
                       <InfoRow label="Panel Make" value={(lead.plant_details as any).panel_make} />
@@ -1306,21 +1213,13 @@ const LeadDetail = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-border bg-muted/20 py-8 text-center space-y-2.5">
-                    <TrendingUp className="h-6 w-6 text-muted-foreground/40 mx-auto" />
-                    <p className="text-xs text-muted-foreground font-medium">No plant details filled yet</p>
-                    <p className="text-[11px] text-muted-foreground/60 max-w-[240px] mx-auto">
-                      Panel, inverter and wiring specs are usually captured during the site visit.
+                  <div className="flex items-start gap-2.5 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3">
+                    <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      No plant details yet — panel, inverter and wiring specs are usually captured
+                      during the site visit. You can still quote: the quotation form asks for the
+                      specs it needs.
                     </p>
-                    {(role === 'sales_person' || role === 'admin') && (
-                      <Button
-                        size="sm"
-                        onClick={() => setIsPlantDetailsOpen(true)}
-                        className="h-8 gap-1.5 text-xs font-semibold"
-                      >
-                        <TrendingUp className="h-3.5 w-3.5" /> Add Plant Details
-                      </Button>
-                    )}
                   </div>
                 )}
 
@@ -1332,7 +1231,7 @@ const LeadDetail = () => {
                     {(role === 'sales_person' || role === 'admin') && (
                       <Button
                         size="sm"
-                        onClick={handleCreateQuotationFromPlant}
+                        onClick={() => handleOpenCreateQuote(null)}
                         className="h-8 gap-1.5 text-xs font-semibold"
                       >
                         <FileText className="h-3.5 w-3.5" /> Create Quotation
