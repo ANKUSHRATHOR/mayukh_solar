@@ -707,6 +707,9 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
               chores — they go behind the overflow menu rather than wrapping to a
               second row on phones and competing with the primary on desktop. */}
           <div className="flex shrink-0 items-center gap-2">
+            <Button onClick={() => navigate('/leads/new')} size="sm" className="h-9 flex-1 bg-primary text-primary-foreground shadow-sm hover:bg-primary/95 sm:flex-none">
+              <PhoneCall className="mr-1.5 h-4 w-4" /> Create Lead
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="More lead actions">
@@ -724,9 +727,6 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button onClick={() => navigate('/leads/new')} size="sm" className="h-9 flex-1 bg-primary text-primary-foreground shadow-sm hover:bg-primary/95 sm:flex-none">
-              <PhoneCall className="mr-1.5 h-4 w-4" /> Create Lead
-            </Button>
           </div>
         </div>
       )}
