@@ -1187,15 +1187,24 @@ const LeadDetail = () => {
         />
 
         <Tabs defaultValue="details" className="space-y-4">
-          <TabsList className="h-10">
-            <TabsTrigger value="details" className="gap-1.5 text-sm">
-              <User className="h-4 w-4" /> Lead Details
+          {/* Three fixed tabs, so they split the width evenly on phones rather
+              than running off the right edge — the strip measured 389px in a
+              375px viewport, and nothing scrolls, so "Plant Details" was
+              clipped and unreachable. Labels shorten below sm to fit. */}
+          <TabsList className="grid h-auto w-full grid-cols-3 sm:inline-flex sm:h-10 sm:w-auto">
+            <TabsTrigger value="details" className="gap-1.5 px-2 text-xs sm:px-3 sm:text-sm">
+              <User className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Details</span>
+              <span className="hidden sm:inline">Lead Details</span>
             </TabsTrigger>
-            <TabsTrigger value="documents" className="gap-1.5 text-sm">
-              <FileText className="h-4 w-4" /> Documents
+            <TabsTrigger value="documents" className="gap-1.5 px-2 text-xs sm:px-3 sm:text-sm">
+              <FileText className="h-4 w-4 shrink-0" />
+              <span>Documents</span>
             </TabsTrigger>
-            <TabsTrigger value="plant" className="gap-1.5 text-sm">
-              <TrendingUp className="h-4 w-4" /> Plant Details
+            <TabsTrigger value="plant" className="gap-1.5 px-2 text-xs sm:px-3 sm:text-sm">
+              <TrendingUp className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Plant</span>
+              <span className="hidden sm:inline">Plant Details</span>
             </TabsTrigger>
           </TabsList>
 
