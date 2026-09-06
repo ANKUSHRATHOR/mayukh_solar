@@ -10,8 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2, Pencil } from 'lucide-react';
+import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2, Pencil, MoreVertical } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -696,16 +702,29 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           <div>
             <h1 className="text-2xl font-bold text-display text-foreground tracking-tight">Leads</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canManageLeads && (
-              <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)} className="border-primary/20 text-primary hover:bg-primary/5">
-                <Upload className="mr-1.5 h-4 w-4" /> Import Leads
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={exportRows} disabled={!filteredRows.length}>
-              <Download className="mr-1.5 h-4 w-4" /> Export CSV
-            </Button>
-            <Button onClick={() => navigate('/leads/new')} size="sm" className="bg-primary hover:bg-primary/95 text-primary-foreground shadow-sm">
+          {/* Create Lead is the one action people come here to take, so it is the
+              only accented control. Import and Export are occasional bulk-data
+              chores — they go behind the overflow menu rather than wrapping to a
+              second row on phones and competing with the primary on desktop. */}
+          <div className="flex shrink-0 items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="More lead actions">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canManageLeads && (
+                  <DropdownMenuItem onClick={() => setIsImportOpen(true)}>
+                    <Upload className="mr-2 h-4 w-4" /> Import Leads
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={exportRows} disabled={!filteredRows.length}>
+                  <Download className="mr-2 h-4 w-4" /> Export CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={() => navigate('/leads/new')} size="sm" className="h-9 flex-1 bg-primary text-primary-foreground shadow-sm hover:bg-primary/95 sm:flex-none">
               <PhoneCall className="mr-1.5 h-4 w-4" /> Create Lead
             </Button>
           </div>
