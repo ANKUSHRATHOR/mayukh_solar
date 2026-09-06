@@ -37,26 +37,13 @@ import { fetchConsumerDetails } from '@/lib/discom';
 import { renderQuotationPdfBlob, downloadQuotationPdf } from '@/lib/quotationPdf';
 import { sendQuotationNotification } from '@/lib/whatsapp';
 import { calculateSubsidy, formatSubsidy, useSubsidySlabs } from '@/lib/subsidy';
+import { leadStatusMeta, resolveStatus, toneClasses } from '@/lib/statusMeta';
 import LeadVisitsPanel from '@/components/leads/LeadVisitsPanel';
 import LeadDocumentsPanel from '@/components/leads/LeadDocumentsPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 type CancellationReason = Database['public']['Enums']['cancellation_reason'];
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  new:               { label: 'New',                    color: 'text-sky-600',     bg: 'bg-sky-50 border-sky-200',       dot: 'bg-sky-500' },
-  visit_created:     { label: 'Visit Booked',            color: 'text-indigo-600',  bg: 'bg-indigo-50 border-indigo-200', dot: 'bg-indigo-500' },
-  visited:           { label: 'Visited',                 color: 'text-violet-600',  bg: 'bg-violet-50 border-violet-200', dot: 'bg-violet-500' },
-  follow_up:         { label: 'Follow Up',               color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200',   dot: 'bg-amber-500' },
-  interested:        { label: 'Interested',              color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
-  not_interested:    { label: 'Not Interested',          color: 'text-orange-600',  bg: 'bg-orange-50 border-orange-200', dot: 'bg-orange-500' },
-  cancelled:         { label: 'Cancelled',               color: 'text-red-600',     bg: 'bg-red-50 border-red-200',       dot: 'bg-red-500' },
-  final:             { label: 'Final / Won',             color: 'text-green-700',   bg: 'bg-green-50 border-green-200',   dot: 'bg-green-600' },
-  quotation_sent:    { label: 'Quotation Sent',          color: 'text-yellow-700',  bg: 'bg-yellow-50 border-yellow-200', dot: 'bg-yellow-500' },
-  quotation_accepted:{ label: 'Quotation Accepted',      color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-300',dot: 'bg-emerald-600' },
-  quotation_rejected:{ label: 'Quotation Rejected',      color: 'text-red-700',     bg: 'bg-red-50 border-red-300',       dot: 'bg-red-600' },
-};
 
 const EVENT_ICON: Record<string, React.ReactNode> = {
   created:            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />,
@@ -67,10 +54,6 @@ const EVENT_ICON: Record<string, React.ReactNode> = {
   quotation_rejected: <AlertTriangle className="h-3.5 w-3.5 text-red-500" />,
 };
 
-const statusConf = (s: string | null | undefined) => {
-  if (!s) return { label: 'Unknown', color: 'text-muted-foreground', bg: 'bg-muted/40', dot: 'bg-muted-foreground' };
-  return STATUS_CONFIG[s] || { label: s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), color: 'text-muted-foreground', bg: 'bg-muted/40', dot: 'bg-muted-foreground' };
-};
 const statusLabel = (s: string | null | undefined) => {
   if (!s) return '—';
   return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -87,22 +70,33 @@ const cancellationReasons: { value: CancellationReason; label: string }[] = [
 ];
 
 /* ─── Section Wrapper ─── */
-const Section = ({ title, icon, children, defaultOpen = true }: {
-  title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean;
+const Section = ({ title, icon, children, action, defaultOpen = true }: {
+  title: string; icon: React.ReactNode; children: React.ReactNode;
+  /** Section-level control (Edit, Sync). Sits in the header, outside the toggle. */
+  action?: React.ReactNode;
+  defaultOpen?: boolean;
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors"
-      >
-        <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
-          <span className="text-primary">{icon}</span>
-          {title}
-        </div>
-        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-      </button>
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      {/* The action lives in the header rather than floating above the content on
+          a negative margin, and stays outside the toggle so it isn't a nested
+          button. */}
+      <div className="flex items-center gap-2 px-5 py-3.5">
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+          className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded p-1 text-left text-sm font-semibold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
+          <span className="shrink-0 text-primary">{icon}</span>
+          <span className="truncate">{title}</span>
+          {open
+            ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+            : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+        </button>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
       {open && <div className="border-t border-border/50">{children}</div>}
     </div>
   );
@@ -1070,7 +1064,7 @@ const LeadDetail = () => {
     );
   }
 
-  const sc = statusConf(lead.status);
+  const sc = resolveStatus(leadStatusMeta, lead.status);
 
   return (
     <div className="min-h-screen bg-background font-sans antialiased text-foreground">
@@ -1082,21 +1076,24 @@ const LeadDetail = () => {
               <ArrowLeft className="h-4 w-4 mr-1" /> Back
             </Button>
             <div className="hidden sm:block w-px h-5 bg-border" />
-            <div className="hidden sm:flex flex-col">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead Details</p>
-              <p className="text-sm font-bold text-foreground leading-tight">{lead.customer_name}</p>
-            </div>
+            {/* The name repeats here only once the hero has scrolled away, so the
+                sticky bar still says which lead you are looking at. */}
+            <p className="hidden truncate text-sm font-bold leading-tight text-foreground sm:block">
+              {lead.customer_name}
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Tone classes are theme-aware. These chips used raw bg-amber-50 /
+                bg-sky-50, which rendered as near-white pills on the dark canvas. */}
             {lead.follow_up_date && (
-              <div className="hidden md:flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 font-medium">
+              <div className={`hidden items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium md:flex ${toneClasses.warning}`}>
                 <Calendar className="h-3 w-3" />
                 Follow-up: {new Date(lead.follow_up_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
               </div>
             )}
-            <div className={`flex items-center gap-1.5 text-xs font-semibold border rounded-full px-3 py-1.5 ${sc.bg} ${sc.color}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />
+            <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${toneClasses[sc.tone]}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
               {sc.label}
             </div>
           </div>
@@ -1104,31 +1101,42 @@ const LeadDetail = () => {
       </div>
 
       {/* ── Hero Strip / Action Bar ── */}
-      <div className="bg-gradient-to-r from-primary/5 via-background to-background border-b border-border/30 px-4 lg:px-8 py-5">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-5">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xl">
+      {/* The gradient wash here fought the Actions button for attention; the spec
+          allows one accent per screen and that accent is the primary action. */}
+      <div className="border-b border-border/30 bg-background px-4 py-5 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted text-lg font-bold text-foreground sm:h-14 sm:w-14 sm:text-xl">
               {lead.customer_name?.charAt(0)?.toUpperCase() || '?'}
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-foreground leading-tight">{lead.customer_name}</h1>
-              <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
-                <a href={`tel:${lead.mobile}`} className="flex items-center gap-1 font-semibold text-primary hover:underline"><Phone className="h-3 w-3" />{lead.mobile}</a>
-                {lead.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{lead.email}</span>}
-                {lead.village_city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{lead.village_city}{lead.district ? `, ${lead.district}` : ''}</span>}
-                <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Created {new Date(lead.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              <h1 className="text-lg font-bold leading-tight text-foreground sm:text-xl">{lead.customer_name}</h1>
+              <div className="mt-1.5 flex flex-col gap-1.5 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
+                <a href={`tel:${lead.mobile}`} className="flex w-fit items-center gap-1 font-semibold text-primary hover:underline"><Phone className="h-3 w-3 shrink-0" />{lead.mobile}</a>
+                {lead.email && <span className="flex min-w-0 items-center gap-1"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{lead.email}</span></span>}
+                {lead.village_city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" />{lead.village_city}{lead.district ? `, ${lead.district}` : ''}</span>}
+                <span className="flex items-center gap-1"><Clock className="h-3 w-3 shrink-0" />Created {new Date(lead.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                {/* Follow-up was desktop-only, hidden exactly from the field staff
+                    who need it. It rides in the meta row at every width now. */}
+                {lead.follow_up_date && (
+                  <span className="flex items-center gap-1 font-semibold text-warning md:hidden">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    Follow-up {new Date(lead.follow_up_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Unified Action Dropdown Menu */}
-          <div className="flex items-center gap-2">
+          {/* Actions sit full-width on a phone at a 44px tap target, and collapse
+              back to the compact desktop pair from sm up. */}
+          <div className="flex shrink-0 items-center gap-2">
             {lead.mobile && (
               <Button
                 asChild
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 text-primary border-primary/20 bg-primary/5 hover:bg-primary hover:text-primary-foreground"
+                className="h-11 w-11 shrink-0 border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground sm:h-9 sm:w-9"
               >
                 <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.customer_name}`}>
                   <Phone className="h-4 w-4" />
@@ -1138,7 +1146,7 @@ const LeadDetail = () => {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button className="gradient-primary text-primary-foreground font-semibold h-9 px-4 text-sm gap-1.5 shadow-sm">
+                <Button className="h-11 flex-1 gap-1.5 px-4 text-sm font-semibold shadow-sm sm:h-9 sm:flex-none">
                   Actions <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1162,7 +1170,7 @@ const LeadDetail = () => {
                 {canUpdateStatus && lead.status !== 'cancelled' && lead.status !== 'final' && (
                   <>
                     <DropdownMenuSeparator className="-mx-1 my-1 h-px bg-muted" />
-                    <DropdownMenuItem onSelect={() => setIsStatusUpdateOpen(true)} className="gap-2 cursor-pointer text-sm hover:bg-accent hover:text-accent-foreground px-2.5 py-2 rounded text-amber-600 font-semibold focus:text-amber-700">
+                    <DropdownMenuItem onSelect={() => setIsStatusUpdateOpen(true)} className="gap-2 cursor-pointer text-sm hover:bg-accent hover:text-accent-foreground px-2.5 py-2 rounded text-warning font-semibold focus:text-warning">
                       <AlertTriangle className="h-4 w-4" /> Change Status
                     </DropdownMenuItem>
                   </>
@@ -1215,19 +1223,17 @@ const LeadDetail = () => {
           <div className="space-y-4">
 
             {/* 1. Contact Details */}
-            <Section title="Customer Contact Details" icon={<User className="h-4 w-4" />}>
+            <Section
+              title="Customer Contact Details"
+              icon={<User className="h-4 w-4" />}
+              action={
+                <Button variant="outline" size="sm" onClick={handleOpenEditContact} className="h-8 gap-1 text-xs font-semibold">
+                  <Edit className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Edit</span>
+                </Button>
+              }
+            >
               <div className="p-5 space-y-4">
-                <div className="flex justify-end -mb-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleOpenEditContact}
-                    className="h-8 text-xs font-semibold gap-1 border-primary/20 hover:border-primary/40 text-primary bg-primary/5 hover:bg-primary/10"
-                  >
-                    <Edit className="h-3.5 w-3.5" />
-                    Edit Contact Details
-                  </Button>
-                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <InfoRow label="Mobile" value={lead.mobile} href={`tel:${lead.mobile}`} />
                   <InfoRow label="Alternate Mobile" value={lead.alt_mobile} href={lead.alt_mobile ? `tel:${lead.alt_mobile}` : undefined} />
@@ -1235,7 +1241,7 @@ const LeadDetail = () => {
                 </div>
                 <Separator />
                 <InfoRow label="Contact Address" value={lead.address} />
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   <InfoRow label="Village / City" value={lead.village_city} />
                   <InfoRow label="District" value={lead.district} />
                   <InfoRow label="State" value={lead.state} />
@@ -1245,7 +1251,7 @@ const LeadDetail = () => {
                     href={`https://www.google.com/maps/search/?api=1&query=${lead.latitude},${lead.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2.5 hover:bg-rose-100 transition-colors w-fit"
+                    className="flex w-fit items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
                   >
                     <MapPin className="h-3.5 w-3.5 animate-bounce" />
                     <span className="font-mono text-[11px] text-muted-foreground mr-1">{lead.latitude?.toFixed(4)}, {lead.longitude?.toFixed(4)}</span>
@@ -1256,22 +1262,25 @@ const LeadDetail = () => {
             </Section>
 
             {/* 2. Discom Connection Specs */}
-            <Section title="Discom Connection Specs" icon={<Zap className="h-4 w-4" />}>
+            <Section
+              title="Discom Connection Specs"
+              icon={<Zap className="h-4 w-4" />}
+              action={lead.k_number ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={syncingKno}
+                  onClick={handleSyncKno}
+                  className="h-8 shrink-0 gap-1.5 px-3 text-xs font-semibold"
+                >
+                  <RefreshCw className={`h-3 w-3 ${syncingKno ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Sync Specs</span>
+                </Button>
+              ) : undefined}
+            >
               <div className="p-5 space-y-4">
                 {lead.k_number ? (
-                  <div className="flex items-start justify-between gap-4">
-                    <InfoRow label="K-Number (Rajasthan Discom)" value={lead.k_number} mono />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={syncingKno}
-                      onClick={handleSyncKno}
-                      className="shrink-0 h-8 text-xs font-semibold px-3 border-primary/20 hover:bg-primary/5 text-primary"
-                    >
-                      <RefreshCw className={`mr-1.5 h-3 w-3 ${syncingKno ? 'animate-spin' : ''}`} />
-                      Sync Specs
-                    </Button>
-                  </div>
+                  <InfoRow label="K-Number (Rajasthan Discom)" value={lead.k_number} mono />
                 ) : (
                   <div className="space-y-1.5">
                     <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
@@ -1310,7 +1319,7 @@ const LeadDetail = () => {
                       <InfoRow label="Meter Number" value={lead.kno_details.meterno} mono />
                     </div>
                     <InfoRow label="Discom Address" value={lead.kno_details.address} />
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                       <InfoRow label="Load Capacity" value={lead.kno_details.sancload || lead.kno_details.connload ? `${lead.kno_details.sancload || lead.kno_details.connload} kW` : null} />
                       <InfoRow label="Office Name" value={lead.kno_details.officename} />
                       <InfoRow label="Category / Tariff" value={lead.kno_details.category || lead.kno_details.tariffcode} />
@@ -1413,12 +1422,12 @@ const LeadDetail = () => {
                 {lead.plant_details && Object.keys(lead.plant_details).length > 0 ? (
                   <div className="space-y-4">
                     {(role === 'sales_person' || role === 'admin') && (
-                      <div className="flex justify-end -mb-2">
+                      <div className="flex justify-end">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => setIsPlantDetailsOpen(true)}
-                          className="h-8 text-xs font-semibold gap-1 border-primary/20 hover:border-primary/40 text-primary bg-primary/5 hover:bg-primary/10"
+                          className="h-8 gap-1 text-xs font-semibold"
                         >
                           <Edit className="h-3.5 w-3.5" /> Edit Plant Details
                         </Button>
