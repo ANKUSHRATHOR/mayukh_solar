@@ -23,6 +23,11 @@ export interface LeadQuotation {
   quote_price?: number | null;
   status?: string | null;
   created_at?: string | null;
+  /** Captured by the lead-side form; absent on older quotations. */
+  phase?: string | null;
+  inverter_capacity?: number | null;
+  updated_at?: string | null;
+  created_by?: string | null;
 }
 
 export const quotationStatusLabels: Record<string, string> = {
@@ -68,8 +73,8 @@ export const quotedPrice = (q: LeadQuotation): number =>
  * Removes one quotation from the lead's JSONB array by its number.
  *
  * Read-modify-write, re-reading immediately before the write so a quotation
- * added elsewhere in the meantime isn't clobbered — same discipline as the
- * create path in CreateQuotationDialog.
+ * added elsewhere in the meantime isn't clobbered — same discipline as
+ * `saveLeadQuotation` below.
  */
 export const deleteLeadQuotation = async (
   leadId: string,
@@ -97,4 +102,80 @@ export const deleteLeadQuotation = async (
     .update({ quotation_details: next as any })
     .eq('id', leadId);
   if (writeError) throw new Error(writeError.message);
+};
+
+/** The draft a form produces, before it is given a number and stamped. */
+export type LeadQuotationDraft = Omit<
+  LeadQuotation,
+  'quotation_number' | 'status' | 'created_at'
+> & {
+  phase?: string | null;
+  inverter_capacity?: number | null;
+  updated_at?: string | null;
+  created_by?: string | null;
+};
+
+/**
+ * Creates or updates one quotation on the lead's JSONB array.
+ *
+ * The list is re-read immediately before the write rather than trusting a copy
+ * the page loaded earlier: two people can be looking at the same lead, and the
+ * old create path wrote back a stale array, silently dropping any quotation
+ * added in between. Numbering happens here for the same reason — it depends on
+ * how many quotations exist *now*.
+ */
+export const saveLeadQuotation = async (
+  leadId: string,
+  draft: LeadQuotationDraft,
+  options: { editingNumber?: string | null; createdBy?: string | null } = {}
+): Promise<LeadQuotation> => {
+  const { data, error: readError } = await supabase
+    .from('leads')
+    .select('quotation_details')
+    .eq('id', leadId)
+    .single();
+  if (readError) throw new Error(readError.message);
+
+  const raw = data?.quotation_details;
+  const list: LeadQuotation[] = Array.isArray(raw)
+    ? (raw as unknown as LeadQuotation[])
+    : raw && typeof raw === 'object' && Object.keys(raw).length > 0
+      ? [raw as unknown as LeadQuotation]
+      : [];
+
+  const now = new Date().toISOString();
+  const existingIndex = options.editingNumber
+    ? list.findIndex((q) => q.quotation_number === options.editingNumber)
+    : -1;
+  const existing = existingIndex >= 0 ? list[existingIndex] : null;
+
+  const quotationNumber =
+    existing?.quotation_number ??
+    `MS-Q-${Math.floor(100000 + Math.random() * 900000)}-${String(list.length + 1).padStart(2, '0')}`;
+
+  const saved: LeadQuotation = {
+    ...draft,
+    quotation_number: quotationNumber,
+    // An edit must not silently reset a quotation the customer already accepted.
+    status: existing?.status ?? 'pending',
+    created_at: existing?.created_at ?? now,
+    created_by: existing?.created_by ?? options.createdBy ?? null,
+    updated_at: now,
+  } as LeadQuotation;
+
+  const next = existingIndex >= 0
+    ? list.map((q, i) => (i === existingIndex ? saved : q))
+    : [...list, saved];
+
+  const { data: written, error: writeError } = await supabase
+    .from('leads')
+    .update({ quotation_details: next as any })
+    .eq('id', leadId)
+    .select('id');
+  if (writeError) throw new Error(writeError.message);
+  if (!written || written.length === 0) {
+    throw new Error('No rows were updated — row level security refused the write.');
+  }
+
+  return saved;
 };

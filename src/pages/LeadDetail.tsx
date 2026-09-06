@@ -39,6 +39,7 @@ import { sendQuotationNotification } from '@/lib/whatsapp';
 import { calculateSubsidy, formatSubsidy, useSubsidySlabs } from '@/lib/subsidy';
 import { leadStatusMeta, resolveStatus, toneClasses } from '@/lib/statusMeta';
 import LeadVisitsPanel from '@/components/leads/LeadVisitsPanel';
+import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
 import LeadDocumentsPanel from '@/components/leads/LeadDocumentsPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -203,19 +204,6 @@ const LeadDetail = () => {
   const [plantSubsidy, setPlantSubsidy] = useState(false);
 
   // Quotation Price state
-  const [quotePrice, setQuotePrice] = useState('');
-  const [quoteCapacity, setQuoteCapacity] = useState('');
-  const [quotePhase, setQuotePhase] = useState('');
-  const [quotePanelBrand, setQuotePanelBrand] = useState('');
-  const [quotePanelWatt, setQuotePanelWatt] = useState('');
-  const [quotePanelQty, setQuotePanelQty] = useState('');
-  const [quoteInverterBrand, setQuoteInverterBrand] = useState('');
-  const [quoteInverterCapacity, setQuoteInverterCapacity] = useState('');
-  const [quoteStructureType, setQuoteStructureType] = useState('');
-  const [quoteTotalCost, setQuoteTotalCost] = useState('');
-  const [quoteSubsidy, setQuoteSubsidy] = useState(false);
-  const [quoteSubsidyAmount, setQuoteSubsidyAmount] = useState('');
-  const [quoteName, setQuoteName] = useState('');
   const [editingQuoteIndex, setEditingQuoteIndex] = useState<number | null>(null);
   const [selectedPreviewQuote, setSelectedPreviewQuote] = useState<any | null>(null);
 
@@ -225,11 +213,6 @@ const LeadDetail = () => {
     () => calculateSubsidy(lead?.kw_interest, subsidySlabs),
     [lead?.kw_interest, subsidySlabs]
   );
-  const quoteDefaultSubsidy = useMemo(
-    () => calculateSubsidy(quoteCapacity, subsidySlabs),
-    [quoteCapacity, subsidySlabs]
-  );
-
   const [project, setProject] = useState<any>(null);
   const [salesPersons, setSalesPersons] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null }[]>([]);
   const [people, setPeople] = useState<{ creator: any; assignee: any; history: any[] } | null>(null);
@@ -308,13 +291,15 @@ const LeadDetail = () => {
     }
   }, [lead]);
 
-  useEffect(() => {
-    if (isCreateQuoteOpen) {
-      const turnkey = Number(quoteTotalCost) || 0;
-      const sub = quoteSubsidy ? (Number(quoteSubsidyAmount) || quoteDefaultSubsidy) : 0;
-      setQuotePrice(String(Math.max(0, turnkey - sub) || ''));
-    }
-  }, [quoteTotalCost, quoteSubsidy, quoteSubsidyAmount, quoteDefaultSubsidy, isCreateQuoteOpen]);
+  // The quotations live in a JSONB array, so the page tracks the row by index;
+  // the shared dialog takes the quotation itself.
+  const leadQuotations: any[] = Array.isArray(lead?.quotation_details)
+    ? (lead.quotation_details as any[])
+    : lead?.quotation_details && typeof lead.quotation_details === 'object'
+      ? [lead.quotation_details as any]
+      : [];
+  const editingQuote =
+    editingQuoteIndex !== null ? (leadQuotations[editingQuoteIndex] ?? null) : null;
 
   const canUpdateStatus = role === 'admin' || role === 'sales_person' || role === 'telecaller';
 
@@ -519,138 +504,8 @@ const LeadDetail = () => {
   };
 
   const handleOpenCreateQuote = (index: number | null = null) => {
-    const quotes = Array.isArray(lead?.quotation_details)
-      ? lead.quotation_details
-      : lead?.quotation_details && typeof lead.quotation_details === 'object'
-      ? [lead.quotation_details]
-      : [];
-
-    if (index !== null && quotes[index]) {
-      const q = quotes[index] as any;
-      setEditingQuoteIndex(index);
-      setQuoteName(q.name || '');
-      setQuotePrice(String(q.quote_price || ''));
-      setQuoteCapacity(String(q.capacity_kw || ''));
-      setQuotePhase(q.phase || '');
-      setQuotePanelBrand(q.panel_brand || '');
-      setQuotePanelWatt(q.panel_watt ? String(q.panel_watt) : '');
-      setQuotePanelQty(q.panel_qty ? String(q.panel_qty) : '');
-      setQuoteInverterBrand(q.inverter_brand || '');
-      setQuoteInverterCapacity(q.inverter_capacity ? String(q.inverter_capacity) : '');
-      setQuoteStructureType(q.structure_type || '');
-      setQuoteTotalCost(q.total_cost ? String(q.total_cost) : '');
-      setQuoteSubsidy(!!q.subsidy_amount);
-      setQuoteSubsidyAmount(q.subsidy_amount ? String(q.subsidy_amount) : '');
-    } else {
-      setEditingQuoteIndex(null);
-      const pd = (lead?.plant_details as any) || {};
-      const nextIndex = quotes.length + 1;
-      const idxStr = String(nextIndex).padStart(2, '0');
-      const cap = pd.required_capacity || lead?.kw_interest || '';
-      
-      setQuoteCapacity(String(cap));
-      setQuotePhase(pd.phase || '');
-      setQuotePanelBrand(pd.panel_make || '');
-      setQuotePanelWatt(pd.panel_wt ? String(pd.panel_wt).replace(/\D/g, '') : '');
-      setQuotePanelQty(pd.panel_qty ? String(pd.panel_qty) : '');
-      setQuoteInverterBrand(pd.inverter || '');
-      setQuoteInverterCapacity(pd.inverter_wt ? String(pd.inverter_wt).replace(/\D/g, '') : '');
-      setQuoteStructureType(pd.structure_type_gauge_make || '');
-      setQuoteTotalCost(pd.total_cost ? String(pd.total_cost) : '');
-      setQuoteSubsidy(!!pd.subsidy);
-      setQuoteSubsidyAmount(
-        pd.subsidy ? String(pd.subsidy_amount || calculateSubsidy(cap, subsidySlabs)) : ''
-      );
-
-      const capStr = cap ? `${cap}kW` : '3kW';
-      setQuoteName(`${lead?.customer_name || 'Client'} - ${idxStr} - ${capStr}`);
-      
-      const turnkey = Number(pd.total_cost) || 0;
-      const sub = pd.subsidy ? (Number(pd.subsidy_amount) || calculateSubsidy(cap, subsidySlabs)) : 0;
-      setQuotePrice(String(Math.max(0, turnkey - sub) || ''));
-    }
+    setEditingQuoteIndex(index);
     setIsCreateQuoteOpen(true);
-  };
-
-  const handleCreateQuotation = async () => {
-    if (!lead || !user) return;
-    const priceNum = Number(quotePrice);
-    if (isNaN(priceNum) || priceNum <= 0) {
-      toast({ title: 'Invalid price', description: 'Please enter a valid price.', variant: 'destructive' });
-      return;
-    }
-
-    try {
-      const staffNameVal = staffName(user.id);
-      
-      const quotes = Array.isArray(lead.quotation_details)
-        ? [...lead.quotation_details]
-        : lead.quotation_details && typeof lead.quotation_details === 'object'
-        ? [lead.quotation_details]
-        : [];
-
-      let quoteNo = '';
-      if (editingQuoteIndex !== null && quotes[editingQuoteIndex]) {
-        quoteNo = (quotes[editingQuoteIndex] as any).quotation_number;
-      } else {
-        const baseNo = `MS-Q-${Math.floor(100000 + Math.random() * 900000)}`;
-        const idxStr = String(quotes.length + 1).padStart(2, '0');
-        quoteNo = `${baseNo}-${idxStr}`;
-      }
-
-      const quoteObj = {
-        quotation_number: quoteNo,
-        name: quoteName.trim() || `${lead.customer_name} - ${quoteNo}`,
-        capacity_kw: Number(quoteCapacity) || null,
-        phase: quotePhase || null,
-        panel_brand: quotePanelBrand || null,
-        panel_watt: Number(quotePanelWatt) || null,
-        panel_qty: Number(quotePanelQty) || null,
-        inverter_brand: quoteInverterBrand || null,
-        inverter_capacity: Number(quoteInverterCapacity) || null,
-        structure_type: quoteStructureType || null,
-        total_cost: Number(quoteTotalCost) || null,
-        subsidy_amount: quoteSubsidy ? (Number(quoteSubsidyAmount) || quoteDefaultSubsidy) : 0,
-        net_cost: (Number(quoteTotalCost) || 0) - (quoteSubsidy ? (Number(quoteSubsidyAmount) || quoteDefaultSubsidy) : 0),
-        quote_price: priceNum,
-        status: editingQuoteIndex !== null ? (quotes[editingQuoteIndex] as any).status : 'pending',
-        created_at: editingQuoteIndex !== null ? (quotes[editingQuoteIndex] as any).created_at : new Date().toISOString(),
-        created_by: editingQuoteIndex !== null ? (quotes[editingQuoteIndex] as any).created_by : staffNameVal,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (editingQuoteIndex !== null) {
-        quotes[editingQuoteIndex] = quoteObj;
-      } else {
-        quotes.push(quoteObj);
-      }
-
-      const { data, error } = await supabase
-        .from('leads')
-        .update({ quotation_details: quotes })
-        .eq('id', lead.id)
-        .select();
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        toast({ 
-          title: 'Permission Denied', 
-          description: 'No rows were updated under Row Level Security.', 
-          variant: 'destructive' 
-        });
-        return;
-      }
-
-      toast({ 
-        title: editingQuoteIndex !== null ? 'Quotation updated successfully!' : 'Quotation generated successfully!', 
-        description: `Quotation No: ${quoteNo}` 
-      });
-      setIsCreateQuoteOpen(false);
-      setQuotePrice('');
-      fetchLead();
-    } catch (e: any) {
-      toast({ title: 'Failed to create quotation', description: e.message, variant: 'destructive' });
-    }
   };
 
   /**
@@ -2017,217 +1872,20 @@ const LeadDetail = () => {
       </Dialog>
 
       {/* 7. Create/Edit Quotation Dialog */}
-      <Dialog open={isCreateQuoteOpen} onOpenChange={setIsCreateQuoteOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-background border border-border shadow-lg p-6 rounded-lg max-h-[85vh] overflow-y-auto animate-in fade-in-50 duration-100">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              {editingQuoteIndex !== null ? 'Edit Quotation Details' : 'Create Quotation'}
-            </DialogTitle>
-            <DialogDescription>
-              Provide specific panel brands, capacity, and cost details for this quotation version.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-3 text-xs">
-            <div className="space-y-1.5">
-              <Label className="font-semibold text-foreground">Quotation Name *</Label>
-              <Input
-                value={quoteName}
-                onChange={e => setQuoteName(e.target.value)}
-                placeholder="e.g. customer_name - 01 - 3kW"
-                className="h-9 text-xs"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Capacity (kW) *</Label>
-                <Input
-                  type="number"
-                  value={quoteCapacity}
-                  onChange={e => setQuoteCapacity(e.target.value)}
-                  placeholder="e.g. 3"
-                  className="h-9 text-xs"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Grid Phase</Label>
-                <Select value={quotePhase} onValueChange={setQuotePhase}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Phase" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.phase || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Panel Brand</Label>
-                <Select value={quotePanelBrand} onValueChange={setQuotePanelBrand}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Panel Brand" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.panel_make || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Panel Wattage (W)</Label>
-                <Select value={quotePanelWatt} onValueChange={setQuotePanelWatt}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Panel Wattage" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.panel_wt || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Panel Qty</Label>
-                <Input
-                  type="number"
-                  value={quotePanelQty}
-                  onChange={e => setQuotePanelQty(e.target.value)}
-                  placeholder="e.g. 6"
-                  className="h-9 text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Inverter Brand</Label>
-                <Select value={quoteInverterBrand} onValueChange={setQuoteInverterBrand}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Inverter" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.inverter || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Inverter Capacity (kW)</Label>
-                <Select value={quoteInverterCapacity} onValueChange={setQuoteInverterCapacity}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Inverter Capacity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.inverter_wt || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Structure Specs / Gauge</Label>
-                <Input
-                  value={quoteStructureType}
-                  onChange={e => setQuoteStructureType(e.target.value)}
-                  placeholder="e.g. HDG 80mm"
-                  className="h-9 text-xs"
-                />
-              </div>
-            </div>
-
-            <Separator className="my-2" />
-
-            <div className="grid grid-cols-2 gap-3 bg-muted/40 p-3 rounded-lg border">
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Turnkey Cost (₹) *</Label>
-                <Input
-                  type="number"
-                  value={quoteTotalCost}
-                  onChange={e => setQuoteTotalCost(e.target.value)}
-                  placeholder="e.g. 180000"
-                  className="h-9 text-xs"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Subsidy Applied</Label>
-                <div className="flex items-center gap-2 h-9">
-                  <Button
-                    type="button"
-                    variant={quoteSubsidy ? "default" : "outline"}
-                    className="h-7 text-[10px] w-14"
-                    onClick={() => setQuoteSubsidy(true)}
-                  >
-                    YES
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={!quoteSubsidy ? "default" : "outline"}
-                    className="h-7 text-[10px] w-14"
-                    onClick={() => {
-                      setQuoteSubsidy(false);
-                      setQuoteSubsidyAmount('');
-                    }}
-                  >
-                    NO
-                  </Button>
-                </div>
-              </div>
-
-              {quoteSubsidy && (
-                <div className="space-y-1.5 col-span-2">
-                  <Label className="font-semibold text-foreground">Subsidy Amount (₹)</Label>
-                  <Input
-                    type="number"
-                    value={quoteSubsidyAmount}
-                    onChange={e => setQuoteSubsidyAmount(e.target.value)}
-                    placeholder={`Default: ${quoteDefaultSubsidy}`}
-                    className="h-9 text-xs"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1.5 col-span-2">
-                <Label className="font-semibold text-foreground">Offered Deal Quote Price (₹) *</Label>
-                <Input
-                  type="number"
-                  value={quotePrice}
-                  onChange={e => setQuotePrice(e.target.value)}
-                  placeholder="Final offered price"
-                  className="h-9 text-xs font-bold text-orange-600 bg-orange-50 border-orange-200"
-                  required
-                />
-                <p className="text-[10px] text-muted-foreground">Calculated Turnkey - Subsidy. You can override it.</p>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0 border-t pt-3">
-            <Button variant="outline" size="sm" onClick={() => setIsCreateQuoteOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateQuotation}
-              disabled={!quotePrice || isNaN(Number(quotePrice)) || !quoteName.trim()}
-              size="sm"
-              className="gradient-primary text-primary-foreground font-semibold"
-            >
-              {editingQuoteIndex !== null ? 'Save Changes' : 'Generate Quote'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* One quotation form, shared with the visit page. */}
+      <QuotationFormDialog
+        open={isCreateQuoteOpen}
+        onOpenChange={(open) => {
+          setIsCreateQuoteOpen(open);
+          if (!open) setEditingQuoteIndex(null);
+        }}
+        leadId={lead.id}
+        customerName={lead.customer_name}
+        capacityKw={lead.kw_interest}
+        editQuote={editingQuote}
+        createdByName={staffName(user?.id ?? '')}
+        onSaved={fetchLead}
+      />
 
       {/* 8. Quotation PDF/Print Preview Dialog */}
       <Dialog open={isQuotationPreviewOpen} onOpenChange={setIsQuotationPreviewOpen}>

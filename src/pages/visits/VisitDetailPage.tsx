@@ -19,7 +19,7 @@ import DetailShell from '@/components/common/DetailShell';
 import SectionCard from '@/components/common/SectionCard';
 import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import CompleteVisitDialog from '@/components/leads/CompleteVisitDialog';
-import CreateQuotationDialog from '@/components/leads/CreateQuotationDialog';
+import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
 import LeadQuotationsPanel from '@/components/leads/LeadQuotationsPanel';
 import { fetchVisit, outcomeLabel } from '@/lib/visits';
 import type { LeadQuotation } from '@/lib/leadQuotations';
@@ -171,7 +171,13 @@ const VisitDetailPage = () => {
             </SectionCard>
 
             {lead && (
-              <LeadQuotationsPanel leadId={lead.id} onEdit={(q) => setEditingQuote(q)} />
+              <LeadQuotationsPanel
+                leadId={lead.id}
+                onEdit={(q) => setEditingQuote(q)}
+                customerName={lead.customer_name}
+                customerMobile={lead.mobile}
+                onSent={() => visitQuery.refetch()}
+              />
             )}
 
             <SectionCard title="Visit" icon={CalendarClock}>
@@ -224,7 +230,7 @@ const VisitDetailPage = () => {
             userId={user?.id ?? ''}
             onCompleted={() => visitQuery.refetch()}
           />
-          <CreateQuotationDialog
+          <QuotationFormDialog
             open={quoting || Boolean(editingQuote)}
             onOpenChange={(open) => {
               if (!open) {
@@ -234,10 +240,9 @@ const VisitDetailPage = () => {
             }}
             leadId={lead.id}
             customerName={lead.customer_name}
-            customerMobile={lead.mobile}
             capacityKw={lead.kw_interest}
             editQuote={editingQuote}
-            onCreated={() => {
+            onSaved={() => {
               // The quotations panel has its own query, so refetching the visit
               // alone would leave the updated quotation invisible until reload.
               queryClient.invalidateQueries({ queryKey: ['lead-quotations', lead.id] });
