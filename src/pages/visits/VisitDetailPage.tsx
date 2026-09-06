@@ -21,11 +21,8 @@ import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import CompleteVisitDialog from '@/components/leads/CompleteVisitDialog';
 import CreateQuotationDialog from '@/components/leads/CreateQuotationDialog';
 import LeadQuotationsPanel from '@/components/leads/LeadQuotationsPanel';
-import { VISIT_OUTCOMES, fetchVisit } from '@/lib/visits';
+import { fetchVisit, outcomeLabel } from '@/lib/visits';
 import type { LeadQuotation } from '@/lib/leadQuotations';
-
-const outcomeLabel = (value: string | null) =>
-  VISIT_OUTCOMES.find((o) => o.value === value)?.label ?? value ?? null;
 
 /**
  * A single site visit.
@@ -196,7 +193,7 @@ const VisitDetailPage = () => {
                   }
                   emptyText="Not yet"
                 />
-                <DetailField label="Outcome" value={outcomeLabel(visit.outcome)} />
+                <DetailField label="Outcome" value={visit.outcome ? outcomeLabel(visit.outcome) : undefined} />
                 <DetailField label="Notes" wide value={visit.visit_notes} />
               </DetailGrid>
 

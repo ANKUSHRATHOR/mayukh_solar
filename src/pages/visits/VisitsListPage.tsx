@@ -13,15 +13,12 @@ import TablePagination from '@/components/common/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { defaultSort } from '@/lib/tableQuery';
 import {
-  VISIT_OUTCOMES,
   fetchVisitTabCounts,
   fetchVisitsPage,
   type VisitTab,
   type VisitWithLead,
+  outcomeLabel,
 } from '@/lib/visits';
-
-const outcomeLabel = (value: string | null) =>
-  VISIT_OUTCOMES.find((o) => o.value === value)?.label ?? value ?? '—';
 
 /**
  * All site visits across every lead.

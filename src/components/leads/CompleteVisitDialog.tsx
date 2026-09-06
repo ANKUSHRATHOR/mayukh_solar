@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -31,9 +32,11 @@ import { cn } from '@/lib/utils';
 import {
   VISIT_DOCUMENTS,
   VISIT_OUTCOMES,
+  bookVisit,
   captureLocation,
   completeVisit,
   fetchLeadDocuments,
+  findOutcome,
   uploadVisitDocument,
   type Coordinates,
   type SiteVisit,
@@ -70,6 +73,7 @@ const CompleteVisitDialog = ({
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [outcome, setOutcome] = useState('');
+  const [rescheduleFor, setRescheduleFor] = useState('');
   const [notes, setNotes] = useState('');
   const [coords, setCoords] = useState<Coordinates | null>(null);
   const [locating, setLocating] = useState(false);
@@ -91,6 +95,7 @@ const CompleteVisitDialog = ({
 
   const reset = () => {
     setOutcome('');
+    setRescheduleFor('');
     setNotes('');
     setCoords(null);
     setLocationError(null);
@@ -122,11 +127,22 @@ const CompleteVisitDialog = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Paperwork is only mandatory once the customer has agreed to go ahead.
+  // Demanding Aadhaar and a bill from someone who just declined leaves the
+  // surveyor unable to close the visit at all.
+  const selectedOutcome = findOutcome(outcome);
+  const docsRequired = selectedOutcome?.requiresDocuments ?? false;
+  const needsNewDate = selectedOutcome?.reschedules ?? false;
+
   const requiredDocs = VISIT_DOCUMENTS.filter((d) => d.required);
-  const missingRequired = requiredDocs.filter(
-    (d) => !files[d.type] && !onFile.has(d.type)
-  );
-  const canSubmit = Boolean(outcome) && Boolean(coords) && missingRequired.length === 0;
+  const missingRequired = docsRequired
+    ? requiredDocs.filter((d) => !files[d.type] && !onFile.has(d.type))
+    : [];
+  const canSubmit =
+    Boolean(outcome) &&
+    Boolean(coords) &&
+    missingRequired.length === 0 &&
+    (!needsNewDate || Boolean(rescheduleFor));
 
   const submit = async () => {
     if (!visit || !coords) return;
@@ -149,9 +165,26 @@ const CompleteVisitDialog = ({
         notes: notes.trim() || undefined,
       });
 
+      // Closing a visit as "change the date" without booking the replacement
+      // would drop the lead off the open-visits list entirely.
+      if (needsNewDate && rescheduleFor) {
+        setProgress('Booking the new date…');
+        await bookVisit(
+          {
+            leadId,
+            scheduledFor: new Date(rescheduleFor).toISOString(),
+            assignedToUserId: visit.assigned_to_user_id ?? visit.staff_id ?? userId,
+            notes: notes.trim() || undefined,
+          },
+          userId
+        );
+      }
+
       toast({
-        title: 'Visit completed',
-        description: 'Site location saved and the lead status updated.',
+        title: needsNewDate ? 'Visit rescheduled' : 'Visit completed',
+        description: needsNewDate
+          ? 'The original visit was closed and a new one booked.'
+          : 'Site location saved and the lead status updated.',
       });
       reset();
       onOpenChange(false);
@@ -280,9 +313,38 @@ const CompleteVisitDialog = ({
             </Select>
           </div>
 
+          {/* New date, when the outcome is a reschedule */}
+          {needsNewDate && (
+            <div className="space-y-1.5">
+              <Label htmlFor="reschedule-for" className="text-xs font-semibold">
+                New visit date<span className="ml-0.5 text-destructive">*</span>
+              </Label>
+              <Input
+                id="reschedule-for"
+                type="datetime-local"
+                className="h-11"
+                value={rescheduleFor}
+                onChange={(e) => setRescheduleFor(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                This visit closes and a new one is booked for the date you pick, so the
+                lead stays on the open visits list.
+              </p>
+            </div>
+          )}
+
           {/* Documents */}
           <div className="space-y-2">
-            <Label className="text-xs font-semibold">Documents</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label className="text-xs font-semibold">Documents</Label>
+              <span className="text-[11px] text-muted-foreground">
+                {!outcome
+                  ? 'Pick an outcome first'
+                  : docsRequired
+                    ? 'Required for this outcome'
+                    : 'Optional for this outcome'}
+              </span>
+            </div>
             <ul className="divide-y divide-border/50 rounded-xl border border-border/70">
               {VISIT_DOCUMENTS.map((doc) => {
                 const staged = files[doc.type];
@@ -296,7 +358,7 @@ const CompleteVisitDialog = ({
                         'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
                         done
                           ? 'bg-success/15 text-success'
-                          : doc.required
+                          : doc.required && docsRequired
                             ? 'bg-warning/15 text-warning'
                             : 'bg-muted text-muted-foreground'
                       )}
@@ -311,7 +373,9 @@ const CompleteVisitDialog = ({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground">
                         {doc.label}
-                        {doc.required && <span className="ml-0.5 text-destructive">*</span>}
+                        {doc.required && docsRequired && (
+                          <span className="ml-0.5 text-destructive">*</span>
+                        )}
                       </p>
                       <p className="truncate text-[11px] text-muted-foreground">
                         {staged
@@ -390,6 +454,7 @@ const CompleteVisitDialog = ({
                   {[
                     !coords && 'site location',
                     !outcome && 'outcome',
+                    needsNewDate && !rescheduleFor && 'new visit date',
                     missingRequired.length > 0 &&
                       missingRequired.map((d) => d.label).join(', '),
                   ]
