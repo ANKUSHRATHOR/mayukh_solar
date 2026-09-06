@@ -15,6 +15,8 @@ import { FileText, Loader2, Phone, MapPin, Briefcase, ChevronRight, CheckCircle2
 import QuotationButton from '@/components/projects/QuotationButton';
 import DocumentPoolDialog from '@/components/projects/DocumentPoolDialog';
 import ManagePaymentsDialog from '@/components/projects/ManagePaymentsDialog';
+import StatusBadge from '@/components/common/StatusBadge';
+import { allProjectStageMeta } from '@/lib/projectStages';
 
 interface DealProject {
   id: string;
@@ -280,154 +282,163 @@ export default function DealsDashboard() {
           {search ? 'No deals match your search.' : 'No active deals. Convert a lead to Interested to see it here.'}
         </div>
       ) : (
-        <div className="rounded-xl border overflow-hidden bg-card shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left border-collapse text-muted-foreground">
-              <thead className="text-xs font-mono uppercase bg-muted/40 border-b text-foreground">
-                <tr>
-                  {/* K-Number identifies the connection; the internal deal
-                      code is not a user-facing identifier. */}
-                  <th className="px-4 py-3.5 font-semibold">K Number</th>
-                  <th className="px-4 py-3.5 font-semibold">Customer Details</th>
-                  <th className="px-4 py-3.5 font-semibold">Plant Specs</th>
-                  <th className="px-4 py-3.5 font-semibold">Pipeline Stage</th>
-                  <th className="px-4 py-3.5 font-semibold">Price Quotes</th>
-                  <th className="px-4 py-3.5 font-semibold text-center">Docs Pool</th>
-                  <th className="px-4 py-3.5 font-semibold text-center">Quotation</th>
-                  <th className="px-4 py-3.5 font-semibold text-center">Payments</th>
-                  <th className="px-4 py-3.5 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y border-b">
-                {filteredDeals.map((deal) => {
-                  const quotes = Array.isArray(deal.leads?.quotation_details) ? deal.leads.quotation_details : [];
-                  const approvedQuote = quotes.find((q: any) => q.status === 'accepted') || quotes[0];
-                  
-                  return (
-                    <tr key={deal.id} className="hover:bg-muted/10 transition-colors">
-                      <td className="px-4 py-3 text-xs font-mono font-bold text-foreground">
-                        {deal.k_number ?? (
-                          <span className="font-normal text-muted-foreground/60">Not linked</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-foreground">{deal.leads.customer_name}</div>
-                        <div className="flex flex-wrap items-center gap-x-2 text-xs mt-0.5">
-                          <a href={`tel:${deal.leads.mobile}`} className="text-primary hover:underline font-semibold">
-                            {deal.leads.mobile}
-                          </a>
-                          {deal.leads.email && <span className="text-muted-foreground">• {deal.leads.email}</span>}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground mt-1 leading-relaxed max-w-[220px]">
-                          <MapPin className="inline h-3 w-3 mr-0.5 text-muted-foreground/75 shrink-0" />
-                          {[deal.leads.address, deal.leads.village_city, deal.leads.district].filter(Boolean).join(", ")}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-foreground">
-                        <div className="font-medium">{deal.capacity_kw} kW System</div>
-                        <div className="text-muted-foreground text-[10px] mt-0.5">
-                          {deal.panel_qty}x {deal.panel_watt}W {deal.panel_brand}
-                        </div>
-                        <div className="text-muted-foreground text-[10px]">
-                          Inv: {deal.inverter_capacity}kW {deal.inverter_brand}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className={`text-[10px] font-bold uppercase shrink-0 ${
-                          deal.status === 'project_completed'
-                            ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none'
-                            : deal.status === 'inspection_failed'
-                            ? 'bg-red-100 text-red-800 hover:bg-red-100 border-none'
-                            : deal.status === 'pending_documents' || deal.status === 'pending_operator_review'
-                            ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100 border-none'
-                            : deal.status === 'net_meter_installed' || deal.status === 'net_metering_submitted'
-                            ? 'bg-blue-100 text-blue-800 hover:bg-blue-100 border-none'
-                            : 'bg-orange-100 text-orange-800 hover:bg-orange-100 border-none'
-                        }`}>
-                          {deal.status?.replace(/_/g, ' ') || 'Pending'}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-foreground">
-                        <div className="font-bold">₹{Number(deal.final_amount ?? 0).toLocaleString('en-IN')}</div>
-                        {approvedQuote && (
-                          <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5 font-normal">
-                            <div>Turnkey: ₹{Number(approvedQuote.total_cost ?? 0).toLocaleString('en-IN')}</div>
-                            {approvedQuote.subsidy_amount > 0 && (
-                              <div className="text-emerald-600">Subsidy: -₹{Number(approvedQuote.subsidy_amount).toLocaleString('en-IN')}</div>
-                            )}
-                            <div>Quote Code: <span className="font-mono text-[9px]">{approvedQuote.quotation_number}</span></div>
-                          </div>
-                        )}
-                        {deal.discount > 0 && (
-                          <div className="text-[10px] text-emerald-500 font-normal mt-0.5">Discount: ₹{deal.discount.toLocaleString('en-IN')}</div>
-                        )}
-                      </td>
-                    <td className="px-4 py-3 text-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs h-8"
-                        onClick={() => {
-                          setSelectedDeal(deal);
-                          setIsDocOpen(true);
-                        }}
-                      >
-                        Upload Docs
-                      </Button>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <QuotationButton projectId={deal.id} size="sm" className="h-8" />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs h-8 gap-1.5"
-                        onClick={() => {
-                          setSelectedDeal(deal);
-                          setIsPaymentsOpen(true);
-                        }}
-                      >
-                        <CreditCard className="h-3.5 w-3.5" /> Payments
-                      </Button>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          onClick={() => navigate(`/projects/${deal.id}/edit`)}
-                          title="Edit Equipment details"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 text-xs text-destructive hover:bg-destructive/10"
-                          onClick={() => handleRevertDeal(deal)}
-                        >
-                          Revert
-                        </Button>
-                        <Button
-                          className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
-                          onClick={() => {
-                            setSelectedDeal(deal);
-                            setPayType((deal.payment_type as any) || 'cash');
-                            setLoanBank(deal.loan_bank || '');
-                            setIsApproveOpen(true);
-                          }}
-                        >
-                          Approve Deal
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                )})}
-              </tbody>
-            </table>
-          </div>
+        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+          {/* Cards rather than a nine-column table: the row carried four separate
+              action buttons that only fitted by scrolling sideways. */}
+          {filteredDeals.map((deal) => {
+            const quotes = Array.isArray(deal.leads?.quotation_details) ? deal.leads.quotation_details : [];
+            const approvedQuote = quotes.find((q: any) => q.status === 'accepted') || quotes[0];
+
+            return (
+              <div
+                key={deal.id}
+                className="flex flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-card"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-mono text-xs font-bold text-foreground">
+                    {deal.k_number ?? (
+                      <span className="font-sans font-normal text-muted-foreground/60">Not linked</span>
+                    )}
+                  </span>
+                  {/* Was a hand-rolled ladder of bg-emerald-100 / bg-yellow-100
+                      classes — light-only, so it rendered as pale chips on the
+                      dark canvas and drifted from every other status badge. */}
+                  <StatusBadge value={deal.status} map={allProjectStageMeta} size="sm" />
+                </div>
+
+                <div className="mt-2 min-w-0">
+                  <p className="truncate font-semibold text-foreground" title={deal.leads.customer_name}>
+                    {deal.leads.customer_name}
+                  </p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
+                    <a
+                      href={`tel:${deal.leads.mobile}`}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {deal.leads.mobile}
+                    </a>
+                    {deal.leads.email && (
+                      <span className="truncate text-muted-foreground">• {deal.leads.email}</span>
+                    )}
+                  </div>
+                  {[deal.leads.address, deal.leads.village_city, deal.leads.district].filter(Boolean).length > 0 && (
+                    <p className="mt-1 flex items-start gap-1 text-[11px] leading-relaxed text-muted-foreground">
+                      <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/75" />
+                      {[deal.leads.address, deal.leads.village_city, deal.leads.district].filter(Boolean).join(', ')}
+                    </p>
+                  )}
+                </div>
+
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border/50 pt-3">
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      System
+                    </dt>
+                    <dd className="mt-0.5 text-xs text-foreground">
+                      <span className="font-medium">{deal.capacity_kw} kW</span>
+                      <span className="block text-[10px] text-muted-foreground">
+                        {deal.panel_qty}x {deal.panel_watt}W {deal.panel_brand}
+                      </span>
+                      <span className="block text-[10px] text-muted-foreground">
+                        Inv: {deal.inverter_capacity}kW {deal.inverter_brand}
+                      </span>
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Value
+                    </dt>
+                    <dd className="mt-0.5 text-xs text-foreground">
+                      <span className="font-bold tabular-nums">
+                        ₹{Number(deal.final_amount ?? 0).toLocaleString('en-IN')}
+                      </span>
+                      {approvedQuote && (
+                        <>
+                          <span className="block text-[10px] text-muted-foreground">
+                            Turnkey: ₹{Number(approvedQuote.total_cost ?? 0).toLocaleString('en-IN')}
+                          </span>
+                          {approvedQuote.subsidy_amount > 0 && (
+                            <span className="block text-[10px] text-success">
+                              Subsidy: −₹{Number(approvedQuote.subsidy_amount).toLocaleString('en-IN')}
+                            </span>
+                          )}
+                          <span className="block font-mono text-[9px] text-muted-foreground">
+                            {approvedQuote.quotation_number}
+                          </span>
+                        </>
+                      )}
+                      {deal.discount > 0 && (
+                        <span className="block text-[10px] text-success">
+                          Discount: ₹{deal.discount.toLocaleString('en-IN')}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => {
+                      setSelectedDeal(deal);
+                      setIsDocOpen(true);
+                    }}
+                  >
+                    Upload Docs
+                  </Button>
+                  <QuotationButton projectId={deal.id} size="sm" className="h-8" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={() => {
+                      setSelectedDeal(deal);
+                      setIsPaymentsOpen(true);
+                    }}
+                  >
+                    <CreditCard className="h-3.5 w-3.5" /> Payments
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => navigate(`/projects/${deal.id}/edit`)}
+                    title="Edit equipment details"
+                    aria-label={`Edit equipment for ${deal.leads.customer_name}`}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Approve is the decision this page exists for, so it sits alone
+                    on the last line rather than fifth in a row of buttons. */}
+                <div className="mt-2 flex items-center gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs text-destructive hover:bg-destructive/10"
+                    onClick={() => handleRevertDeal(deal)}
+                  >
+                    Revert
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 flex-1 text-xs font-semibold"
+                    onClick={() => {
+                      setSelectedDeal(deal);
+                      setPayType((deal.payment_type as any) || 'cash');
+                      setLoanBank(deal.loan_bank || '');
+                      setIsApproveOpen(true);
+                    }}
+                  >
+                    Approve Deal
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

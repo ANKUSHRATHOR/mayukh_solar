@@ -37,26 +37,14 @@ import { fetchConsumerDetails } from '@/lib/discom';
 import { renderQuotationPdfBlob, downloadQuotationPdf } from '@/lib/quotationPdf';
 import { sendQuotationNotification } from '@/lib/whatsapp';
 import { calculateSubsidy, formatSubsidy, useSubsidySlabs } from '@/lib/subsidy';
+import { leadStatusMeta, resolveStatus, toneClasses } from '@/lib/statusMeta';
 import LeadVisitsPanel from '@/components/leads/LeadVisitsPanel';
+import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
 import LeadDocumentsPanel from '@/components/leads/LeadDocumentsPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 type CancellationReason = Database['public']['Enums']['cancellation_reason'];
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  new:               { label: 'New',                    color: 'text-sky-600',     bg: 'bg-sky-50 border-sky-200',       dot: 'bg-sky-500' },
-  visit_created:     { label: 'Visit Booked',            color: 'text-indigo-600',  bg: 'bg-indigo-50 border-indigo-200', dot: 'bg-indigo-500' },
-  visited:           { label: 'Visited',                 color: 'text-violet-600',  bg: 'bg-violet-50 border-violet-200', dot: 'bg-violet-500' },
-  follow_up:         { label: 'Follow Up',               color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200',   dot: 'bg-amber-500' },
-  interested:        { label: 'Interested',              color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
-  not_interested:    { label: 'Not Interested',          color: 'text-orange-600',  bg: 'bg-orange-50 border-orange-200', dot: 'bg-orange-500' },
-  cancelled:         { label: 'Cancelled',               color: 'text-red-600',     bg: 'bg-red-50 border-red-200',       dot: 'bg-red-500' },
-  final:             { label: 'Final / Won',             color: 'text-green-700',   bg: 'bg-green-50 border-green-200',   dot: 'bg-green-600' },
-  quotation_sent:    { label: 'Quotation Sent',          color: 'text-yellow-700',  bg: 'bg-yellow-50 border-yellow-200', dot: 'bg-yellow-500' },
-  quotation_accepted:{ label: 'Quotation Accepted',      color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-300',dot: 'bg-emerald-600' },
-  quotation_rejected:{ label: 'Quotation Rejected',      color: 'text-red-700',     bg: 'bg-red-50 border-red-300',       dot: 'bg-red-600' },
-};
 
 const EVENT_ICON: Record<string, React.ReactNode> = {
   created:            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />,
@@ -67,10 +55,6 @@ const EVENT_ICON: Record<string, React.ReactNode> = {
   quotation_rejected: <AlertTriangle className="h-3.5 w-3.5 text-red-500" />,
 };
 
-const statusConf = (s: string | null | undefined) => {
-  if (!s) return { label: 'Unknown', color: 'text-muted-foreground', bg: 'bg-muted/40', dot: 'bg-muted-foreground' };
-  return STATUS_CONFIG[s] || { label: s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), color: 'text-muted-foreground', bg: 'bg-muted/40', dot: 'bg-muted-foreground' };
-};
 const statusLabel = (s: string | null | undefined) => {
   if (!s) return '—';
   return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -87,22 +71,33 @@ const cancellationReasons: { value: CancellationReason; label: string }[] = [
 ];
 
 /* ─── Section Wrapper ─── */
-const Section = ({ title, icon, children, defaultOpen = true }: {
-  title: string; icon: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean;
+const Section = ({ title, icon, children, action, defaultOpen = true }: {
+  title: string; icon: React.ReactNode; children: React.ReactNode;
+  /** Section-level control (Edit, Sync). Sits in the header, outside the toggle. */
+  action?: React.ReactNode;
+  defaultOpen?: boolean;
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors"
-      >
-        <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
-          <span className="text-primary">{icon}</span>
-          {title}
-        </div>
-        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-      </button>
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      {/* The action lives in the header rather than floating above the content on
+          a negative margin, and stays outside the toggle so it isn't a nested
+          button. */}
+      <div className="flex items-center gap-2 px-5 py-3.5">
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+          className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded p-1 text-left text-sm font-semibold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
+          <span className="shrink-0 text-primary">{icon}</span>
+          <span className="truncate">{title}</span>
+          {open
+            ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+            : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+        </button>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
       {open && <div className="border-t border-border/50">{children}</div>}
     </div>
   );
@@ -209,19 +204,6 @@ const LeadDetail = () => {
   const [plantSubsidy, setPlantSubsidy] = useState(false);
 
   // Quotation Price state
-  const [quotePrice, setQuotePrice] = useState('');
-  const [quoteCapacity, setQuoteCapacity] = useState('');
-  const [quotePhase, setQuotePhase] = useState('');
-  const [quotePanelBrand, setQuotePanelBrand] = useState('');
-  const [quotePanelWatt, setQuotePanelWatt] = useState('');
-  const [quotePanelQty, setQuotePanelQty] = useState('');
-  const [quoteInverterBrand, setQuoteInverterBrand] = useState('');
-  const [quoteInverterCapacity, setQuoteInverterCapacity] = useState('');
-  const [quoteStructureType, setQuoteStructureType] = useState('');
-  const [quoteTotalCost, setQuoteTotalCost] = useState('');
-  const [quoteSubsidy, setQuoteSubsidy] = useState(false);
-  const [quoteSubsidyAmount, setQuoteSubsidyAmount] = useState('');
-  const [quoteName, setQuoteName] = useState('');
   const [editingQuoteIndex, setEditingQuoteIndex] = useState<number | null>(null);
   const [selectedPreviewQuote, setSelectedPreviewQuote] = useState<any | null>(null);
 
@@ -231,11 +213,6 @@ const LeadDetail = () => {
     () => calculateSubsidy(lead?.kw_interest, subsidySlabs),
     [lead?.kw_interest, subsidySlabs]
   );
-  const quoteDefaultSubsidy = useMemo(
-    () => calculateSubsidy(quoteCapacity, subsidySlabs),
-    [quoteCapacity, subsidySlabs]
-  );
-
   const [project, setProject] = useState<any>(null);
   const [salesPersons, setSalesPersons] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null }[]>([]);
   const [people, setPeople] = useState<{ creator: any; assignee: any; history: any[] } | null>(null);
@@ -314,13 +291,19 @@ const LeadDetail = () => {
     }
   }, [lead]);
 
-  useEffect(() => {
-    if (isCreateQuoteOpen) {
-      const turnkey = Number(quoteTotalCost) || 0;
-      const sub = quoteSubsidy ? (Number(quoteSubsidyAmount) || quoteDefaultSubsidy) : 0;
-      setQuotePrice(String(Math.max(0, turnkey - sub) || ''));
-    }
-  }, [quoteTotalCost, quoteSubsidy, quoteSubsidyAmount, quoteDefaultSubsidy, isCreateQuoteOpen]);
+  const hasPlantDetails = Boolean(
+    lead?.plant_details && Object.keys(lead.plant_details as any).length > 0
+  );
+
+  // The quotations live in a JSONB array, so the page tracks the row by index;
+  // the shared dialog takes the quotation itself.
+  const leadQuotations: any[] = Array.isArray(lead?.quotation_details)
+    ? (lead.quotation_details as any[])
+    : lead?.quotation_details && typeof lead.quotation_details === 'object'
+      ? [lead.quotation_details as any]
+      : [];
+  const editingQuote =
+    editingQuoteIndex !== null ? (leadQuotations[editingQuoteIndex] ?? null) : null;
 
   const canUpdateStatus = role === 'admin' || role === 'sales_person' || role === 'telecaller';
 
@@ -525,238 +508,8 @@ const LeadDetail = () => {
   };
 
   const handleOpenCreateQuote = (index: number | null = null) => {
-    const quotes = Array.isArray(lead?.quotation_details)
-      ? lead.quotation_details
-      : lead?.quotation_details && typeof lead.quotation_details === 'object'
-      ? [lead.quotation_details]
-      : [];
-
-    if (index !== null && quotes[index]) {
-      const q = quotes[index] as any;
-      setEditingQuoteIndex(index);
-      setQuoteName(q.name || '');
-      setQuotePrice(String(q.quote_price || ''));
-      setQuoteCapacity(String(q.capacity_kw || ''));
-      setQuotePhase(q.phase || '');
-      setQuotePanelBrand(q.panel_brand || '');
-      setQuotePanelWatt(q.panel_watt ? String(q.panel_watt) : '');
-      setQuotePanelQty(q.panel_qty ? String(q.panel_qty) : '');
-      setQuoteInverterBrand(q.inverter_brand || '');
-      setQuoteInverterCapacity(q.inverter_capacity ? String(q.inverter_capacity) : '');
-      setQuoteStructureType(q.structure_type || '');
-      setQuoteTotalCost(q.total_cost ? String(q.total_cost) : '');
-      setQuoteSubsidy(!!q.subsidy_amount);
-      setQuoteSubsidyAmount(q.subsidy_amount ? String(q.subsidy_amount) : '');
-    } else {
-      setEditingQuoteIndex(null);
-      const pd = (lead?.plant_details as any) || {};
-      const nextIndex = quotes.length + 1;
-      const idxStr = String(nextIndex).padStart(2, '0');
-      const cap = pd.required_capacity || lead?.kw_interest || '';
-      
-      setQuoteCapacity(String(cap));
-      setQuotePhase(pd.phase || '');
-      setQuotePanelBrand(pd.panel_make || '');
-      setQuotePanelWatt(pd.panel_wt ? String(pd.panel_wt).replace(/\D/g, '') : '');
-      setQuotePanelQty(pd.panel_qty ? String(pd.panel_qty) : '');
-      setQuoteInverterBrand(pd.inverter || '');
-      setQuoteInverterCapacity(pd.inverter_wt ? String(pd.inverter_wt).replace(/\D/g, '') : '');
-      setQuoteStructureType(pd.structure_type_gauge_make || '');
-      setQuoteTotalCost(pd.total_cost ? String(pd.total_cost) : '');
-      setQuoteSubsidy(!!pd.subsidy);
-      setQuoteSubsidyAmount(
-        pd.subsidy ? String(pd.subsidy_amount || calculateSubsidy(cap, subsidySlabs)) : ''
-      );
-
-      const capStr = cap ? `${cap}kW` : '3kW';
-      setQuoteName(`${lead?.customer_name || 'Client'} - ${idxStr} - ${capStr}`);
-      
-      const turnkey = Number(pd.total_cost) || 0;
-      const sub = pd.subsidy ? (Number(pd.subsidy_amount) || calculateSubsidy(cap, subsidySlabs)) : 0;
-      setQuotePrice(String(Math.max(0, turnkey - sub) || ''));
-    }
+    setEditingQuoteIndex(index);
     setIsCreateQuoteOpen(true);
-  };
-
-  const handleCreateQuotation = async () => {
-    if (!lead || !user) return;
-    const priceNum = Number(quotePrice);
-    if (isNaN(priceNum) || priceNum <= 0) {
-      toast({ title: 'Invalid price', description: 'Please enter a valid price.', variant: 'destructive' });
-      return;
-    }
-
-    try {
-      const staffNameVal = staffName(user.id);
-      
-      const quotes = Array.isArray(lead.quotation_details)
-        ? [...lead.quotation_details]
-        : lead.quotation_details && typeof lead.quotation_details === 'object'
-        ? [lead.quotation_details]
-        : [];
-
-      let quoteNo = '';
-      if (editingQuoteIndex !== null && quotes[editingQuoteIndex]) {
-        quoteNo = (quotes[editingQuoteIndex] as any).quotation_number;
-      } else {
-        const baseNo = `MS-Q-${Math.floor(100000 + Math.random() * 900000)}`;
-        const idxStr = String(quotes.length + 1).padStart(2, '0');
-        quoteNo = `${baseNo}-${idxStr}`;
-      }
-
-      const quoteObj = {
-        quotation_number: quoteNo,
-        name: quoteName.trim() || `${lead.customer_name} - ${quoteNo}`,
-        capacity_kw: Number(quoteCapacity) || null,
-        phase: quotePhase || null,
-        panel_brand: quotePanelBrand || null,
-        panel_watt: Number(quotePanelWatt) || null,
-        panel_qty: Number(quotePanelQty) || null,
-        inverter_brand: quoteInverterBrand || null,
-        inverter_capacity: Number(quoteInverterCapacity) || null,
-        structure_type: quoteStructureType || null,
-        total_cost: Number(quoteTotalCost) || null,
-        subsidy_amount: quoteSubsidy ? (Number(quoteSubsidyAmount) || quoteDefaultSubsidy) : 0,
-        net_cost: (Number(quoteTotalCost) || 0) - (quoteSubsidy ? (Number(quoteSubsidyAmount) || quoteDefaultSubsidy) : 0),
-        quote_price: priceNum,
-        status: editingQuoteIndex !== null ? (quotes[editingQuoteIndex] as any).status : 'pending',
-        created_at: editingQuoteIndex !== null ? (quotes[editingQuoteIndex] as any).created_at : new Date().toISOString(),
-        created_by: editingQuoteIndex !== null ? (quotes[editingQuoteIndex] as any).created_by : staffNameVal,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (editingQuoteIndex !== null) {
-        quotes[editingQuoteIndex] = quoteObj;
-      } else {
-        quotes.push(quoteObj);
-      }
-
-      const { data, error } = await supabase
-        .from('leads')
-        .update({ quotation_details: quotes })
-        .eq('id', lead.id)
-        .select();
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        toast({ 
-          title: 'Permission Denied', 
-          description: 'No rows were updated under Row Level Security.', 
-          variant: 'destructive' 
-        });
-        return;
-      }
-
-      toast({ 
-        title: editingQuoteIndex !== null ? 'Quotation updated successfully!' : 'Quotation generated successfully!', 
-        description: `Quotation No: ${quoteNo}` 
-      });
-      setIsCreateQuoteOpen(false);
-      setQuotePrice('');
-      fetchLead();
-    } catch (e: any) {
-      toast({ title: 'Failed to create quotation', description: e.message, variant: 'destructive' });
-    }
-  };
-
-  /**
-   * Creates a quotation straight from the lead's plant details — no form.
-   *
-   * A quotation is just the plant specs and pricing already captured under
-   * "Plant Details", so re-asking for them in a dialog was redundant. This
-   * validates that the fields a quotation needs are present, names the ones
-   * that aren't, and otherwise runs the same save as the manual flow.
-   */
-  const handleCreateQuotationFromPlant = async () => {
-    if (!lead || !user) return;
-
-    const pd = (lead.plant_details as any) || {};
-    const capacity = Number(pd.required_capacity || lead.kw_interest || 0);
-    const panelWatt = Number(String(pd.panel_wt || '').replace(/\D/g, '')) || 0;
-    const totalCost = Number(pd.total_cost) || 0;
-
-    // Every field a quotation document needs, with the label the user sees.
-    const missing: string[] = [];
-    if (!capacity) missing.push('Interested Capacity');
-    if (!pd.phase) missing.push('Phase');
-    if (!pd.panel_make) missing.push('Panel Make');
-    if (!panelWatt) missing.push('Panel Wattage');
-    if (!pd.inverter) missing.push('Inverter Make');
-    if (!totalCost) missing.push('Total Cost');
-
-    if (missing.length > 0) {
-      const hasAnyPlant = Object.keys(pd).length > 0;
-      toast({
-        title: 'Fill plant details before quoting',
-        description: `${hasAnyPlant ? 'Missing' : 'Add plant details first — missing'}: ${missing.join(', ')}. Use ${hasAnyPlant ? 'Edit' : 'Add'} Plant Details above.`,
-        variant: 'destructive',
-        duration: 10000,
-      });
-      return;
-    }
-
-    try {
-      const quotes = Array.isArray(lead.quotation_details)
-        ? [...lead.quotation_details]
-        : lead.quotation_details && typeof lead.quotation_details === 'object'
-        ? [lead.quotation_details]
-        : [];
-
-      const idxStr = String(quotes.length + 1).padStart(2, '0');
-      const quoteNo = `MS-Q-${Math.floor(100000 + Math.random() * 900000)}-${idxStr}`;
-      const panelQty = Math.ceil((capacity * 1000) / panelWatt);
-      const subsidyAmt = pd.subsidy
-        ? Number(pd.subsidy_amount) || calculateSubsidy(capacity, subsidySlabs)
-        : 0;
-      const netCost = Math.max(0, totalCost - subsidyAmt);
-
-      const quoteObj = {
-        quotation_number: quoteNo,
-        name: `${lead.customer_name} - ${idxStr} - ${capacity}kW`,
-        capacity_kw: capacity,
-        phase: pd.phase || null,
-        panel_brand: pd.panel_make || null,
-        panel_watt: panelWatt || null,
-        panel_qty: panelQty || null,
-        inverter_brand: pd.inverter || null,
-        inverter_capacity: Number(String(pd.inverter_wt || '').replace(/\D/g, '')) || null,
-        structure_type: pd.structure_type_gauge_make || null,
-        total_cost: totalCost,
-        subsidy_amount: subsidyAmt,
-        net_cost: netCost,
-        quote_price: netCost,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        created_by: staffName(user.id),
-        updated_at: new Date().toISOString(),
-      };
-
-      quotes.push(quoteObj);
-
-      const { data, error } = await supabase
-        .from('leads')
-        .update({ quotation_details: quotes })
-        .eq('id', lead.id)
-        .select();
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        toast({
-          title: 'Permission Denied',
-          description: 'No rows were updated under Row Level Security.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      toast({
-        title: 'Quotation generated',
-        description: `${quoteNo} — ₹${netCost.toLocaleString('en-IN')} after subsidy. Send it from the row menu.`,
-      });
-      fetchLead();
-    } catch (e: any) {
-      toast({ title: 'Failed to create quotation', description: e.message, variant: 'destructive' });
-    }
   };
 
   const handleDeleteQuotation = async (index: number) => {
@@ -1070,7 +823,7 @@ const LeadDetail = () => {
     );
   }
 
-  const sc = statusConf(lead.status);
+  const sc = resolveStatus(leadStatusMeta, lead.status);
 
   return (
     <div className="min-h-screen bg-background font-sans antialiased text-foreground">
@@ -1082,21 +835,24 @@ const LeadDetail = () => {
               <ArrowLeft className="h-4 w-4 mr-1" /> Back
             </Button>
             <div className="hidden sm:block w-px h-5 bg-border" />
-            <div className="hidden sm:flex flex-col">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead Details</p>
-              <p className="text-sm font-bold text-foreground leading-tight">{lead.customer_name}</p>
-            </div>
+            {/* The name repeats here only once the hero has scrolled away, so the
+                sticky bar still says which lead you are looking at. */}
+            <p className="hidden truncate text-sm font-bold leading-tight text-foreground sm:block">
+              {lead.customer_name}
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Tone classes are theme-aware. These chips used raw bg-amber-50 /
+                bg-sky-50, which rendered as near-white pills on the dark canvas. */}
             {lead.follow_up_date && (
-              <div className="hidden md:flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 font-medium">
+              <div className={`hidden items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium md:flex ${toneClasses.warning}`}>
                 <Calendar className="h-3 w-3" />
                 Follow-up: {new Date(lead.follow_up_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
               </div>
             )}
-            <div className={`flex items-center gap-1.5 text-xs font-semibold border rounded-full px-3 py-1.5 ${sc.bg} ${sc.color}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />
+            <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${toneClasses[sc.tone]}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
               {sc.label}
             </div>
           </div>
@@ -1104,31 +860,42 @@ const LeadDetail = () => {
       </div>
 
       {/* ── Hero Strip / Action Bar ── */}
-      <div className="bg-gradient-to-r from-primary/5 via-background to-background border-b border-border/30 px-4 lg:px-8 py-5">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-5">
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xl">
+      {/* The gradient wash here fought the Actions button for attention; the spec
+          allows one accent per screen and that accent is the primary action. */}
+      <div className="border-b border-border/30 bg-background px-4 py-5 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted text-lg font-bold text-foreground sm:h-14 sm:w-14 sm:text-xl">
               {lead.customer_name?.charAt(0)?.toUpperCase() || '?'}
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-foreground leading-tight">{lead.customer_name}</h1>
-              <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
-                <a href={`tel:${lead.mobile}`} className="flex items-center gap-1 font-semibold text-primary hover:underline"><Phone className="h-3 w-3" />{lead.mobile}</a>
-                {lead.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{lead.email}</span>}
-                {lead.village_city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{lead.village_city}{lead.district ? `, ${lead.district}` : ''}</span>}
-                <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Created {new Date(lead.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              <h1 className="text-lg font-bold leading-tight text-foreground sm:text-xl">{lead.customer_name}</h1>
+              <div className="mt-1.5 flex flex-col gap-1.5 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
+                <a href={`tel:${lead.mobile}`} className="flex w-fit items-center gap-1 font-semibold text-primary hover:underline"><Phone className="h-3 w-3 shrink-0" />{lead.mobile}</a>
+                {lead.email && <span className="flex min-w-0 items-center gap-1"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{lead.email}</span></span>}
+                {lead.village_city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" />{lead.village_city}{lead.district ? `, ${lead.district}` : ''}</span>}
+                <span className="flex items-center gap-1"><Clock className="h-3 w-3 shrink-0" />Created {new Date(lead.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                {/* Follow-up was desktop-only, hidden exactly from the field staff
+                    who need it. It rides in the meta row at every width now. */}
+                {lead.follow_up_date && (
+                  <span className="flex items-center gap-1 font-semibold text-warning md:hidden">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    Follow-up {new Date(lead.follow_up_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Unified Action Dropdown Menu */}
-          <div className="flex items-center gap-2">
+          {/* Actions sit full-width on a phone at a 44px tap target, and collapse
+              back to the compact desktop pair from sm up. */}
+          <div className="flex shrink-0 items-center gap-2">
             {lead.mobile && (
               <Button
                 asChild
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 text-primary border-primary/20 bg-primary/5 hover:bg-primary hover:text-primary-foreground"
+                className="h-11 w-11 shrink-0 border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground sm:h-9 sm:w-9"
               >
                 <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.customer_name}`}>
                   <Phone className="h-4 w-4" />
@@ -1138,7 +905,7 @@ const LeadDetail = () => {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button className="gradient-primary text-primary-foreground font-semibold h-9 px-4 text-sm gap-1.5 shadow-sm">
+                <Button className="h-11 flex-1 gap-1.5 px-4 text-sm font-semibold shadow-sm sm:h-9 sm:flex-none">
                   Actions <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1162,7 +929,7 @@ const LeadDetail = () => {
                 {canUpdateStatus && lead.status !== 'cancelled' && lead.status !== 'final' && (
                   <>
                     <DropdownMenuSeparator className="-mx-1 my-1 h-px bg-muted" />
-                    <DropdownMenuItem onSelect={() => setIsStatusUpdateOpen(true)} className="gap-2 cursor-pointer text-sm hover:bg-accent hover:text-accent-foreground px-2.5 py-2 rounded text-amber-600 font-semibold focus:text-amber-700">
+                    <DropdownMenuItem onSelect={() => setIsStatusUpdateOpen(true)} className="gap-2 cursor-pointer text-sm hover:bg-accent hover:text-accent-foreground px-2.5 py-2 rounded text-warning font-semibold focus:text-warning">
                       <AlertTriangle className="h-4 w-4" /> Change Status
                     </DropdownMenuItem>
                   </>
@@ -1187,15 +954,24 @@ const LeadDetail = () => {
         />
 
         <Tabs defaultValue="details" className="space-y-4">
-          <TabsList className="h-10">
-            <TabsTrigger value="details" className="gap-1.5 text-sm">
-              <User className="h-4 w-4" /> Lead Details
+          {/* Three fixed tabs, so they split the width evenly on phones rather
+              than running off the right edge — the strip measured 389px in a
+              375px viewport, and nothing scrolls, so "Plant Details" was
+              clipped and unreachable. Labels shorten below sm to fit. */}
+          <TabsList className="grid h-auto w-full grid-cols-3 sm:inline-flex sm:h-10 sm:w-auto">
+            <TabsTrigger value="details" className="gap-1.5 px-2 text-xs sm:px-3 sm:text-sm">
+              <User className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Details</span>
+              <span className="hidden sm:inline">Lead Details</span>
             </TabsTrigger>
-            <TabsTrigger value="documents" className="gap-1.5 text-sm">
-              <FileText className="h-4 w-4" /> Documents
+            <TabsTrigger value="documents" className="gap-1.5 px-2 text-xs sm:px-3 sm:text-sm">
+              <FileText className="h-4 w-4 shrink-0" />
+              <span>Documents</span>
             </TabsTrigger>
-            <TabsTrigger value="plant" className="gap-1.5 text-sm">
-              <TrendingUp className="h-4 w-4" /> Plant Details
+            <TabsTrigger value="plant" className="gap-1.5 px-2 text-xs sm:px-3 sm:text-sm">
+              <TrendingUp className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Plant</span>
+              <span className="hidden sm:inline">Plant Details</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1206,19 +982,17 @@ const LeadDetail = () => {
           <div className="space-y-4">
 
             {/* 1. Contact Details */}
-            <Section title="Customer Contact Details" icon={<User className="h-4 w-4" />}>
+            <Section
+              title="Customer Contact Details"
+              icon={<User className="h-4 w-4" />}
+              action={
+                <Button variant="outline" size="sm" onClick={handleOpenEditContact} className="h-8 gap-1 text-xs font-semibold">
+                  <Edit className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Edit</span>
+                </Button>
+              }
+            >
               <div className="p-5 space-y-4">
-                <div className="flex justify-end -mb-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleOpenEditContact}
-                    className="h-8 text-xs font-semibold gap-1 border-primary/20 hover:border-primary/40 text-primary bg-primary/5 hover:bg-primary/10"
-                  >
-                    <Edit className="h-3.5 w-3.5" />
-                    Edit Contact Details
-                  </Button>
-                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <InfoRow label="Mobile" value={lead.mobile} href={`tel:${lead.mobile}`} />
                   <InfoRow label="Alternate Mobile" value={lead.alt_mobile} href={lead.alt_mobile ? `tel:${lead.alt_mobile}` : undefined} />
@@ -1226,7 +1000,7 @@ const LeadDetail = () => {
                 </div>
                 <Separator />
                 <InfoRow label="Contact Address" value={lead.address} />
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   <InfoRow label="Village / City" value={lead.village_city} />
                   <InfoRow label="District" value={lead.district} />
                   <InfoRow label="State" value={lead.state} />
@@ -1236,7 +1010,7 @@ const LeadDetail = () => {
                     href={`https://www.google.com/maps/search/?api=1&query=${lead.latitude},${lead.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2.5 hover:bg-rose-100 transition-colors w-fit"
+                    className="flex w-fit items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
                   >
                     <MapPin className="h-3.5 w-3.5 animate-bounce" />
                     <span className="font-mono text-[11px] text-muted-foreground mr-1">{lead.latitude?.toFixed(4)}, {lead.longitude?.toFixed(4)}</span>
@@ -1247,22 +1021,25 @@ const LeadDetail = () => {
             </Section>
 
             {/* 2. Discom Connection Specs */}
-            <Section title="Discom Connection Specs" icon={<Zap className="h-4 w-4" />}>
+            <Section
+              title="Discom Connection Specs"
+              icon={<Zap className="h-4 w-4" />}
+              action={lead.k_number ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={syncingKno}
+                  onClick={handleSyncKno}
+                  className="h-8 shrink-0 gap-1.5 px-3 text-xs font-semibold"
+                >
+                  <RefreshCw className={`h-3 w-3 ${syncingKno ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Sync Specs</span>
+                </Button>
+              ) : undefined}
+            >
               <div className="p-5 space-y-4">
                 {lead.k_number ? (
-                  <div className="flex items-start justify-between gap-4">
-                    <InfoRow label="K-Number (Rajasthan Discom)" value={lead.k_number} mono />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={syncingKno}
-                      onClick={handleSyncKno}
-                      className="shrink-0 h-8 text-xs font-semibold px-3 border-primary/20 hover:bg-primary/5 text-primary"
-                    >
-                      <RefreshCw className={`mr-1.5 h-3 w-3 ${syncingKno ? 'animate-spin' : ''}`} />
-                      Sync Specs
-                    </Button>
-                  </div>
+                  <InfoRow label="K-Number (Rajasthan Discom)" value={lead.k_number} mono />
                 ) : (
                   <div className="space-y-1.5">
                     <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
@@ -1301,7 +1078,7 @@ const LeadDetail = () => {
                       <InfoRow label="Meter Number" value={lead.kno_details.meterno} mono />
                     </div>
                     <InfoRow label="Discom Address" value={lead.kno_details.address} />
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                       <InfoRow label="Load Capacity" value={lead.kno_details.sancload || lead.kno_details.connload ? `${lead.kno_details.sancload || lead.kno_details.connload} kW` : null} />
                       <InfoRow label="Office Name" value={lead.kno_details.officename} />
                       <InfoRow label="Category / Tariff" value={lead.kno_details.category || lead.kno_details.tariffcode} />
@@ -1399,22 +1176,25 @@ const LeadDetail = () => {
 
           {/* ══════════════ PLANT DETAILS TAB ══════════════ */}
           <TabsContent value="plant" className="mt-0 space-y-4">
-            <Section title="Plant & Quotation Details" icon={<TrendingUp className="h-4 w-4" />}>
+            <Section
+              title="Plant & Quotation Details"
+              icon={<TrendingUp className="h-4 w-4" />}
+              action={(role === 'sales_person' || role === 'admin') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsPlantDetailsOpen(true)}
+                  className="h-8 gap-1.5 text-xs font-semibold"
+                >
+                  {hasPlantDetails ? <Edit className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{hasPlantDetails ? 'Edit' : 'Add'} plant details</span>
+                  <span className="sm:hidden">Plant</span>
+                </Button>
+              )}
+            >
               <div className="p-5 space-y-4">
-                {lead.plant_details && Object.keys(lead.plant_details).length > 0 ? (
+                {hasPlantDetails ? (
                   <div className="space-y-4">
-                    {(role === 'sales_person' || role === 'admin') && (
-                      <div className="flex justify-end -mb-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setIsPlantDetailsOpen(true)}
-                          className="h-8 text-xs font-semibold gap-1 border-primary/20 hover:border-primary/40 text-primary bg-primary/5 hover:bg-primary/10"
-                        >
-                          <Edit className="h-3.5 w-3.5" /> Edit Plant Details
-                        </Button>
-                      </div>
-                    )}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       <InfoRow label="Phase" value={(lead.plant_details as any).phase} />
                       <InfoRow label="Panel Make" value={(lead.plant_details as any).panel_make} />
@@ -1433,21 +1213,13 @@ const LeadDetail = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-border bg-muted/20 py-8 text-center space-y-2.5">
-                    <TrendingUp className="h-6 w-6 text-muted-foreground/40 mx-auto" />
-                    <p className="text-xs text-muted-foreground font-medium">No plant details filled yet</p>
-                    <p className="text-[11px] text-muted-foreground/60 max-w-[240px] mx-auto">
-                      Panel, inverter and wiring specs are usually captured during the site visit.
+                  <div className="flex items-start gap-2.5 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3">
+                    <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      No plant details yet — panel, inverter and wiring specs are usually captured
+                      during the site visit. You can still quote: the quotation form asks for the
+                      specs it needs.
                     </p>
-                    {(role === 'sales_person' || role === 'admin') && (
-                      <Button
-                        size="sm"
-                        onClick={() => setIsPlantDetailsOpen(true)}
-                        className="h-8 gap-1.5 text-xs font-semibold"
-                      >
-                        <TrendingUp className="h-3.5 w-3.5" /> Add Plant Details
-                      </Button>
-                    )}
                   </div>
                 )}
 
@@ -1459,7 +1231,7 @@ const LeadDetail = () => {
                     {(role === 'sales_person' || role === 'admin') && (
                       <Button
                         size="sm"
-                        onClick={handleCreateQuotationFromPlant}
+                        onClick={() => handleOpenCreateQuote(null)}
                         className="h-8 gap-1.5 text-xs font-semibold"
                       >
                         <FileText className="h-3.5 w-3.5" /> Create Quotation
@@ -1999,217 +1771,20 @@ const LeadDetail = () => {
       </Dialog>
 
       {/* 7. Create/Edit Quotation Dialog */}
-      <Dialog open={isCreateQuoteOpen} onOpenChange={setIsCreateQuoteOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-background border border-border shadow-lg p-6 rounded-lg max-h-[85vh] overflow-y-auto animate-in fade-in-50 duration-100">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              {editingQuoteIndex !== null ? 'Edit Quotation Details' : 'Create Quotation'}
-            </DialogTitle>
-            <DialogDescription>
-              Provide specific panel brands, capacity, and cost details for this quotation version.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-3 text-xs">
-            <div className="space-y-1.5">
-              <Label className="font-semibold text-foreground">Quotation Name *</Label>
-              <Input
-                value={quoteName}
-                onChange={e => setQuoteName(e.target.value)}
-                placeholder="e.g. customer_name - 01 - 3kW"
-                className="h-9 text-xs"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Capacity (kW) *</Label>
-                <Input
-                  type="number"
-                  value={quoteCapacity}
-                  onChange={e => setQuoteCapacity(e.target.value)}
-                  placeholder="e.g. 3"
-                  className="h-9 text-xs"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Grid Phase</Label>
-                <Select value={quotePhase} onValueChange={setQuotePhase}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Phase" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.phase || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Panel Brand</Label>
-                <Select value={quotePanelBrand} onValueChange={setQuotePanelBrand}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Panel Brand" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.panel_make || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Panel Wattage (W)</Label>
-                <Select value={quotePanelWatt} onValueChange={setQuotePanelWatt}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Panel Wattage" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.panel_wt || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Panel Qty</Label>
-                <Input
-                  type="number"
-                  value={quotePanelQty}
-                  onChange={e => setQuotePanelQty(e.target.value)}
-                  placeholder="e.g. 6"
-                  className="h-9 text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Inverter Brand</Label>
-                <Select value={quoteInverterBrand} onValueChange={setQuoteInverterBrand}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Inverter" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.inverter || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Inverter Capacity (kW)</Label>
-                <Select value={quoteInverterCapacity} onValueChange={setQuoteInverterCapacity}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select Inverter Capacity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(dropdownOptions.inverter_wt || []).map((opt: string) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Structure Specs / Gauge</Label>
-                <Input
-                  value={quoteStructureType}
-                  onChange={e => setQuoteStructureType(e.target.value)}
-                  placeholder="e.g. HDG 80mm"
-                  className="h-9 text-xs"
-                />
-              </div>
-            </div>
-
-            <Separator className="my-2" />
-
-            <div className="grid grid-cols-2 gap-3 bg-muted/40 p-3 rounded-lg border">
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Turnkey Cost (₹) *</Label>
-                <Input
-                  type="number"
-                  value={quoteTotalCost}
-                  onChange={e => setQuoteTotalCost(e.target.value)}
-                  placeholder="e.g. 180000"
-                  className="h-9 text-xs"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground">Subsidy Applied</Label>
-                <div className="flex items-center gap-2 h-9">
-                  <Button
-                    type="button"
-                    variant={quoteSubsidy ? "default" : "outline"}
-                    className="h-7 text-[10px] w-14"
-                    onClick={() => setQuoteSubsidy(true)}
-                  >
-                    YES
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={!quoteSubsidy ? "default" : "outline"}
-                    className="h-7 text-[10px] w-14"
-                    onClick={() => {
-                      setQuoteSubsidy(false);
-                      setQuoteSubsidyAmount('');
-                    }}
-                  >
-                    NO
-                  </Button>
-                </div>
-              </div>
-
-              {quoteSubsidy && (
-                <div className="space-y-1.5 col-span-2">
-                  <Label className="font-semibold text-foreground">Subsidy Amount (₹)</Label>
-                  <Input
-                    type="number"
-                    value={quoteSubsidyAmount}
-                    onChange={e => setQuoteSubsidyAmount(e.target.value)}
-                    placeholder={`Default: ${quoteDefaultSubsidy}`}
-                    className="h-9 text-xs"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1.5 col-span-2">
-                <Label className="font-semibold text-foreground">Offered Deal Quote Price (₹) *</Label>
-                <Input
-                  type="number"
-                  value={quotePrice}
-                  onChange={e => setQuotePrice(e.target.value)}
-                  placeholder="Final offered price"
-                  className="h-9 text-xs font-bold text-orange-600 bg-orange-50 border-orange-200"
-                  required
-                />
-                <p className="text-[10px] text-muted-foreground">Calculated Turnkey - Subsidy. You can override it.</p>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0 border-t pt-3">
-            <Button variant="outline" size="sm" onClick={() => setIsCreateQuoteOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateQuotation}
-              disabled={!quotePrice || isNaN(Number(quotePrice)) || !quoteName.trim()}
-              size="sm"
-              className="gradient-primary text-primary-foreground font-semibold"
-            >
-              {editingQuoteIndex !== null ? 'Save Changes' : 'Generate Quote'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* One quotation form, shared with the visit page. */}
+      <QuotationFormDialog
+        open={isCreateQuoteOpen}
+        onOpenChange={(open) => {
+          setIsCreateQuoteOpen(open);
+          if (!open) setEditingQuoteIndex(null);
+        }}
+        leadId={lead.id}
+        customerName={lead.customer_name}
+        capacityKw={lead.kw_interest}
+        editQuote={editingQuote}
+        createdByName={staffName(user?.id ?? '')}
+        onSaved={fetchLead}
+      />
 
       {/* 8. Quotation PDF/Print Preview Dialog */}
       <Dialog open={isQuotationPreviewOpen} onOpenChange={setIsQuotationPreviewOpen}>

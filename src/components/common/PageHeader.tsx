@@ -42,7 +42,7 @@ const PageHeader = ({
             variant="ghost"
             size="icon"
             aria-label="Go back"
-            className="mt-0.5 h-9 w-9 shrink-0"
+            className="mt-0.5 h-11 w-11 shrink-0 sm:h-9 sm:w-9"
             onClick={() => (typeof back === 'string' ? navigate(back) : navigate(-1))}
           >
             <ArrowLeft className="h-5 w-5" />

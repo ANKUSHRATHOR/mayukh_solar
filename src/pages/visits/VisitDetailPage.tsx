@@ -19,13 +19,10 @@ import DetailShell from '@/components/common/DetailShell';
 import SectionCard from '@/components/common/SectionCard';
 import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import CompleteVisitDialog from '@/components/leads/CompleteVisitDialog';
-import CreateQuotationDialog from '@/components/leads/CreateQuotationDialog';
+import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
 import LeadQuotationsPanel from '@/components/leads/LeadQuotationsPanel';
-import { VISIT_OUTCOMES, fetchVisit } from '@/lib/visits';
+import { fetchVisit, outcomeLabel } from '@/lib/visits';
 import type { LeadQuotation } from '@/lib/leadQuotations';
-
-const outcomeLabel = (value: string | null) =>
-  VISIT_OUTCOMES.find((o) => o.value === value)?.label ?? value ?? null;
 
 /**
  * A single site visit.
@@ -124,7 +121,7 @@ const VisitDetailPage = () => {
             {/* Call and navigate first — the two things needed on arrival. */}
             <SectionCard title="Customer" icon={User}>
               <DetailGrid>
-                <DetailField label="Name" value={lead?.customer_name} />
+                <DetailField label="Name" value={lead?.customer_name} wide />
                 <DetailField label="K-Number" value={lead?.k_number} emptyText="Not linked" />
                 <DetailField
                   label="Interested capacity"
@@ -174,7 +171,13 @@ const VisitDetailPage = () => {
             </SectionCard>
 
             {lead && (
-              <LeadQuotationsPanel leadId={lead.id} onEdit={(q) => setEditingQuote(q)} />
+              <LeadQuotationsPanel
+                leadId={lead.id}
+                onEdit={(q) => setEditingQuote(q)}
+                customerName={lead.customer_name}
+                customerMobile={lead.mobile}
+                onSent={() => visitQuery.refetch()}
+              />
             )}
 
             <SectionCard title="Visit" icon={CalendarClock}>
@@ -196,7 +199,7 @@ const VisitDetailPage = () => {
                   }
                   emptyText="Not yet"
                 />
-                <DetailField label="Outcome" value={outcomeLabel(visit.outcome)} />
+                <DetailField label="Outcome" value={visit.outcome ? outcomeLabel(visit.outcome) : undefined} />
                 <DetailField label="Notes" wide value={visit.visit_notes} />
               </DetailGrid>
 
@@ -227,7 +230,7 @@ const VisitDetailPage = () => {
             userId={user?.id ?? ''}
             onCompleted={() => visitQuery.refetch()}
           />
-          <CreateQuotationDialog
+          <QuotationFormDialog
             open={quoting || Boolean(editingQuote)}
             onOpenChange={(open) => {
               if (!open) {
@@ -237,10 +240,9 @@ const VisitDetailPage = () => {
             }}
             leadId={lead.id}
             customerName={lead.customer_name}
-            customerMobile={lead.mobile}
             capacityKw={lead.kw_interest}
             editQuote={editingQuote}
-            onCreated={() => {
+            onSaved={() => {
               // The quotations panel has its own query, so refetching the visit
               // alone would leave the updated quotation invisible until reload.
               queryClient.invalidateQueries({ queryKey: ['lead-quotations', lead.id] });

@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Briefcase,
   CheckCircle2,
+  ChevronDown,
   ExternalLink,
   FileText,
   Landmark,
@@ -18,12 +19,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import DetailShell from '@/components/common/DetailShell';
 import SectionCard from '@/components/common/SectionCard';
 import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import StatusBadge from '@/components/common/StatusBadge';
 import ProjectDocumentsTab from './ProjectDocumentsTab';
 import ProjectWorkPanel from './ProjectWorkPanel';
+import ManagePaymentsDialog from '@/components/projects/ManagePaymentsDialog';
 import { allProjectStageMeta, pipelineFor, stageIndex, stageProgress } from '@/lib/projectStages';
 import { fetchProject, fetchStageRequirements, projectIdentity } from '@/lib/projects';
 import { formatMoney } from '@/lib/payments';
@@ -35,6 +38,11 @@ const ProjectDetailPage = () => {
 
   // Tab lives in the URL so a link can point at a specific tab and the browser
   // back button steps between them.
+  // Stages already behind the project are hidden by default — they are history,
+  // and twelve rows of it pushed the current stage and Commercials off-screen.
+  const [showDoneStages, setShowDoneStages] = useState(false);
+  const [paymentsOpen, setPaymentsOpen] = useState(false);
+
   const tab = searchParams.get('tab') ?? 'customer';
   const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true });
 
@@ -99,7 +107,7 @@ const ProjectDetailPage = () => {
           <Button
             variant="outline"
             size="sm"
-            className="gap-2"
+            className="h-11 gap-2 sm:h-9"
             onClick={() => navigate(`/projects/${project.id}/edit`)}
           >
             <Pencil className="h-4 w-4" /> Edit
@@ -109,45 +117,100 @@ const ProjectDetailPage = () => {
       aside={
         project && (
           <>
-            <SectionCard title="Pipeline">
-              <div className="space-y-3">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {currentIndex >= 0
-                      ? `Stage ${currentIndex + 1} of ${pipeline.length}`
-                      : 'Off-pipeline (legacy stage)'}
+            {/* A pipeline is a path, not a checklist: the markers are joined by a
+                rail, the current stage is the thing the eye lands on, and the
+                stages already behind you collapse so the card leads with where
+                the project actually is. Completed stages were struck through,
+                which reads as cancelled rather than done. */}
+            <SectionCard
+              title="Pipeline"
+              actions={
+                currentIndex >= 0 && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground">
+                    {currentIndex + 1}/{pipeline.length}
                   </span>
-                  <span className="text-sm font-bold tabular-nums">{progress}%</span>
+                )
+              }
+            >
+              <div className="space-y-4">
+                {/* The stage name is already the page header's status badge and the
+                    bold row below, so this line carries only the progress. The
+                    percentage is distance travelled between the first and last
+                    stage, which is why it does not equal 4/12. */}
+                <div className="space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] text-muted-foreground">
+                      {currentIndex >= 0 ? 'Progress' : 'Off-pipeline (legacy stage)'}
+                    </span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                      {progress}% through
+                    </span>
+                  </div>
+                  <Progress value={progress} className="h-1.5" />
                 </div>
-                <Progress value={progress} className="h-2" />
 
-                <ol className="space-y-1.5 pt-1">
+                {currentIndex > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDoneStages((v) => !v)}
+                    className="-my-1.5 flex w-full items-center gap-1.5 rounded py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:my-0"
+                    aria-expanded={showDoneStages}
+                  >
+                    <ChevronDown
+                      className={cn('h-3.5 w-3.5 transition-transform', showDoneStages && 'rotate-180')}
+                    />
+                    {currentIndex} completed
+                  </button>
+                )}
+
+                <ol className="relative space-y-2.5">
                   {pipeline.map((stage, index) => {
                     const done = currentIndex >= 0 && index < currentIndex;
                     const current = index === currentIndex;
+                    if (done && !showDoneStages) return null;
+
+                    const last = index === pipeline.length - 1;
                     return (
-                      <li
-                        key={stage.stage}
-                        className={
-                          current
-                            ? 'flex items-center gap-2 text-xs font-bold text-foreground'
-                            : done
-                              ? 'flex items-center gap-2 text-xs text-muted-foreground line-through'
-                              : 'flex items-center gap-2 text-xs text-muted-foreground/70'
-                        }
-                      >
-                        {done ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
-                        ) : (
+                      <li key={stage.stage} className="relative flex gap-2.5">
+                        {/* The rail joins one marker to the next, so the list
+                            reads as a sequence rather than twelve loose rows. */}
+                        {!last && (
                           <span
-                            className={
-                              current
-                                ? 'h-2 w-2 shrink-0 rounded-full bg-primary ring-4 ring-primary/20'
-                                : 'h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30'
-                            }
+                            aria-hidden
+                            className={cn(
+                              'absolute left-[6px] top-[14px] h-[calc(100%+0.625rem)] w-px',
+                              // bg-border is only a hair lighter than the card, so
+                              // a 1px rail on it was invisible.
+                              done ? 'bg-success/50' : 'bg-muted-foreground/25'
+                            )}
                           />
                         )}
-                        {stage.label}
+                        <span className="relative z-10 mt-[3px] flex h-3 w-3 shrink-0 items-center justify-center">
+                          {done ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                          ) : (
+                            <span
+                              className={cn(
+                                'h-2 w-2 rounded-full',
+                                current
+                                  ? 'bg-primary ring-4 ring-primary/20'
+                                  : 'bg-muted-foreground/30'
+                              )}
+                            />
+                          )}
+                        </span>
+                        <span
+                          className={cn(
+                            'text-xs leading-tight',
+                            current
+                              ? 'font-bold text-foreground'
+                              : done
+                                ? 'text-muted-foreground'
+                                : 'text-muted-foreground/70'
+                          )}
+                        >
+                          {stage.label}
+                        </span>
                       </li>
                     );
                   })}
@@ -165,7 +228,7 @@ const ProjectDetailPage = () => {
                   variant="outline"
                   size="sm"
                   className="mt-3 w-full gap-2"
-                  onClick={() => setTab('payments')}
+                  onClick={() => setPaymentsOpen(true)}
                 >
                   <Wallet className="h-4 w-4" /> Review payments
                 </Button>
@@ -222,15 +285,23 @@ const ProjectDetailPage = () => {
     >
       {project && (
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="customer" className="gap-1.5 text-xs sm:text-sm">
-              <User className="h-3.5 w-3.5" /> Customer Details
+          {/* Three fixed tabs, so they split the width evenly on phones. The
+              strip ran to 385px in a 375px viewport, leaving Documents to be
+              found by dragging sideways. */}
+          <TabsList className="grid h-auto w-full grid-cols-3 sm:inline-flex sm:h-10 sm:w-auto">
+            <TabsTrigger value="customer" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <User className="h-3.5 w-3.5 shrink-0" />
+              <span className="sm:hidden">Customer</span>
+              <span className="hidden sm:inline">Customer Details</span>
             </TabsTrigger>
-            <TabsTrigger value="plant" className="gap-1.5 text-xs sm:text-sm">
-              <Sun className="h-3.5 w-3.5" /> Plant Details
+            <TabsTrigger value="plant" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <Sun className="h-3.5 w-3.5 shrink-0" />
+              <span className="sm:hidden">Plant</span>
+              <span className="hidden sm:inline">Plant Details</span>
             </TabsTrigger>
-            <TabsTrigger value="documents" className="gap-1.5 text-xs sm:text-sm">
-              <FileText className="h-3.5 w-3.5" /> Documents
+            <TabsTrigger value="documents" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span>Documents</span>
             </TabsTrigger>
           </TabsList>
 
@@ -238,7 +309,7 @@ const ProjectDetailPage = () => {
             <SectionCard title="Customer" icon={User}>
               <DetailGrid>
                 <DetailField label="K-Number" value={identity?.kNumber} emptyText="Not linked" />
-                <DetailField label="Name" value={identity?.name} />
+                <DetailField label="Name" value={identity?.name} wide />
                 <DetailField
                   label="Mobile"
                   value={
@@ -267,12 +338,12 @@ const ProjectDetailPage = () => {
                 />
               </DetailGrid>
 
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4">
+              <div className="mt-4 flex flex-col gap-2 border-t border-border/50 pt-4 sm:flex-row sm:flex-wrap">
                 {project.lead_id && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2"
+                    className="h-11 gap-2 sm:h-9"
                     onClick={() => navigate(`/leads/${project.lead_id}`)}
                   >
                     <ExternalLink className="h-4 w-4" /> Open source lead
@@ -281,7 +352,7 @@ const ProjectDetailPage = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-2"
+                  className="h-11 gap-2 sm:h-9"
                   onClick={() => navigate(`/projects/${project.id}/home-location`)}
                 >
                   <MapPin className="h-4 w-4" />
@@ -367,6 +438,26 @@ const ProjectDetailPage = () => {
             <ProjectDocumentsTab projectId={project.id} />
           </TabsContent>
         </Tabs>
+      )}
+
+      {/* "Review payments" used to switch to a `payments` tab this page never
+          had, so the click did nothing at all. Payments open here instead, the
+          same dialog the operator and deals views use. */}
+      {project && (
+        <ManagePaymentsDialog
+          open={paymentsOpen}
+          onOpenChange={(open) => {
+            setPaymentsOpen(open);
+            if (!open) {
+              projectQuery.refetch();
+              requirementsQuery.refetch();
+            }
+          }}
+          projectId={project.id}
+          finalAmount={project.final_amount}
+          paymentType={project.payment_type || 'cash'}
+          customerName={identity?.name ?? 'Customer'}
+        />
       )}
     </DetailShell>
   );
