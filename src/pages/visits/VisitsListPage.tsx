@@ -166,6 +166,7 @@ const VisitsListPage = () => {
       />
 
       <DataTable
+        layout="cards"
         table={table}
         columns={columns}
         rowKey={(v) => v.id}

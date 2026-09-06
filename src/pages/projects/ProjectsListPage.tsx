@@ -216,6 +216,7 @@ const ProjectsListPage = () => {
       />
 
       <DataTable
+        layout="cards"
         table={table}
         columns={columns}
         rowKey={(p) => p.id}

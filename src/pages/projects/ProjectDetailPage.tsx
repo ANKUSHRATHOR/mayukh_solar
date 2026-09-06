@@ -26,6 +26,7 @@ import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import StatusBadge from '@/components/common/StatusBadge';
 import ProjectDocumentsTab from './ProjectDocumentsTab';
 import ProjectWorkPanel from './ProjectWorkPanel';
+import ManagePaymentsDialog from '@/components/projects/ManagePaymentsDialog';
 import { allProjectStageMeta, pipelineFor, stageIndex, stageProgress } from '@/lib/projectStages';
 import { fetchProject, fetchStageRequirements, projectIdentity } from '@/lib/projects';
 import { formatMoney } from '@/lib/payments';
@@ -40,6 +41,7 @@ const ProjectDetailPage = () => {
   // Stages already behind the project are hidden by default — they are history,
   // and twelve rows of it pushed the current stage and Commercials off-screen.
   const [showDoneStages, setShowDoneStages] = useState(false);
+  const [paymentsOpen, setPaymentsOpen] = useState(false);
 
   const tab = searchParams.get('tab') ?? 'customer';
   const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true });
@@ -226,7 +228,7 @@ const ProjectDetailPage = () => {
                   variant="outline"
                   size="sm"
                   className="mt-3 w-full gap-2"
-                  onClick={() => setTab('payments')}
+                  onClick={() => setPaymentsOpen(true)}
                 >
                   <Wallet className="h-4 w-4" /> Review payments
                 </Button>
@@ -428,6 +430,26 @@ const ProjectDetailPage = () => {
             <ProjectDocumentsTab projectId={project.id} />
           </TabsContent>
         </Tabs>
+      )}
+
+      {/* "Review payments" used to switch to a `payments` tab this page never
+          had, so the click did nothing at all. Payments open here instead, the
+          same dialog the operator and deals views use. */}
+      {project && (
+        <ManagePaymentsDialog
+          open={paymentsOpen}
+          onOpenChange={(open) => {
+            setPaymentsOpen(open);
+            if (!open) {
+              projectQuery.refetch();
+              requirementsQuery.refetch();
+            }
+          }}
+          projectId={project.id}
+          finalAmount={project.final_amount}
+          paymentType={project.payment_type || 'cash'}
+          customerName={identity?.name ?? 'Customer'}
+        />
       )}
     </DetailShell>
   );
