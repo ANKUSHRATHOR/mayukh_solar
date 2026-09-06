@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Briefcase,
   CheckCircle2,
+  ChevronDown,
   ExternalLink,
   FileText,
   Landmark,
@@ -18,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import DetailShell from '@/components/common/DetailShell';
 import SectionCard from '@/components/common/SectionCard';
 import DetailField, { DetailGrid } from '@/components/common/DetailField';
@@ -35,6 +37,10 @@ const ProjectDetailPage = () => {
 
   // Tab lives in the URL so a link can point at a specific tab and the browser
   // back button steps between them.
+  // Stages already behind the project are hidden by default — they are history,
+  // and twelve rows of it pushed the current stage and Commercials off-screen.
+  const [showDoneStages, setShowDoneStages] = useState(false);
+
   const tab = searchParams.get('tab') ?? 'customer';
   const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true });
 
@@ -109,45 +115,100 @@ const ProjectDetailPage = () => {
       aside={
         project && (
           <>
-            <SectionCard title="Pipeline">
-              <div className="space-y-3">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {currentIndex >= 0
-                      ? `Stage ${currentIndex + 1} of ${pipeline.length}`
-                      : 'Off-pipeline (legacy stage)'}
+            {/* A pipeline is a path, not a checklist: the markers are joined by a
+                rail, the current stage is the thing the eye lands on, and the
+                stages already behind you collapse so the card leads with where
+                the project actually is. Completed stages were struck through,
+                which reads as cancelled rather than done. */}
+            <SectionCard
+              title="Pipeline"
+              actions={
+                currentIndex >= 0 && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground">
+                    {currentIndex + 1}/{pipeline.length}
                   </span>
-                  <span className="text-sm font-bold tabular-nums">{progress}%</span>
+                )
+              }
+            >
+              <div className="space-y-4">
+                {/* The stage name is already the page header's status badge and the
+                    bold row below, so this line carries only the progress. The
+                    percentage is distance travelled between the first and last
+                    stage, which is why it does not equal 4/12. */}
+                <div className="space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] text-muted-foreground">
+                      {currentIndex >= 0 ? 'Progress' : 'Off-pipeline (legacy stage)'}
+                    </span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                      {progress}% through
+                    </span>
+                  </div>
+                  <Progress value={progress} className="h-1.5" />
                 </div>
-                <Progress value={progress} className="h-2" />
 
-                <ol className="space-y-1.5 pt-1">
+                {currentIndex > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDoneStages((v) => !v)}
+                    className="flex w-full items-center gap-1.5 rounded text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-expanded={showDoneStages}
+                  >
+                    <ChevronDown
+                      className={cn('h-3.5 w-3.5 transition-transform', showDoneStages && 'rotate-180')}
+                    />
+                    {currentIndex} completed
+                  </button>
+                )}
+
+                <ol className="relative space-y-2.5">
                   {pipeline.map((stage, index) => {
                     const done = currentIndex >= 0 && index < currentIndex;
                     const current = index === currentIndex;
+                    if (done && !showDoneStages) return null;
+
+                    const last = index === pipeline.length - 1;
                     return (
-                      <li
-                        key={stage.stage}
-                        className={
-                          current
-                            ? 'flex items-center gap-2 text-xs font-bold text-foreground'
-                            : done
-                              ? 'flex items-center gap-2 text-xs text-muted-foreground line-through'
-                              : 'flex items-center gap-2 text-xs text-muted-foreground/70'
-                        }
-                      >
-                        {done ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
-                        ) : (
+                      <li key={stage.stage} className="relative flex gap-2.5">
+                        {/* The rail joins one marker to the next, so the list
+                            reads as a sequence rather than twelve loose rows. */}
+                        {!last && (
                           <span
-                            className={
-                              current
-                                ? 'h-2 w-2 shrink-0 rounded-full bg-primary ring-4 ring-primary/20'
-                                : 'h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30'
-                            }
+                            aria-hidden
+                            className={cn(
+                              'absolute left-[6px] top-[14px] h-[calc(100%+0.625rem)] w-px',
+                              // bg-border is only a hair lighter than the card, so
+                              // a 1px rail on it was invisible.
+                              done ? 'bg-success/50' : 'bg-muted-foreground/25'
+                            )}
                           />
                         )}
-                        {stage.label}
+                        <span className="relative z-10 mt-[3px] flex h-3 w-3 shrink-0 items-center justify-center">
+                          {done ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                          ) : (
+                            <span
+                              className={cn(
+                                'h-2 w-2 rounded-full',
+                                current
+                                  ? 'bg-primary ring-4 ring-primary/20'
+                                  : 'bg-muted-foreground/30'
+                              )}
+                            />
+                          )}
+                        </span>
+                        <span
+                          className={cn(
+                            'text-xs leading-tight',
+                            current
+                              ? 'font-bold text-foreground'
+                              : done
+                                ? 'text-muted-foreground'
+                                : 'text-muted-foreground/70'
+                          )}
+                        >
+                          {stage.label}
+                        </span>
                       </li>
                     );
                   })}
