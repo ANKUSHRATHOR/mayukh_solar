@@ -121,7 +121,7 @@ const VisitDetailPage = () => {
             {/* Call and navigate first — the two things needed on arrival. */}
             <SectionCard title="Customer" icon={User}>
               <DetailGrid>
-                <DetailField label="Name" value={lead?.customer_name} />
+                <DetailField label="Name" value={lead?.customer_name} wide />
                 <DetailField label="K-Number" value={lead?.k_number} emptyText="Not linked" />
                 <DetailField
                   label="Interested capacity"

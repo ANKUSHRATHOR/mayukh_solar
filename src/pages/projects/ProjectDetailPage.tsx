@@ -107,7 +107,7 @@ const ProjectDetailPage = () => {
           <Button
             variant="outline"
             size="sm"
-            className="gap-2"
+            className="h-11 gap-2 sm:h-9"
             onClick={() => navigate(`/projects/${project.id}/edit`)}
           >
             <Pencil className="h-4 w-4" /> Edit
@@ -153,7 +153,7 @@ const ProjectDetailPage = () => {
                   <button
                     type="button"
                     onClick={() => setShowDoneStages((v) => !v)}
-                    className="flex w-full items-center gap-1.5 rounded text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className="-my-1.5 flex w-full items-center gap-1.5 rounded py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:my-0"
                     aria-expanded={showDoneStages}
                   >
                     <ChevronDown
@@ -285,15 +285,23 @@ const ProjectDetailPage = () => {
     >
       {project && (
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="customer" className="gap-1.5 text-xs sm:text-sm">
-              <User className="h-3.5 w-3.5" /> Customer Details
+          {/* Three fixed tabs, so they split the width evenly on phones. The
+              strip ran to 385px in a 375px viewport, leaving Documents to be
+              found by dragging sideways. */}
+          <TabsList className="grid h-auto w-full grid-cols-3 sm:inline-flex sm:h-10 sm:w-auto">
+            <TabsTrigger value="customer" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <User className="h-3.5 w-3.5 shrink-0" />
+              <span className="sm:hidden">Customer</span>
+              <span className="hidden sm:inline">Customer Details</span>
             </TabsTrigger>
-            <TabsTrigger value="plant" className="gap-1.5 text-xs sm:text-sm">
-              <Sun className="h-3.5 w-3.5" /> Plant Details
+            <TabsTrigger value="plant" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <Sun className="h-3.5 w-3.5 shrink-0" />
+              <span className="sm:hidden">Plant</span>
+              <span className="hidden sm:inline">Plant Details</span>
             </TabsTrigger>
-            <TabsTrigger value="documents" className="gap-1.5 text-xs sm:text-sm">
-              <FileText className="h-3.5 w-3.5" /> Documents
+            <TabsTrigger value="documents" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span>Documents</span>
             </TabsTrigger>
           </TabsList>
 
@@ -301,7 +309,7 @@ const ProjectDetailPage = () => {
             <SectionCard title="Customer" icon={User}>
               <DetailGrid>
                 <DetailField label="K-Number" value={identity?.kNumber} emptyText="Not linked" />
-                <DetailField label="Name" value={identity?.name} />
+                <DetailField label="Name" value={identity?.name} wide />
                 <DetailField
                   label="Mobile"
                   value={
@@ -330,12 +338,12 @@ const ProjectDetailPage = () => {
                 />
               </DetailGrid>
 
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4">
+              <div className="mt-4 flex flex-col gap-2 border-t border-border/50 pt-4 sm:flex-row sm:flex-wrap">
                 {project.lead_id && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2"
+                    className="h-11 gap-2 sm:h-9"
                     onClick={() => navigate(`/leads/${project.lead_id}`)}
                   >
                     <ExternalLink className="h-4 w-4" /> Open source lead
@@ -344,7 +352,7 @@ const ProjectDetailPage = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-2"
+                  className="h-11 gap-2 sm:h-9"
                   onClick={() => navigate(`/projects/${project.id}/home-location`)}
                 >
                   <MapPin className="h-4 w-4" />
