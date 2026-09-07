@@ -40,6 +40,9 @@ import { calculateSubsidy, formatSubsidy, useSubsidySlabs } from '@/lib/subsidy'
 import { leadStatusMeta, resolveStatus, toneClasses } from '@/lib/statusMeta';
 import LeadVisitsPanel from '@/components/leads/LeadVisitsPanel';
 import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
+import { fromLeadQuotation } from '@/lib/quotationDocument';
+import { buildQuotationBody } from '@/lib/quotationTemplate';
+import { useQuotationContext } from '@/hooks/useQuotationContext';
 import PlantDetailsDialog from '@/components/projects/PlantDetailsDialog';
 import { fromLeadPlantDetails } from '@/lib/plantDetails';
 import LeadDocumentsPanel from '@/components/leads/LeadDocumentsPanel';
@@ -127,6 +130,7 @@ const LeadDetail = () => {
   const { toast } = useToast();
 
   const subsidySlabs = useSubsidySlabs();
+  const quotationContext = useQuotationContext();
 
   const [lead, setLead] = useState<any>(null);
   const [visits, setVisits] = useState<any[]>([]);
@@ -254,6 +258,22 @@ const LeadDetail = () => {
 
   useEffect(() => { fetchLead(); }, [id]);
 
+
+  // One document, built once and rendered into both the on-screen preview and
+  // the offscreen node html2pdf rasterises — so what the user checks is exactly
+  // what the customer receives.
+  const quotationHtml = useMemo(() => {
+    if (!selectedPreviewQuote || !lead) return '';
+    return buildQuotationBody(
+      fromLeadQuotation({
+        quotation: selectedPreviewQuote as any,
+        lead,
+        vendor: vendorProfile ?? null,
+        terms: quotationContext.data?.terms ?? [],
+        bomRows: quotationContext.data?.bomRows ?? [],
+      })
+    );
+  }, [selectedPreviewQuote, lead, vendorProfile, quotationContext.data]);
 
   const hasPlantDetails = Boolean(
     lead?.plant_details && Object.keys(lead.plant_details as any).length > 0
@@ -1571,109 +1591,9 @@ const LeadDetail = () => {
           
           <div className="flex-1 overflow-y-auto p-6 bg-slate-100/50 font-sans">
             {/* Printable Document A4 Container */}
-            <div className="max-w-2xl mx-auto bg-white border border-slate-200 shadow-xl rounded-xl p-8 min-h-[297mm] flex flex-col justify-between text-slate-800" id="screen-quotation-area">
-              <div className="space-y-6">
-                {/* Header (Letterhead) */}
-                <div className="flex justify-between items-start border-b-2 border-orange-500 pb-5">
-                  <div>
-                    <h2 className="text-2xl font-extrabold text-orange-600 tracking-wide">
-                      {vendorProfile?.firm_name || "MAYUKH SOLAR"}
-                    </h2>
-                    <p className="text-[11px] text-slate-500 font-medium">Solar Energy Solutions</p>
-                    {vendorProfile?.address && <p className="text-[11px] text-slate-500 mt-1 max-w-sm leading-relaxed">{vendorProfile.address}</p>}
-                    {vendorProfile?.mobile && (
-                      <p className="text-[11px] text-slate-500 mt-1 font-semibold">
-                        Mob: {vendorProfile.mobile} {vendorProfile.email ? ` | ${vendorProfile.email}` : ""}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900 uppercase tracking-widest">QUOTATION</p>
-                    <p className="text-[11px] text-slate-600 mt-1 font-semibold">No: {selectedPreviewQuote?.quotation_number}</p>
-                    <p className="text-[11px] text-slate-500">
-                      Date: {selectedPreviewQuote?.created_at ? new Date(selectedPreviewQuote.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Grid for Customer vs System Specs */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
-                    <h4 className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-2">Quotation For</h4>
-                    <p className="text-sm font-bold text-slate-900">{lead.customer_name}</p>
-                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                      {[lead.address, lead.village_city, lead.district, lead.state].filter(Boolean).join(", ")}
-                    </p>
-                    {lead.mobile && <p className="text-xs text-slate-900 mt-2 font-semibold">Mob: {lead.mobile}</p>}
-                  </div>
-
-                  <div className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
-                    <h4 className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-2">System Specs</h4>
-                    <p className="text-sm font-bold text-slate-900">
-                      {selectedPreviewQuote?.capacity_kw || 'N/A'} kW System ({selectedPreviewQuote?.phase || 'N/A'})
-                    </p>
-                    <div className="text-xs text-slate-600 mt-2 space-y-1">
-                      <p><strong>Panel:</strong> {selectedPreviewQuote?.panel_brand || 'N/A'} ({selectedPreviewQuote?.panel_watt ? `${selectedPreviewQuote.panel_watt}W` : 'N/A'}) x {selectedPreviewQuote?.panel_qty || 'N/A'}</p>
-                      <p><strong>Inverter:</strong> {selectedPreviewQuote?.inverter_brand || 'N/A'} ({selectedPreviewQuote?.inverter_capacity ? `${selectedPreviewQuote.inverter_capacity} kW` : 'N/A'})</p>
-                      <p><strong>Cable:</strong> {lead.plant_details?.wiremake || 'Polycab'} ({lead.plant_details?.wire_size || '4 sqmm'} {lead.plant_details?.wire_material || 'Copper'})</p>
-                      {selectedPreviewQuote?.structure_type && (
-                        <p><strong>Structure:</strong> {selectedPreviewQuote.structure_type}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pricing Table */}
-                <div className="space-y-2 pt-2">
-                  <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider border-b pb-1">Cost &amp; Subsidy Breakdown</h4>
-                  <table className="w-full text-xs text-left border-collapse border border-slate-200">
-                    <thead>
-                      <tr className="bg-orange-50/80 text-orange-950 font-bold">
-                        <th className="p-2.5 border border-slate-200">Description</th>
-                        <th className="p-2.5 border border-slate-200 text-right">Amount (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="p-2.5 border border-slate-200">Solar Power Plant Setup (Turnkey Cost)</td>
-                        <td className="p-2.5 border border-slate-200 text-right font-medium">
-                          {selectedPreviewQuote?.total_cost ? Number(selectedPreviewQuote.total_cost).toLocaleString('en-IN') : '0'}
-                        </td>
-                      </tr>
-                      {!!selectedPreviewQuote?.subsidy_amount && (
-                        <tr>
-                          <td className="p-2.5 border border-slate-200 text-emerald-700 font-semibold">Central Government Subsidy Benefit</td>
-                          <td className="p-2.5 border border-slate-200 text-right text-emerald-700 font-semibold">- {Number(selectedPreviewQuote.subsidy_amount).toLocaleString('en-IN')}</td>
-                        </tr>
-                      )}
-                      <tr className="bg-slate-50 font-bold text-slate-900">
-                        <td className="p-2.5 border border-slate-200">Net Cost to Customer</td>
-                        <td className="p-2.5 border border-slate-200 text-right text-slate-950">
-                          ₹{selectedPreviewQuote?.net_cost ? Number(selectedPreviewQuote.net_cost).toLocaleString('en-IN') : '0'}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Quotation Price offered */}
-                <div className="p-4 bg-orange-50 border border-orange-200/80 rounded-xl flex justify-between items-center mt-4">
-                  <div>
-                    <p className="text-xs font-bold text-orange-950">Offered Deal Quote Price</p>
-                    <p className="text-[10px] text-orange-700/80">Final agreed pricing from visit assessment</p>
-                  </div>
-                  <p className="text-2xl font-black text-orange-600">
-                    ₹{selectedPreviewQuote?.quote_price ? Number(selectedPreviewQuote.quote_price).toLocaleString('en-IN') : '0'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-slate-200 pt-5 text-center mt-12 text-[10px] text-slate-400">
-                <p className="font-bold text-slate-600">{vendorProfile?.firm_name || "MAYUKH SOLAR"}</p>
-                <p className="mt-0.5">This is a system-generated quotation based on site assessment specs.</p>
-              </div>
-            </div>
+            {/* The shared document — identical to the PDF and to what the
+                project page renders. */}
+            <div className="mx-auto w-fit" dangerouslySetInnerHTML={{ __html: quotationHtml }} />
           </div>
         </DialogContent>
       </Dialog>
@@ -1798,116 +1718,13 @@ const LeadDetail = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Hidden print area for background PDF generation */}
-      <div 
-        style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '210mm', minHeight: '297mm', overflow: 'hidden' }}
-        className="bg-white text-slate-800 p-8"
+      {/* Offscreen node html2pdf rasterises. Keep the id and keep it mounted:
+          handleSendQuotationWhatsApp looks it up by id after a 300ms timeout. */}
+      <div
+        style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '210mm' }}
         id="print-quotation-area"
-      >
-        {selectedPreviewQuote && (
-          <div className="space-y-6">
-            {/* Header (Letterhead) */}
-            <div className="flex justify-between items-start border-b-2 border-orange-500 pb-5">
-              <div>
-                <h2 className="text-2xl font-extrabold text-orange-600 tracking-wide">
-                  {vendorProfile?.firm_name || "MAYUKH SOLAR"}
-                </h2>
-                <p className="text-[11px] text-slate-500 font-medium">Solar Energy Solutions</p>
-                {vendorProfile?.address && <p className="text-[11px] text-slate-500 mt-1 max-w-sm leading-relaxed">{vendorProfile.address}</p>}
-                {vendorProfile?.mobile && (
-                  <p className="text-[11px] text-slate-500 mt-1 font-semibold">
-                    Mob: {vendorProfile.mobile} {vendorProfile.email ? ` | ${vendorProfile.email}` : ""}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-slate-900 uppercase tracking-widest">QUOTATION</p>
-                <p className="text-[11px] text-slate-600 mt-1 font-semibold">No: {selectedPreviewQuote.quotation_number}</p>
-                <p className="text-[11px] text-slate-500">
-                  Date: {selectedPreviewQuote.created_at ? new Date(selectedPreviewQuote.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
-                </p>
-              </div>
-            </div>
-
-            {/* Grid for Customer vs System Specs */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
-                <h4 className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-2">Quotation For</h4>
-                <p className="text-sm font-bold text-slate-900">{lead.customer_name}</p>
-                <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
-                  {[lead.address, lead.village_city, lead.district, lead.state].filter(Boolean).join(", ")}
-                </p>
-                {lead.mobile && <p className="text-xs text-slate-900 mt-2 font-semibold">Mob: {lead.mobile}</p>}
-              </div>
-
-              <div className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
-                <h4 className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-2">System Specs</h4>
-                <p className="text-sm font-bold text-slate-900">
-                  {selectedPreviewQuote.capacity_kw || 'N/A'} kW System ({selectedPreviewQuote.phase || 'N/A'})
-                </p>
-                <div className="text-xs text-slate-600 mt-2 space-y-1">
-                  <p><strong>Panel:</strong> {selectedPreviewQuote.panel_brand || 'N/A'} ({selectedPreviewQuote.panel_watt ? `${selectedPreviewQuote.panel_watt}W` : 'N/A'}) x {selectedPreviewQuote.panel_qty || 'N/A'}</p>
-                  <p><strong>Inverter:</strong> {selectedPreviewQuote.inverter_brand || 'N/A'} ({selectedPreviewQuote.inverter_capacity ? `${selectedPreviewQuote.inverter_capacity} kW` : 'N/A'})</p>
-                  <p><strong>Cable:</strong> {lead.plant_details?.wiremake || 'Polycab'} ({lead.plant_details?.wire_size || '4 sqmm'} {lead.plant_details?.wire_material || 'Copper'})</p>
-                  {selectedPreviewQuote.structure_type && (
-                    <p><strong>Structure:</strong> {selectedPreviewQuote.structure_type}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Pricing Table */}
-            <div className="space-y-2 pt-2">
-              <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider border-b pb-1">Cost &amp; Subsidy Breakdown</h4>
-              <table className="w-full text-xs text-left border-collapse border border-slate-200">
-                <thead>
-                  <tr className="bg-orange-50/80 text-orange-950 font-bold">
-                    <th className="p-2.5 border border-slate-200">Description</th>
-                    <th className="p-2.5 border border-slate-200 text-right">Amount (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="p-2.5 border border-slate-200">Solar Power Plant Setup (Turnkey Cost)</td>
-                    <td className="p-2.5 border border-slate-200 text-right font-medium">
-                      {selectedPreviewQuote.total_cost ? Number(selectedPreviewQuote.total_cost).toLocaleString('en-IN') : '0'}
-                    </td>
-                  </tr>
-                  {!!selectedPreviewQuote.subsidy_amount && (
-                    <tr>
-                      <td className="p-2.5 border border-slate-200 text-emerald-700 font-semibold">Central Government Subsidy Benefit</td>
-                      <td className="p-2.5 border border-slate-200 text-right text-emerald-700 font-semibold">- {Number(selectedPreviewQuote.subsidy_amount).toLocaleString('en-IN')}</td>
-                    </tr>
-                  )}
-                  <tr className="bg-slate-50 font-bold text-slate-900">
-                    <td className="p-2.5 border border-slate-200">Net Cost to Customer</td>
-                    <td className="p-2.5 border border-slate-200 text-right text-slate-950">
-                      ₹{selectedPreviewQuote.net_cost ? Number(selectedPreviewQuote.net_cost).toLocaleString('en-IN') : '0'}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Quotation Price offered */}
-            <div className="p-4 bg-orange-50 border border-orange-200/80 rounded-xl flex justify-between items-center mt-4">
-              <div>
-                <p className="text-xs font-bold text-orange-950">Offered Deal Quote Price</p>
-                <p className="text-[10px] text-orange-700/80">Final agreed pricing from visit assessment</p>
-              </div>
-              <p className="text-2xl font-black text-orange-600">
-                ₹{selectedPreviewQuote.quote_price ? Number(selectedPreviewQuote.quote_price).toLocaleString('en-IN') : '0'}
-              </p>
-            </div>
-
-            {/* Footer */}
-            <div className="border-t border-slate-200 pt-5 text-center mt-12 text-[10px] text-slate-400">
-              <p className="font-bold text-slate-600">{vendorProfile?.firm_name || "MAYUKH SOLAR"}</p>
-              <p className="mt-0.5">This is a system-generated quotation based on site assessment specs.</p>
-            </div>
-          </div>
-        )}
-      </div>
+        dangerouslySetInnerHTML={{ __html: quotationHtml }}
+      />
 
     </div>
   );
