@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { AlertTriangle, Camera, CheckCircle2, Clock, Loader2, UserX, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, Camera, CheckCircle2, Clock, Loader2, Pencil, UserX, Wrench, Zap } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import SectionCard from '@/components/common/SectionCard';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -55,7 +56,14 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const canAssign = canAssignTrades(role);
-  const [pendingTrade, setPendingTrade] = useState<Trade | null>(null);
+  // Assignment is an explicit edit → save, not a dropdown that writes the
+  // moment it changes: a stray tap on a Select would otherwise reassign
+  // somebody's job and fire a notification at them.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<Trade, string | null>>({
+    welder: null,
+    electrician: null,
+  });
 
   const staffIds = [project.assigned_welder_id, project.assigned_electrician_id].filter(
     Boolean
@@ -92,12 +100,29 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
     queryFn: () => fetchAssignableTradeStaff('electrician'),
   });
 
-  const assign = useMutation({
-    mutationFn: ({ trade, userId }: { trade: Trade; userId: string | null }) =>
-      assignTrade(project.id, trade, userId),
-    onMutate: ({ trade }) => setPendingTrade(trade),
-    onSettled: () => setPendingTrade(null),
-    onSuccess: (_data, { trade, userId }) => {
+  const startEditing = () => {
+    setDraft({
+      welder: project.assigned_welder_id,
+      electrician: project.assigned_electrician_id,
+    });
+    setEditing(true);
+  };
+
+  const save = useMutation({
+    mutationFn: async () => {
+      // Only the trades the user actually changed are written, so saving
+      // without touching a row cannot re-notify the person already on it.
+      const changes: { trade: Trade; userId: string | null }[] = [];
+      if (draft.welder !== project.assigned_welder_id)
+        changes.push({ trade: 'welder', userId: draft.welder });
+      if (draft.electrician !== project.assigned_electrician_id)
+        changes.push({ trade: 'electrician', userId: draft.electrician });
+      for (const change of changes) {
+        await assignTrade(project.id, change.trade, change.userId);
+      }
+      return changes.length;
+    },
+    onSuccess: (changed) => {
       // project-requirements carries welder_assigned / electrician_assigned,
       // which the stage checklist reads — stale there would tell an operator
       // the gate is still closed after they just satisfied it.
@@ -105,18 +130,24 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
       queryClient.invalidateQueries({ queryKey: ['project-requirements', project.id] });
       queryClient.invalidateQueries({ queryKey: ['project-trades', project.id] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setEditing(false);
       toast({
-        title: userId ? `${trade === 'welder' ? 'Welder' : 'Electrician'} assigned` : 'Assignment cleared',
-        description: userId ? 'They have been notified.' : undefined,
+        title: changed === 0 ? 'No changes' : 'Assignment saved',
+        description: changed > 0 ? 'Anyone newly assigned has been notified.' : undefined,
       });
     },
     onError: (err) =>
       toast({
-        title: 'Could not change the assignment',
+        title: 'Could not save the assignment',
         description: err instanceof Error ? err.message : String(err),
         variant: 'destructive',
       }),
   });
+
+  const dirty =
+    editing &&
+    (draft.welder !== project.assigned_welder_id ||
+      draft.electrician !== project.assigned_electrician_id);
 
   const trades: TradeState[] = [
     {
@@ -142,24 +173,63 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
   const bothAssigned = trades.every((t) => t.assignedId);
   const bothComplete = trades.every((t) => t.doneAt && t.photoUploaded);
 
+  const statusBadge = bothComplete ? (
+    <Badge className="border-transparent bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase text-success">
+      Complete
+    </Badge>
+  ) : bothAssigned ? (
+    <Badge className="border-transparent bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
+      Work pending
+    </Badge>
+  ) : (
+    <Badge className="border-transparent bg-muted px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
+      Not assigned
+    </Badge>
+  );
+
   return (
     <SectionCard
       title="Installation work"
       icon={Wrench}
       actions={
-        bothComplete ? (
-          <Badge className="border-transparent bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase text-success">
-            Complete
-          </Badge>
-        ) : bothAssigned ? (
-          <Badge className="border-transparent bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
-            Work pending
-          </Badge>
-        ) : (
-          <Badge className="border-transparent bg-muted px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
-            Not assigned
-          </Badge>
-        )
+        <div className="flex items-center gap-2">
+          {canAssign &&
+            (editing ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setEditing(false)}
+                  disabled={save.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs font-semibold"
+                  onClick={() => save.mutate()}
+                  disabled={save.isPending || !dirty}
+                >
+                  {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Save
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs font-semibold"
+                onClick={startEditing}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">
+                  {bothAssigned ? 'Reassign' : 'Assign'}
+                </span>
+              </Button>
+            ))}
+          {statusBadge}
+        </div>
       }
       contentClassName="p-0"
     >
@@ -225,7 +295,7 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
                     )}
                   </p>
                 ) : (
-                  !canAssign && (
+                  !editing && (
                     <p className="mt-0.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
                       <UserX className="h-3.5 w-3.5" /> Nobody assigned yet
                     </p>
@@ -234,23 +304,23 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
 
                 {/* Assignment used to mean leaving for the operator page and
                     driving a status transition. It happens here now. */}
-                {canAssign && (
+                {editing && (
                   <div className="mt-2 flex items-center gap-2">
                     <Select
-                      value={trade.assignedId ?? UNASSIGNED}
-                      disabled={assign.isPending}
+                      value={draft[trade.trade] ?? UNASSIGNED}
+                      disabled={save.isPending}
                       onValueChange={(value) =>
-                        assign.mutate({
-                          trade: trade.trade,
-                          userId: value === UNASSIGNED ? null : value,
-                        })
+                        setDraft((d) => ({
+                          ...d,
+                          [trade.trade]: value === UNASSIGNED ? null : value,
+                        }))
                       }
                     >
                       <SelectTrigger
                         className="h-9 max-w-[240px] text-xs"
                         aria-label={`Assign ${trade.role.toLowerCase()}`}
                       >
-                        <SelectValue placeholder={`Assign a ${trade.role.toLowerCase()}`} />
+                        <SelectValue placeholder={`Choose a ${trade.role.toLowerCase()}`} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={UNASSIGNED}>— Unassigned —</SelectItem>
@@ -264,9 +334,6 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
                         ))}
                       </SelectContent>
                     </Select>
-                    {pendingTrade === trade.trade && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    )}
                   </div>
                 )}
 
