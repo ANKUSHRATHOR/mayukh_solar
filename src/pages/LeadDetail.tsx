@@ -40,6 +40,8 @@ import { calculateSubsidy, formatSubsidy, useSubsidySlabs } from '@/lib/subsidy'
 import { leadStatusMeta, resolveStatus, toneClasses } from '@/lib/statusMeta';
 import LeadVisitsPanel from '@/components/leads/LeadVisitsPanel';
 import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
+import PlantDetailsDialog from '@/components/projects/PlantDetailsDialog';
+import { fromLeadPlantDetails } from '@/lib/plantDetails';
 import LeadDocumentsPanel from '@/components/leads/LeadDocumentsPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -192,16 +194,6 @@ const LeadDetail = () => {
   });
 
   // Plant Details input states
-  const [plantPhase, setPlantPhase] = useState('');
-  const [plantPanelMake, setPlantPanelMake] = useState('');
-  const [plantPanelWt, setPlantPanelWt] = useState('');
-  const [plantInverter, setPlantInverter] = useState('');
-  const [plantInverterWt, setPlantInverterWt] = useState('');
-  const [plantWiremake, setPlantWiremake] = useState('');
-  const [plantWireSize, setPlantWireSize] = useState('');
-  const [plantWireMaterial, setPlantWireMaterial] = useState('');
-  const [plantTotalCost, setPlantTotalCost] = useState('');
-  const [plantSubsidy, setPlantSubsidy] = useState(false);
 
   // Quotation Price state
   const [editingQuoteIndex, setEditingQuoteIndex] = useState<number | null>(null);
@@ -262,34 +254,6 @@ const LeadDetail = () => {
 
   useEffect(() => { fetchLead(); }, [id]);
 
-  useEffect(() => {
-    if (lead) {
-      if (lead.plant_details) {
-        const pd = lead.plant_details as any;
-        setPlantPhase(pd.phase || '');
-        setPlantPanelMake(pd.panel_make || '');
-        setPlantPanelWt(pd.panel_wt || '');
-        setPlantInverter(pd.inverter || '');
-        setPlantInverterWt(pd.inverter_wt || '');
-        setPlantWiremake(pd.wiremake || '');
-        setPlantWireSize(pd.wire_size || '');
-        setPlantWireMaterial(pd.wire_material || '');
-        setPlantTotalCost(pd.total_cost ? String(pd.total_cost) : '');
-        setPlantSubsidy(!!pd.subsidy);
-      } else {
-        setPlantPhase('');
-        setPlantPanelMake('');
-        setPlantPanelWt('');
-        setPlantInverter('');
-        setPlantInverterWt('');
-        setPlantWiremake('');
-        setPlantWireSize('');
-        setPlantWireMaterial('');
-        setPlantTotalCost('');
-        setPlantSubsidy(false);
-      }
-    }
-  }, [lead]);
 
   const hasPlantDetails = Boolean(
     lead?.plant_details && Object.keys(lead.plant_details as any).length > 0
@@ -458,52 +422,6 @@ const LeadDetail = () => {
       toast({ title: 'Booking failed', description: err.message, variant: 'destructive' });
     } finally {
       setBookingAppt(false);
-    }
-  };
-
-  const handleSavePlantDetails = async () => {
-    if (!lead) return;
-    try {
-      const subsidyAmt = plantSubsidy ? plantSubsidyAmount : 0;
-      const totalCostNum = Number(plantTotalCost) || 0;
-      const netCostNum = Math.max(0, totalCostNum - subsidyAmt);
-
-      const plantObj = {
-        phase: plantPhase,
-        panel_make: plantPanelMake,
-        panel_wt: plantPanelWt,
-        inverter: plantInverter,
-        inverter_wt: plantInverterWt,
-        wiremake: plantWiremake,
-        wire_size: plantWireSize,
-        wire_material: plantWireMaterial,
-        total_cost: totalCostNum,
-        subsidy: plantSubsidy,
-        subsidy_amount: subsidyAmt,
-        net_cost: netCostNum
-      };
-
-      const { data, error } = await supabase
-        .from('leads')
-        .update({ plant_details: plantObj })
-        .eq('id', lead.id)
-        .select();
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        toast({ 
-          title: 'Permission Denied', 
-          description: 'No rows were updated. You might not have authorization to edit this lead under Row Level Security.', 
-          variant: 'destructive' 
-        });
-        return;
-      }
-
-      toast({ title: 'Plant details saved successfully!' });
-      setIsPlantDetailsOpen(false);
-      fetchLead();
-    } catch (e: any) {
-      toast({ title: 'Failed to save plant details', description: e.message, variant: 'destructive' });
     }
   };
 
@@ -1593,182 +1511,16 @@ const LeadDetail = () => {
       </Dialog>
 
       {/* 6. Plant Details Dialog */}
-      <Dialog open={isPlantDetailsOpen} onOpenChange={setIsPlantDetailsOpen}>
-        <DialogContent className="sm:max-w-[700px] bg-background border border-border shadow-lg p-6 rounded-lg max-h-[90vh] overflow-y-auto animate-in fade-in-50 duration-100">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              Update Plant Technical Specifications
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Configure parameters like phase, panel brand, inverter, and wires.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-3">
-            {/* Phase Dropdown */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Phase</Label>
-              <Select value={plantPhase} onValueChange={setPlantPhase}>
-                <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Select Phase" /></SelectTrigger>
-                <SelectContent>
-                  {(dropdownOptions.phase || []).map((opt: string) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Panel Make Dropdown */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Panel Make</Label>
-              <Select value={plantPanelMake} onValueChange={setPlantPanelMake}>
-                <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Select Panel Make" /></SelectTrigger>
-                <SelectContent>
-                  {(dropdownOptions.panel_make || []).map((opt: string) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Panel Wattage Dropdown */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Panel Wattage</Label>
-              <Select value={plantPanelWt} onValueChange={setPlantPanelWt}>
-                <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Select Wattage" /></SelectTrigger>
-                <SelectContent>
-                  {(dropdownOptions.panel_wt || []).map((opt: string) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Inverter Make Dropdown */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Inverter Make</Label>
-              <Select value={plantInverter} onValueChange={setPlantInverter}>
-                <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Select Inverter Make" /></SelectTrigger>
-                <SelectContent>
-                  {(dropdownOptions.inverter || []).map((opt: string) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Inverter Capacity Dropdown */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Inverter Capacity</Label>
-              <Select value={plantInverterWt} onValueChange={setPlantInverterWt}>
-                <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Select Capacity" /></SelectTrigger>
-                <SelectContent>
-                  {(dropdownOptions.inverter_wt || []).map((opt: string) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Wire Make Dropdown */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Wire Make</Label>
-              <Select value={plantWiremake} onValueChange={setPlantWiremake}>
-                <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Select Wire Make" /></SelectTrigger>
-                <SelectContent>
-                  {(dropdownOptions.wiremake || []).map((opt: string) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Wire Size Dropdown */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Wire Size</Label>
-              <Select value={plantWireSize} onValueChange={setPlantWireSize}>
-                <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Select Wire Size" /></SelectTrigger>
-                <SelectContent>
-                  {(dropdownOptions.wire_size || []).map((opt: string) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Wire Material Dropdown */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Wire Material</Label>
-              <Select value={plantWireMaterial} onValueChange={setPlantWireMaterial}>
-                <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Select Wire Material" /></SelectTrigger>
-                <SelectContent>
-                  {(dropdownOptions.wire_material || []).map((opt: string) => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Total Cost Input */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Total Cost (INR)</Label>
-              <Input
-                type="number"
-                value={plantTotalCost}
-                onChange={e => setPlantTotalCost(e.target.value)}
-                placeholder="e.g. 150000"
-                className="h-10 text-sm"
-              />
-            </div>
-
-            {/* Subsidy Checkbox */}
-            <div className="flex items-center space-x-2 pt-8">
-              <input
-                type="checkbox"
-                id="plantSubsidy"
-                checked={plantSubsidy}
-                onChange={e => setPlantSubsidy(e.target.checked)}
-                className="h-4.5 w-4.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-              />
-              <Label htmlFor="plantSubsidy" className="text-sm font-semibold text-foreground cursor-pointer select-none">
-                Apply Central Subsidy ({formatSubsidy(plantSubsidyAmount)} deduction)
-              </Label>
-            </div>
-          </div>
-
-          {/* Pricing Preview */}
-          {plantTotalCost && (
-            <div className="mt-4 p-4 bg-muted/40 rounded-xl border space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Base Total Cost:</span>
-                <span className="font-semibold text-foreground">₹{Number(plantTotalCost).toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subsidy Benefit:</span>
-                <span className="font-semibold text-emerald-600">
-                  {plantSubsidy ? `- ${formatSubsidy(plantSubsidyAmount)}` : '₹0 (Not applied)'}
-                </span>
-              </div>
-              <Separator className="my-1.5" />
-              <div className="flex justify-between text-sm font-bold">
-                <span className="text-foreground">Net Customer Price:</span>
-                <span className="text-primary text-base">
-                  ₹{Math.max(0, (Number(plantTotalCost) || 0) - (plantSubsidy ? plantSubsidyAmount : 0)).toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2 sm:gap-0 mt-4">
-            <Button variant="outline" size="sm" onClick={() => setIsPlantDetailsOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSavePlantDetails} size="sm" className="gradient-primary text-primary-foreground font-semibold">
-              Save Plant Details
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* One plant-details form, shared with the project pages. */}
+      <PlantDetailsDialog
+        open={isPlantDetailsOpen}
+        onOpenChange={setIsPlantDetailsOpen}
+        mode="lead"
+        recordId={lead.id}
+        value={fromLeadPlantDetails(lead.plant_details, lead.kw_interest)}
+        existingLeadDetails={lead.plant_details}
+        onSaved={fetchLead}
+      />
 
       {/* 7. Create/Edit Quotation Dialog */}
       {/* One quotation form, shared with the visit page. */}

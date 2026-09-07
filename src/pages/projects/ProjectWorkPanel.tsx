@@ -1,11 +1,30 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { AlertTriangle, Camera, CheckCircle2, Clock, UserX, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, Camera, CheckCircle2, Clock, Loader2, UserX, Wrench, Zap } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import SectionCard from '@/components/common/SectionCard';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import {
+  assignTrade,
+  canAssignTrades,
+  fetchAssignableTradeStaff,
+  type Trade,
+} from '@/lib/projectWork';
 import type { ProjectRow, StageRequirements } from '@/lib/projects';
+
+/** Radix Select cannot take value="" — this stands in for "nobody". */
+const UNASSIGNED = '__unassigned__';
 
 interface Props {
   project: ProjectRow;
@@ -14,6 +33,7 @@ interface Props {
 
 interface TradeState {
   role: 'Welder' | 'Electrician';
+  trade: Trade;
   icon: typeof Wrench;
   assignedId: string | null;
   doneAt: string | null;
@@ -31,6 +51,12 @@ interface TradeState {
  * in `can_advance_project`.
  */
 const ProjectWorkPanel = ({ project, requirements }: Props) => {
+  const { role } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const canAssign = canAssignTrades(role);
+  const [pendingTrade, setPendingTrade] = useState<Trade | null>(null);
+
   const staffIds = [project.assigned_welder_id, project.assigned_electrician_id].filter(
     Boolean
   ) as string[];
@@ -51,9 +77,51 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
   const nameFor = (userId: string | null) =>
     staff?.find((s) => s.user_id === userId) ?? null;
 
+  // The roster barely changes, and this is two extra queries on a page that is
+  // already loading several — cache it hard.
+  const welderOptions = useQuery({
+    queryKey: ['assignable-trade-staff', 'welder'],
+    enabled: canAssign,
+    staleTime: 5 * 60_000,
+    queryFn: () => fetchAssignableTradeStaff('welder'),
+  });
+  const electricianOptions = useQuery({
+    queryKey: ['assignable-trade-staff', 'electrician'],
+    enabled: canAssign,
+    staleTime: 5 * 60_000,
+    queryFn: () => fetchAssignableTradeStaff('electrician'),
+  });
+
+  const assign = useMutation({
+    mutationFn: ({ trade, userId }: { trade: Trade; userId: string | null }) =>
+      assignTrade(project.id, trade, userId),
+    onMutate: ({ trade }) => setPendingTrade(trade),
+    onSettled: () => setPendingTrade(null),
+    onSuccess: (_data, { trade, userId }) => {
+      // project-requirements carries welder_assigned / electrician_assigned,
+      // which the stage checklist reads — stale there would tell an operator
+      // the gate is still closed after they just satisfied it.
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['project-requirements', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['project-trades', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast({
+        title: userId ? `${trade === 'welder' ? 'Welder' : 'Electrician'} assigned` : 'Assignment cleared',
+        description: userId ? 'They have been notified.' : undefined,
+      });
+    },
+    onError: (err) =>
+      toast({
+        title: 'Could not change the assignment',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      }),
+  });
+
   const trades: TradeState[] = [
     {
       role: 'Welder',
+      trade: 'welder',
       icon: Wrench,
       assignedId: project.assigned_welder_id,
       doneAt: project.welder_work_done_at,
@@ -62,6 +130,7 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
     },
     {
       role: 'Electrician',
+      trade: 'electrician',
       icon: Zap,
       assignedId: project.assigned_electrician_id,
       doneAt: project.electrician_work_done_at,
@@ -156,9 +225,49 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
                     )}
                   </p>
                 ) : (
-                  <p className="mt-0.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <UserX className="h-3.5 w-3.5" /> Nobody assigned yet
-                  </p>
+                  !canAssign && (
+                    <p className="mt-0.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <UserX className="h-3.5 w-3.5" /> Nobody assigned yet
+                    </p>
+                  )
+                )}
+
+                {/* Assignment used to mean leaving for the operator page and
+                    driving a status transition. It happens here now. */}
+                {canAssign && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Select
+                      value={trade.assignedId ?? UNASSIGNED}
+                      disabled={assign.isPending}
+                      onValueChange={(value) =>
+                        assign.mutate({
+                          trade: trade.trade,
+                          userId: value === UNASSIGNED ? null : value,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        className="h-9 max-w-[240px] text-xs"
+                        aria-label={`Assign ${trade.role.toLowerCase()}`}
+                      >
+                        <SelectValue placeholder={`Assign a ${trade.role.toLowerCase()}`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={UNASSIGNED}>— Unassigned —</SelectItem>
+                        {(trade.trade === 'welder'
+                          ? welderOptions.data ?? []
+                          : electricianOptions.data ?? []
+                        ).map((person) => (
+                          <SelectItem key={person.user_id} value={person.user_id}>
+                            {person.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {pendingTrade === trade.trade && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
                 )}
 
                 <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">

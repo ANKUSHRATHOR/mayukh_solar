@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import AdminLeadsList from './AdminLeadsList';
-import AdminProjects from './AdminProjects';
+import ProjectsListPage from './projects/ProjectsListPage';
 import Tasks from './Tasks';
 import AdminAttendance from './AdminAttendance';
 
@@ -212,15 +212,15 @@ const AdminDashboard = () => {
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <StatCard accent="primary" onClick={() => navigate('/leads')} title="Total Leads" value={String(stats.totalLeads)} icon={Users} change={periodLabel[period]} changeType={stats.totalLeads > 0 ? 'up' : 'neutral'} />
-                <StatCard accent="info" onClick={() => navigate('/admin/projects')} title="Running Projects" value={String(stats.runningProjects)} icon={Briefcase} change={stats.runningProjects > 0 ? 'Active pipeline' : 'None'} changeType={stats.runningProjects > 0 ? 'up' : 'neutral'} />
-                <StatCard accent="success" onClick={() => navigate('/admin/projects')} title="Completed" value={String(stats.completedInPeriod)} icon={CheckCircle2} change={periodLabel[period]} changeType={stats.completedInPeriod > 0 ? 'up' : 'neutral'} />
+                <StatCard accent="info" onClick={() => navigate('/projects')} title="Running Projects" value={String(stats.runningProjects)} icon={Briefcase} change={stats.runningProjects > 0 ? 'Active pipeline' : 'None'} changeType={stats.runningProjects > 0 ? 'up' : 'neutral'} />
+                <StatCard accent="success" onClick={() => navigate('/projects?stage=project_completed')} title="Completed" value={String(stats.completedInPeriod)} icon={CheckCircle2} change={periodLabel[period]} changeType={stats.completedInPeriod > 0 ? 'up' : 'neutral'} />
                 <StatCard accent="destructive" onClick={() => navigate('/leads/bin')} title="Cancelled" value={String(stats.cancelledLeads)} icon={XCircle} change={stats.cancelledLeads > 0 ? `${stats.cancelledLeads} in bin` : 'All clear'} changeType={stats.cancelledLeads > 0 ? 'down' : 'neutral'} />
-                <StatCard accent="warning" onClick={() => navigate('/admin/projects')} title="Cash Projects" value={String(stats.cashProjects)} icon={IndianRupee} change="Direct payment" changeType="neutral" />
-                <StatCard accent="info" onClick={() => navigate('/admin/projects')} title="Loan Projects" value={String(stats.loanProjects)} icon={FolderOpen} change="Financed" changeType="neutral" />
+                <StatCard accent="warning" onClick={() => navigate('/projects?tab=cash')} title="Cash Projects" value={String(stats.cashProjects)} icon={IndianRupee} change="Direct payment" changeType="neutral" />
+                <StatCard accent="info" onClick={() => navigate('/projects?tab=loan')} title="Loan Projects" value={String(stats.loanProjects)} icon={FolderOpen} change="Financed" changeType="neutral" />
                 <StatCard accent="primary" onClick={() => navigate('/tasks')} title="Pending Tasks" value={String(stats.pendingTasks)} icon={Clock} change={stats.pendingTasks > 0 ? 'Open work' : 'All done'} changeType={stats.pendingTasks > 0 ? 'down' : 'up'} />
                 <StatCard accent="success" onClick={() => navigate('/admin/attendance')} title="Present Today" value={String(stats.presentToday)} icon={CheckCircle2} change="Staff on duty" changeType="up" />
-                <StatCard accent="warning" onClick={() => navigate('/admin/projects')} title="Pending Docs" value={String(stats.pendingDocuments)} icon={FileText} change="Awaiting upload" changeType={stats.pendingDocuments > 0 ? 'down' : 'neutral'} />
-                <StatCard accent="success" onClick={() => navigate('/admin/projects')} title="Revenue" value={`₹${stats.revenueInPeriod > 0 ? (stats.revenueInPeriod / 100000).toFixed(1) + 'L' : '0'}`} icon={IndianRupee} change={periodLabel[period]} changeType={stats.revenueInPeriod > 0 ? 'up' : 'neutral'} />
+                <StatCard accent="warning" onClick={() => navigate('/projects?stage=documents_pending')} title="Pending Docs" value={String(stats.pendingDocuments)} icon={FileText} change="Awaiting upload" changeType={stats.pendingDocuments > 0 ? 'down' : 'neutral'} />
+                <StatCard accent="success" onClick={() => navigate('/projects')} title="Revenue" value={`₹${stats.revenueInPeriod > 0 ? (stats.revenueInPeriod / 100000).toFixed(1) + 'L' : '0'}`} icon={IndianRupee} change={periodLabel[period]} changeType={stats.revenueInPeriod > 0 ? 'up' : 'neutral'} />
                 <StatCard accent="destructive" onClick={() => navigate('/leads')} title="Overdue Follow-ups" value={String(stats.overdueFollowUps)} icon={Clock} change={stats.overdueFollowUps > 0 ? 'Needs attention' : 'All clear'} changeType={stats.overdueFollowUps > 0 ? 'down' : 'neutral'} />
               </div>
 
@@ -231,7 +231,7 @@ const AdminDashboard = () => {
                     <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/staff')}><Users className="mr-2 h-4 w-4" /> View All Staff</Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/staff/new')}><UserPlus className="mr-2 h-4 w-4" /> Add Staff Member</Button>
                     <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/leads')}><FileText className="mr-2 h-4 w-4" /> View All Leads</Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/admin/projects')}><FolderOpen className="mr-2 h-4 w-4" /> View All Projects</Button>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/projects')}><FolderOpen className="mr-2 h-4 w-4" /> View All Projects</Button>
                   </CardContent>
                 </Card>
 
@@ -261,7 +261,7 @@ const AdminDashboard = () => {
         </TabsContent>
 
         <TabsContent value="projects" className="mt-0">
-          <AdminProjects isEmbedded={true} />
+          <ProjectsListPage isEmbedded={true} />
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-0">

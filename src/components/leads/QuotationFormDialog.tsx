@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { fetchSystemConfig } from '@/lib/systemConfig';
 import { calculateSubsidy, useSubsidySlabs } from '@/lib/subsidy';
 import { saveLeadQuotation, type LeadQuotation } from '@/lib/leadQuotations';
+import { parseUnit } from '@/lib/plantDetails';
 import { supabase } from '@/integrations/supabase/client';
 
 /** Plant dropdowns are admin-editable; these are the fallback if the fetch fails. */
@@ -132,15 +133,14 @@ const QuotationFormDialog = ({
       const raw = data?.quotation_details;
       const count = Array.isArray(raw) ? raw.length : raw && typeof raw === 'object' ? 1 : 0;
       const cap = pd.required_capacity || data?.kw_interest || capacityKw || '';
-      const digits = (v: unknown) => (v ? String(v).replace(/\D/g, '') : '');
 
       setCapacity(cap ? String(cap) : '');
       setPhase(pd.phase || '');
       setPanelBrand(pd.panel_make || '');
-      setPanelWatt(digits(pd.panel_wt));
+      setPanelWatt(String(parseUnit(pd.panel_wt) ?? ''));
       setPanelQty(pd.panel_qty ? String(pd.panel_qty) : '');
       setInverterBrand(pd.inverter || '');
-      setInverterCapacity(digits(pd.inverter_wt));
+      setInverterCapacity(String(parseUnit(pd.inverter_wt) ?? ''));
       setStructureType(pd.structure_type_gauge_make || '');
       setTotalCost(pd.total_cost ? String(pd.total_cost) : '');
       setSubsidyApplied(Boolean(pd.subsidy));
@@ -179,13 +179,13 @@ const QuotationFormDialog = ({
         leadId,
         {
           name: name.trim() || `${customerName} quotation`,
-          capacity_kw: Number(capacity) || null,
+          capacity_kw: parseUnit(capacity),
           phase: phase || null,
           panel_brand: panelBrand || null,
-          panel_watt: Number(panelWatt) || null,
-          panel_qty: Number(panelQty) || null,
+          panel_watt: parseUnit(panelWatt),
+          panel_qty: parseUnit(panelQty),
           inverter_brand: inverterBrand || null,
-          inverter_capacity: Number(inverterCapacity) || null,
+          inverter_capacity: parseUnit(inverterCapacity),
           structure_type: structureType || null,
           total_cost: Number(totalCost) || null,
           subsidy_amount: sub,

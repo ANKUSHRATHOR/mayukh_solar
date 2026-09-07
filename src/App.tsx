@@ -22,7 +22,6 @@ import OperatorProjectDetail from "./pages/OperatorProjectDetail.tsx";
 import MaterialDispatch from "./pages/MaterialDispatch.tsx";
 import WelderDashboard from "./pages/WelderDashboard.tsx";
 import ElectricianDashboard from "./pages/ElectricianDashboard.tsx";
-import AdminProjects from "./pages/AdminProjects.tsx";
 import ProjectsListPage from "./pages/projects/ProjectsListPage.tsx";
 import ProjectDetailPage from "./pages/projects/ProjectDetailPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
@@ -208,14 +207,11 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/admin/projects"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminProjects />
-                </ProtectedRoute>
-              }
-            />
+            {/* The legacy admin projects table was replaced by /projects.
+                Left outside ProtectedRoute like the /staff redirects: the
+                destination re-gates, and an admin-only gate here would 403 an
+                operator following an old bookmark instead of forwarding them. */}
+            <Route path="/admin/projects" element={<Navigate to="/projects" replace />} />
             <Route
               path="/deals"
               element={

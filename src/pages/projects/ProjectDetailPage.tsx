@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   AlertTriangle,
@@ -17,6 +17,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,8 @@ import StatusBadge from '@/components/common/StatusBadge';
 import ProjectDocumentsTab from './ProjectDocumentsTab';
 import ProjectWorkPanel from './ProjectWorkPanel';
 import ManagePaymentsDialog from '@/components/projects/ManagePaymentsDialog';
+import PlantDetailsDialog from '@/components/projects/PlantDetailsDialog';
+import { fromProject, structureTypeLabel } from '@/lib/plantDetails';
 import { allProjectStageMeta, pipelineFor, stageIndex, stageProgress } from '@/lib/projectStages';
 import { fetchProject, fetchStageRequirements, projectIdentity } from '@/lib/projects';
 import { formatMoney } from '@/lib/payments';
@@ -34,6 +37,8 @@ import { formatMoney } from '@/lib/payments';
 const ProjectDetailPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { role, user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Tab lives in the URL so a link can point at a specific tab and the browser
@@ -42,6 +47,7 @@ const ProjectDetailPage = () => {
   // and twelve rows of it pushed the current stage and Commercials off-screen.
   const [showDoneStages, setShowDoneStages] = useState(false);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
+  const [plantOpen, setPlantOpen] = useState(false);
 
   const tab = searchParams.get('tab') ?? 'customer';
   const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true });
@@ -53,6 +59,12 @@ const ProjectDetailPage = () => {
   });
 
   const project = projectQuery.data;
+  // Mirrors the projects UPDATE policies: admin and operator can edit any
+  // project, a sales person only one assigned to them.
+  const canEditPlant =
+    role === 'admin' ||
+    role === 'operator' ||
+    (role === 'sales_person' && project?.assigned_sales_person_id === user?.id);
 
   const requirementsQuery = useQuery({
     queryKey: ['project-requirements', projectId],
@@ -365,10 +377,27 @@ const ProjectDetailPage = () => {
           </TabsContent>
 
           <TabsContent value="plant" className="mt-4 space-y-4">
-            <SectionCard title="System specification" icon={Sun}>
+            {/* Editing the specs used to mean leaving for the finalization form.
+                The section edits in place, through the same dialog the lead uses. */}
+            <SectionCard
+              title="System specification"
+              icon={Sun}
+              actions={canEditPlant && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs font-semibold"
+                  onClick={() => setPlantOpen(true)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Edit</span>
+                </Button>
+              )}
+            >
               <DetailGrid>
                 <DetailField label="Capacity" value={`${project.capacity_kw} kW`} />
-                <DetailField label="Structure" value={project.structure_type?.replace(/_/g, ' ')} />
+                <DetailField label="Structure" value={structureTypeLabel(project.structure_type)} />
+                <DetailField label="Grid phase" value={project.phase} />
                 <DetailField label="Panel brand" value={project.panel_brand} />
                 <DetailField
                   label="Panels"
@@ -376,6 +405,15 @@ const ProjectDetailPage = () => {
                 />
                 <DetailField label="Inverter brand" value={project.inverter_brand} />
                 <DetailField label="Inverter capacity" value={`${project.inverter_capacity} kW`} />
+                {/* Carried over from the lead since 20260907000200 — the specs a
+                    welder and an electrician need on site. */}
+                <DetailField label="Wire make" value={project.wiremake} />
+                <DetailField label="Wire size" value={project.wire_size} />
+                <DetailField label="Wire material" value={project.wire_material} />
+                <DetailField
+                  label="Subsidy"
+                  value={project.subsidy_amount ? formatMoney(project.subsidy_amount) : null}
+                />
               </DetailGrid>
             </SectionCard>
 
@@ -443,6 +481,21 @@ const ProjectDetailPage = () => {
       {/* "Review payments" used to switch to a `payments` tab this page never
           had, so the click did nothing at all. Payments open here instead, the
           same dialog the operator and deals views use. */}
+      {project && (
+        <PlantDetailsDialog
+          open={plantOpen}
+          onOpenChange={setPlantOpen}
+          mode="project"
+          recordId={project.id}
+          value={fromProject(project)}
+          onSaved={() => {
+            projectQuery.refetch();
+            // final_amount feeds the list's money tiles.
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+          }}
+        />
+      )}
+
       {project && (
         <ManagePaymentsDialog
           open={paymentsOpen}

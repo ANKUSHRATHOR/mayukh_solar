@@ -60,7 +60,6 @@ const adminNav: NavSection[] = [
     title: 'Operations',
     items: [
       { label: 'Projects', icon: Briefcase, path: '/projects' },
-      { label: 'Projects (legacy)', icon: Briefcase, path: '/admin/projects' },
       { label: 'Tasks', icon: CheckSquare, path: '/tasks' },
     ],
   },
