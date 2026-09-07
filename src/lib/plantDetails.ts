@@ -254,4 +254,10 @@ export const toProjectColumns = (values: PlantValues): ProjectPlantColumns => ({
   wire_size: values.wireSize || null,
   wire_material: values.wireMaterial || null,
   subsidy_amount: values.subsidyApplied ? parseUnit(values.subsidyAmount) : null,
+  // fromProject reads final_amount into the Total Cost field, so it has to be
+  // written back — otherwise the field looks editable and silently discards the
+  // edit, which is the exact failure this module exists to remove. Note this
+  // is the project's contract value and feeds the payment balance, so callers
+  // should refresh anything derived from it.
+  final_amount: parseUnit(values.totalCost),
 });

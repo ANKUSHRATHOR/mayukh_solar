@@ -128,6 +128,12 @@ describe('lead ↔ project mapping', () => {
     expect(cols.subsidy_amount).toBe(78000);
   });
 
+  it('writes the total cost back, so the field is not a silent no-op', () => {
+    const values = fromProject({ final_amount: 180000 });
+    expect(values.totalCost).toBe('180000');
+    expect(toProjectColumns({ ...values, totalCost: '195000' }).final_amount).toBe(195000);
+  });
+
   it('reads a project row back into the same shape', () => {
     const values = fromProject({
       capacity_kw: 3,
