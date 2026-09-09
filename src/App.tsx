@@ -35,7 +35,6 @@ import SalaryManagement from "./pages/SalaryManagement.tsx";
 import MyAttendance from "./pages/MyAttendance.tsx";
 import AdminSettings from "./pages/AdminSettings.tsx";
 import StaffPerformance from "./pages/StaffPerformance.tsx";
-import FieldVisit from "./pages/FieldVisit.tsx";
 import Tasks from "./pages/Tasks.tsx";
 import ProjectHomeLocation from "./pages/ProjectHomeLocation.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -294,7 +293,6 @@ const App = () => (
             />
             <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
             <Route path="/admin/performance" element={<ProtectedRoute allowedRoles={['admin']}><StaffPerformance /></ProtectedRoute>} />
-            <Route path="/field-visit" element={<ProtectedRoute module="crm"><FieldVisit /></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute module="tasks"><Tasks /></ProtectedRoute>} />
             <Route path="/projects/:projectId/home-location" element={<ProtectedRoute module="projects"><ProjectHomeLocation /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><StaffProfile /></ProtectedRoute>} />

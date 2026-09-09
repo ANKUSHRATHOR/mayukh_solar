@@ -62,13 +62,37 @@ describe('role access', () => {
     });
   });
 
-  it('telecaller creates leads from My Leads, not a second sidebar entry', () => {
-    expect(paths('telecaller')).toContain('/leads');
-    expect(paths('telecaller')).not.toContain('/leads/new');
-    // The duplication is only removed where it was asked for; the other CRM
-    // roles still have the shortcut.
-    expect(paths('sales_person')).toContain('/leads/new');
-    expect(paths('operator')).toContain('/leads/new');
+  describe('nav exclusions are a workflow choice, not a permission', () => {
+    // My Leads carries Create Lead as its primary action, so the sidebar entry
+    // was the same destination twice for the two roles that live on that page.
+    it('telecaller and sales create leads from My Leads', () => {
+      for (const role of ['telecaller', 'sales_person'] as AppRole[]) {
+        expect(paths(role)).toContain('/leads');
+        expect(paths(role)).not.toContain('/leads/new');
+      }
+      expect(paths('operator')).toContain('/leads/new');
+    });
+
+    it('sales does not carry Deals Dashboard', () => {
+      expect(paths('sales_person')).not.toContain('/deals');
+      expect(paths('telecaller')).toContain('/deals');
+      expect(paths('operator')).toContain('/deals');
+    });
+
+    // Excluding a path must never revoke access — the route stays open, so the
+    // page is still reachable from wherever it is linked.
+    it('leaves the excluded routes reachable', () => {
+      expect(canEnter('sales_person', '/leads/new')).toBe(true);
+      expect(canEnter('sales_person', '/deals')).toBe(true);
+      expect(canEnter('telecaller', '/leads/new')).toBe(true);
+    });
+  });
+
+  it('Field Visit is gone from the app', () => {
+    for (const role of ALL_ROLES) {
+      expect(paths(role)).not.toContain('/field-visit');
+    }
+    expect('/field-visit' in NAV_ROUTE_GATES).toBe(false);
   });
 
   it('admin can reach attendance and the directory from the sidebar', () => {

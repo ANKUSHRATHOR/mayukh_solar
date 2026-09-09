@@ -34,6 +34,20 @@ export interface RouteGate {
   roles?: AppRole[];
 }
 
+/**
+ * Destinations a role does not want in its sidebar, even though its modules
+ * grant them. Module access answers "may this role use the feature"; this
+ * answers "does this role want the shortcut", which is a workflow question and
+ * not a permission one — every path here stays reachable by its own route.
+ *
+ * Both current entries are the same duplication: My Leads carries Create Lead
+ * as its primary action, so a sidebar entry is the same destination twice.
+ */
+export const NAV_EXCLUSIONS: Partial<Record<AppRole, string[]>> = {
+  telecaller: ['/leads/new'],
+  sales_person: ['/leads/new', '/deals'],
+};
+
 export const NAV_ROUTE_GATES: Record<string, RouteGate> = {
   '/': {},
   '/profile': { roles: ['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician'] },
@@ -42,7 +56,6 @@ export const NAV_ROUTE_GATES: Record<string, RouteGate> = {
   '/leads': { module: 'crm' },
   '/leads/new': { module: 'crm' },
   '/deals': { module: 'crm' },
-  '/field-visit': { module: 'crm' },
   '/leads/bin': { roles: ['admin'] },
 
   '/visits': { module: 'site_visits' },
@@ -136,15 +149,9 @@ export const buildNav = (
   const crm: NavItem[] = hasModule('crm')
     ? [
         { label: 'My Leads', icon: PhoneCall, path: '/leads' },
-        // A telecaller creates leads from the My Leads page, which carries
-        // Create Lead as its primary action — a second entry in the sidebar is
-        // the same destination twice.
-        ...(role === 'telecaller'
-          ? []
-          : [{ label: 'Create Lead', icon: PhoneCall, path: '/leads/new' }]),
+        { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
         { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
-        { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
-      ]
+      ].filter((item) => !(NAV_EXCLUSIONS[role ?? 'admin'] ?? []).includes(item.path))
     : [];
   if (hasModule('site_visits')) crm.push({ label: 'Site Visits', icon: MapPin, path: '/visits' });
   if (crm.length) sections.push({ title: 'Sales & Leads', items: crm });
