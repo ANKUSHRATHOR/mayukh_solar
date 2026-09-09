@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { PhoneCall, MapPin, Briefcase, CheckSquare, CalendarCheck, Contact } from 'lucide-react';
+import { PhoneCall, MapPin, Briefcase, CheckSquare, CalendarCheck, Contact, IndianRupee, Wrench } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 export type AppRole = Database['public']['Enums']['app_role'];
@@ -13,6 +13,8 @@ export type ModuleKey =
   | 'crm'
   | 'site_visits'
   | 'projects'
+  | 'payments'
+  | 'operations'
   | 'tasks'
   | 'attendance'
   | 'contacts';
@@ -27,7 +29,9 @@ export interface ModuleDef {
 export const MODULES: ModuleDef[] = [
   { key: 'crm', label: 'CRM', description: 'Leads, deals & field visits', icon: PhoneCall },
   { key: 'site_visits', label: 'Site Visits', description: 'Schedule & complete site visits', icon: MapPin },
-  { key: 'projects', label: 'Projects', description: 'Installation projects & tasks', icon: Briefcase },
+  { key: 'projects', label: 'Projects', description: 'Installation projects & job detail', icon: Briefcase },
+  { key: 'payments', label: 'Payments', description: 'Inward payments & dues', icon: IndianRupee },
+  { key: 'operations', label: 'Operations', description: 'Material dispatch & operator console', icon: Wrench },
   { key: 'tasks', label: 'Tasks', description: 'Personal task list', icon: CheckSquare },
   { key: 'attendance', label: 'Attendance', description: 'Punch in/out & monthly view', icon: CalendarCheck },
   { key: 'contacts', label: 'Contacts', description: 'Team phone directory', icon: Contact },
@@ -43,8 +47,10 @@ export const MODULE_KEYS: ModuleKey[] = MODULES.map((m) => m.key);
 export const DEFAULT_ROLE_MODULES: Record<AppRole, ModuleKey[]> = {
   admin: [...MODULE_KEYS],
   telecaller: ['crm', 'site_visits', 'projects', 'tasks', 'attendance', 'contacts'],
-  sales_person: ['crm', 'site_visits', 'projects', 'tasks', 'attendance', 'contacts'],
-  operator: ['projects', 'tasks', 'attendance', 'contacts'],
+  sales_person: ['crm', 'site_visits', 'projects', 'payments', 'tasks', 'attendance', 'contacts'],
+  // `crm` is deliberate and matches production: an admin turned it on for
+  // operators on 2026-08-01. The original seed had it false.
+  operator: ['crm', 'projects', 'payments', 'operations', 'tasks', 'attendance', 'contacts'],
   welder: ['projects', 'tasks', 'attendance', 'contacts'],
   electrician: ['projects', 'tasks', 'attendance', 'contacts'],
 };

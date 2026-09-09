@@ -35,6 +35,7 @@ import { useServerTable } from '@/hooks/useServerTable';
 import { useStickyState } from '@/hooks/useStickyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { defaultSort } from '@/lib/tableQuery';
+import { canAddPayment } from '@/lib/capabilities';
 import { downloadCsv } from '@/lib/exportCsv';
 import { formatMoney, paymentModeLabels } from '@/lib/payments';
 import {
@@ -64,7 +65,10 @@ const PaymentsListPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { role } = useAuth();
-  const isAdmin = role === 'admin';
+  // Was `const isAdmin = role === 'admin'` — declared, never referenced, so
+  // both "Add payment" buttons rendered for every role that could reach the
+  // page. project_payments takes inserts from admin, operator and sales only.
+  const canAdd = canAddPayment(role);
 
   // Tab and filters live in the URL so a KPI tile can point at a filtered list
   // and the back button steps between them. Validated on read: an unvalidated
@@ -351,14 +355,16 @@ const PaymentsListPage = () => {
             >
               <Download className="h-4 w-4" /> Export
             </Button>
-            <Button size="sm" className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none" onClick={openNew}>
-              <Plus className="h-4 w-4" /> Add payment
-            </Button>
+            {canAdd && (
+              <Button size="sm" className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none" onClick={openNew}>
+                <Plus className="h-4 w-4" /> Add payment
+              </Button>
+            )}
           </div>
         }
       />
 
-      {kpis && (
+      {kpis?.payments_visible && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
           <StatCard
             title="This month"
@@ -483,7 +489,7 @@ const PaymentsListPage = () => {
             }
             emptyIcon={tab === 'unallocated' ? Inbox : Wallet}
             emptyAction={
-              tab !== 'unallocated' ? (
+              canAdd && tab !== 'unallocated' ? (
                 <Button size="sm" className="gap-1.5" onClick={openNew}>
                   <Plus className="h-4 w-4" /> Add payment
                 </Button>

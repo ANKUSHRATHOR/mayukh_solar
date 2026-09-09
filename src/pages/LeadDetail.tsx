@@ -1319,7 +1319,7 @@ const LeadDetail = () => {
                       onClick={() => navigate(`/projects/new?leadId=${lead.id}`)}
                       className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 shadow-sm mt-3"
                     >
-                      <TrendingUp className="mr-1.5 h-3.5 w-3.5" /> Convert to Deal (Approved Quotation)
+                      <TrendingUp className="mr-1.5 h-3.5 w-3.5" /> Convert to Project (Approved Quotation)
                     </Button>
                   )}
                 </div>
@@ -1352,7 +1352,7 @@ const LeadDetail = () => {
                   <SelectItem value="new">New Lead</SelectItem>
                   <SelectItem value="visited">Site Visited</SelectItem>
                   <SelectItem value="follow_up">Need Follow-up</SelectItem>
-                  <SelectItem value="interested">Interested (Convert to Deal)</SelectItem>
+                  <SelectItem value="interested">Interested</SelectItem>
                   <SelectItem value="not_interested">Not Interested</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
@@ -1465,7 +1465,7 @@ const LeadDetail = () => {
                   <SelectItem value="interested">Interested</SelectItem>
                   <SelectItem value="not_interested">Not Interested</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="final">Final (Deal Confirmed)</SelectItem>
+                  <SelectItem value="final">Final (Converted to Project)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

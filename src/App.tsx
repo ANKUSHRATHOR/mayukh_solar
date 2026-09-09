@@ -35,7 +35,6 @@ import SalaryManagement from "./pages/SalaryManagement.tsx";
 import MyAttendance from "./pages/MyAttendance.tsx";
 import AdminSettings from "./pages/AdminSettings.tsx";
 import StaffPerformance from "./pages/StaffPerformance.tsx";
-import FieldVisit from "./pages/FieldVisit.tsx";
 import Tasks from "./pages/Tasks.tsx";
 import ProjectHomeLocation from "./pages/ProjectHomeLocation.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -43,7 +42,6 @@ import PasswordResetLogs from "./pages/PasswordResetLogs.tsx";
 import StaffProfile from "./pages/StaffProfile.tsx";
 import KNumberLookup from "./pages/KNumberLookup.tsx";
 import StaffContacts from "./pages/StaffContacts.tsx";
-import DealsDashboard from "./pages/DealsDashboard.tsx";
 import VisitsListPage from "./pages/visits/VisitsListPage.tsx";
 import VisitDetailPage from "./pages/visits/VisitDetailPage.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
@@ -196,7 +194,7 @@ const App = () => (
             <Route
               path="/operator/projects/:projectId"
               element={
-                <ProtectedRoute module="projects">
+                <ProtectedRoute module="operations">
                   <OperatorProjectDetail />
                 </ProtectedRoute>
               }
@@ -204,19 +202,20 @@ const App = () => (
             <Route
               path="/projects/:projectId/material-dispatch"
               element={
-                <ProtectedRoute module="projects">
+                <ProtectedRoute module="operations">
                   <MaterialDispatch />
                 </ProtectedRoute>
               }
             />
-            {/* Inward payments across every project. Gated by the projects
-                module rather than a seventh module of its own; project_payments
-                RLS narrows it further, so a role with the module but no payment
-                access sees an empty list rather than an error. */}
+            {/* Inward payments across every project. Its own module since
+                20260909100000: gating on `projects` handed a ledger to every
+                role, and project_payments admits only admin, operator and
+                sales-on-own — so three roles were advertised a page that could
+                never show them a row. */}
             <Route
               path="/payments"
               element={
-                <ProtectedRoute module="projects">
+                <ProtectedRoute module="payments">
                   <PaymentsListPage />
                 </ProtectedRoute>
               }
@@ -224,7 +223,7 @@ const App = () => (
             <Route
               path="/payments/:paymentId"
               element={
-                <ProtectedRoute module="projects">
+                <ProtectedRoute module="payments">
                   <PaymentDetailPage />
                 </ProtectedRoute>
               }
@@ -235,14 +234,6 @@ const App = () => (
                 destination re-gates, and an admin-only gate here would 403 an
                 operator following an old bookmark instead of forwarding them. */}
             <Route path="/admin/projects" element={<Navigate to="/projects" replace />} />
-            <Route
-              path="/deals"
-              element={
-                <ProtectedRoute module="crm">
-                  <DealsDashboard />
-                </ProtectedRoute>
-              }
-            />
             <Route
               path="/activity-logs"
               element={
@@ -293,7 +284,6 @@ const App = () => (
             />
             <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
             <Route path="/admin/performance" element={<ProtectedRoute allowedRoles={['admin']}><StaffPerformance /></ProtectedRoute>} />
-            <Route path="/field-visit" element={<ProtectedRoute module="crm"><FieldVisit /></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute module="tasks"><Tasks /></ProtectedRoute>} />
             <Route path="/projects/:projectId/home-location" element={<ProtectedRoute module="projects"><ProjectHomeLocation /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute allowedRoles={['admin', 'telecaller', 'sales_person', 'operator', 'welder', 'electrician']}><StaffProfile /></ProtectedRoute>} />

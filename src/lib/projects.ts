@@ -95,7 +95,9 @@ export const fetchProjectsPage = async (
   let query = supabase.from('projects').select(SELECT_COLUMNS, { count: 'exact' });
 
   if (tab === 'cash') query = query.eq('payment_type', 'cash');
-  if (tab === 'loan') query = query.eq('payment_type', 'loan');
+  // "Loan" is any project the bank part-finances, so a loan_cash project is not
+  // stranded outside both tabs.
+  if (tab === 'loan') query = query.in('payment_type', ['loan', 'loan_cash']);
   if (stage) query = query.eq('status', stage as any);
 
   if (term) {
@@ -139,7 +141,7 @@ export const fetchProjectTabCounts = async (): Promise<Record<ProjectTab, number
   const countOf = async (tab: ProjectTab) => {
     let q = supabase.from('projects').select('id', { count: 'exact', head: true });
     if (tab === 'cash') q = q.eq('payment_type', 'cash');
-    if (tab === 'loan') q = q.eq('payment_type', 'loan');
+    if (tab === 'loan') q = q.in('payment_type', ['loan', 'loan_cash']);
     const { count } = await q;
     return count ?? 0;
   };

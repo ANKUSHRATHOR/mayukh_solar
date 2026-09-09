@@ -1,4 +1,5 @@
 import type { StatusMeta } from '@/lib/statusMeta';
+import { involvesLoan } from '@/lib/payments';
 
 /**
  * The 12-stage project pipeline.
@@ -143,7 +144,7 @@ export const projectStageMeta: Record<string, StatusMeta> = Object.fromEntries(
  */
 export const pipelineFor = (paymentType: string | null | undefined): StageDefinition[] =>
   PROJECT_STAGES.filter((s) =>
-    s.appliesTo === 'all' ? true : paymentType === 'loan' ? s.appliesTo === 'loan' : false
+    s.appliesTo === 'all' ? true : involvesLoan(paymentType) ? s.appliesTo === 'loan' : false
   );
 
 /** Zero-based position in this project's pipeline; -1 when off-pipeline. */

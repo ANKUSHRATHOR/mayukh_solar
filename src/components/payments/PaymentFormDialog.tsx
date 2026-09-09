@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { formatMoney, paymentModeLabels } from '@/lib/payments';
+import { formatMoney, involvesLoan, paymentModeLabels } from '@/lib/payments';
 import {
   createPayment,
   projectOptionLabel,
@@ -121,7 +121,7 @@ const PaymentFormDialog = ({
 
   // The bank is only ever a payer on a loan file. Offering the choice on a cash
   // project invites a receipt that no reconciliation will ever match.
-  const showSource = selectedType === 'loan';
+  const showSource = involvesLoan(selectedType);
 
   const amountValue = Number(amount);
   const amountValid = amount.trim() !== '' && Number.isFinite(amountValue) && amountValue > 0;

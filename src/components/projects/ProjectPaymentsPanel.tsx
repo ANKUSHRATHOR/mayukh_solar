@@ -20,6 +20,7 @@ import ErrorState from '@/components/common/ErrorState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { canAddPayment, canEditPayment } from '@/lib/capabilities';
 import { fetchSystemConfig } from '@/lib/systemConfig';
 import {
   DEFAULT_PAYMENT_DUE_DAYS,
@@ -64,7 +65,10 @@ const ProjectPaymentsPanel = ({
 }: Props) => {
   const { toast } = useToast();
   const { role } = useAuth();
-  const isAdmin = role === 'admin';
+  // Adding a receipt and correcting one are different rights: operator and
+  // sales may record money in, only an admin may edit or delete it.
+  const canAdd = canAddPayment(role);
+  const canModify = canEditPayment(role);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PaymentRow | null>(null);
@@ -144,9 +148,11 @@ const ProjectPaymentsPanel = ({
         title="Money"
         icon={Wallet}
         actions={
-          <Button size="sm" className="h-11 gap-1.5 text-xs font-semibold sm:h-8" onClick={openNew}>
-            <Plus className="h-3.5 w-3.5" /> Add payment
-          </Button>
+          canAdd && (
+            <Button size="sm" className="h-11 gap-1.5 text-xs font-semibold sm:h-8" onClick={openNew}>
+              <Plus className="h-3.5 w-3.5" /> Add payment
+            </Button>
+          )
         }
       >
         <div className="grid grid-cols-3 gap-3">
@@ -188,9 +194,11 @@ const ProjectPaymentsPanel = ({
             description="Log money as it arrives so the outstanding balance stays honest."
             icon={Wallet}
             action={
-              <Button size="sm" className="gap-1.5" onClick={openNew}>
-                <Plus className="h-4 w-4" /> Add payment
-              </Button>
+              canAdd ? (
+                <Button size="sm" className="gap-1.5" onClick={openNew}>
+                  <Plus className="h-4 w-4" /> Add payment
+                </Button>
+              ) : undefined
             }
           />
         ) : (
@@ -232,7 +240,7 @@ const ProjectPaymentsPanel = ({
 
                 {/* Corrections are admin-only: everyone else adds receipts but
                     cannot rewrite one after the fact. */}
-                {isAdmin && (
+                {canModify && (
                   <div className="flex shrink-0 gap-1">
                     <Button
                       variant="ghost"

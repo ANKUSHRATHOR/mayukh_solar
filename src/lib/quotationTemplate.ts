@@ -16,6 +16,7 @@
  */
 
 import { formatMoney, type QuotationDocument } from '@/lib/quotationDocument';
+import { involvesLoan } from '@/lib/payments';
 
 /** Solar orange — the app's own theme-color, not Tailwind's orange-500. */
 const BRAND = '#BD4308';
@@ -166,7 +167,7 @@ const pageOne = (doc: QuotationDocument): string => `
       }</div>
       <p>On-Grid Solar Power Pack System</p>
       <p style="margin-top:5px"><span class="chip">${
-        doc.meta.paymentType === 'loan' ? 'Bank Financed' : 'Consumer (Cash)'
+        involvesLoan(doc.meta.paymentType) ? 'Bank Financed' : 'Consumer (Cash)'
       }</span></p>
     </div>
   </div>
@@ -227,7 +228,7 @@ const pageTwo = (doc: QuotationDocument): string => {
   </table>
 
   <h3 class="sec">Payment Schedule${
-    doc.meta.paymentType === 'loan' ? ' — Bank Financed' : ''
+    involvesLoan(doc.meta.paymentType) ? ' — Bank Financed' : ''
   }</h3>
   <table class="q-block">
     <thead><tr>

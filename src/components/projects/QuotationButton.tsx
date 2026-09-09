@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { involvesLoan } from '@/lib/payments';
 import { supabase } from '@/integrations/supabase/client';
 import { invokeApi } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -68,7 +69,7 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
         .eq('id', projectId)
         .maybeSingle();
       setProject(proj);
-      if ((proj as any)?.payment_type === 'loan') setQType('bank');
+      if (involvesLoan((proj as any)?.payment_type)) setQType('bank');
       else if ((proj as any)?.payment_type === 'cash') setQType('consumer');
 
       const { data } = await supabase

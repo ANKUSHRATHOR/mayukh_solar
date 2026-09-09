@@ -80,8 +80,34 @@ export const LOAN_SCHEDULE: MilestoneDefinition[] = [
   },
 ];
 
+/**
+ * Does this project involve bank money?
+ *
+ * `loan_cash` is part customer cash, part bank loan. Every gate that used to ask
+ * `paymentType === 'loan'` was really asking this, and treating anything else as
+ * cash — which would have waved a loan_cash project straight past the bank gate.
+ * Ask this instead, never the equality.
+ */
+export const involvesLoan = (paymentType: string | null | undefined): boolean =>
+  paymentType === 'loan' || paymentType === 'loan_cash';
+
+export const paymentTypeLabels: Record<string, string> = {
+  cash: 'Cash',
+  loan: 'Loan',
+  loan_cash: 'Loan + Cash',
+};
+
+export const paymentTypeLabel = (paymentType: string | null | undefined): string =>
+  paymentTypeLabels[paymentType ?? ''] ?? 'Cash';
+
+/**
+ * A loan_cash project follows the loan schedule: the customer's share is the
+ * margin, and the bank still pays in two instalments. The difference from a pure
+ * loan is how much margin the customer carries, which the schedule already
+ * derives from the sanctioned amount rather than assuming a fraction.
+ */
 export const scheduleFor = (paymentType: string | null | undefined): MilestoneDefinition[] =>
-  paymentType === 'loan' ? LOAN_SCHEDULE : CASH_SCHEDULE;
+  involvesLoan(paymentType) ? LOAN_SCHEDULE : CASH_SCHEDULE;
 
 export const milestoneLabels: Record<PaymentMilestone, string> = {
   ...Object.fromEntries(
@@ -179,7 +205,7 @@ export const canStartFabrication = (
   paymentType: string | null | undefined,
   payments: PaymentLike[]
 ): boolean => {
-  if (paymentType !== 'loan') return true;
+  if (!involvesLoan(paymentType)) return true;
   return payments.some(
     (p) => p.milestone === 'loan_bank_first' && p.status === 'completed'
   );

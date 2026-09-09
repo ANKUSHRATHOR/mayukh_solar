@@ -134,18 +134,29 @@ const ProjectDocuments = () => {
       if (uploadError) throw uploadError;
 
       // Store the storage path (bucket is private; we'll generate signed URLs to view)
+      // Both branches used to discard `error`, and PostgREST reports a refusal
+      // there rather than throwing — so a write RLS rejected still fell through
+      // to the success toast below. An RLS-filtered UPDATE is quieter still: no
+      // error at all, simply zero rows touched, which is why this asks for the
+      // affected row back instead of trusting silence.
       const existingDoc = getDoc(docType);
       if (existingDoc) {
-        await supabase.from('documents')
+        const { data: updated, error: updateError } = await supabase.from('documents')
           .update({ file_url: path, uploaded_at: new Date().toISOString(), rejection_reason: null })
-          .eq('id', existingDoc.id);
+          .eq('id', existingDoc.id)
+          .select('id');
+        if (updateError) throw updateError;
+        if (!updated || updated.length === 0) {
+          throw new Error('You do not have permission to replace this document.');
+        }
       } else {
-        await supabase.from('documents').insert({
+        const { error: insertError } = await supabase.from('documents').insert({
           project_id: projectId,
           document_type: docType,
           file_url: path,
           uploaded_by_user_id: user.id,
         });
+        if (insertError) throw insertError;
       }
 
       toast({ title: 'Uploaded!', description: `${docType.replace(/_/g, ' ')} uploaded successfully` });
@@ -162,16 +173,22 @@ const ProjectDocuments = () => {
     try {
       const existingDoc = getDoc(docType);
       if (existingDoc) {
-        await supabase.from('documents')
+        const { data: updated, error: updateError } = await supabase.from('documents')
           .update({ text_value: value.trim(), uploaded_at: new Date().toISOString(), rejection_reason: null })
-          .eq('id', existingDoc.id);
+          .eq('id', existingDoc.id)
+          .select('id');
+        if (updateError) throw updateError;
+        if (!updated || updated.length === 0) {
+          throw new Error('You do not have permission to change this document.');
+        }
       } else {
-        await supabase.from('documents').insert({
+        const { error: insertError } = await supabase.from('documents').insert({
           project_id: projectId,
           document_type: docType,
           text_value: value.trim(),
           uploaded_by_user_id: user.id,
         });
+        if (insertError) throw insertError;
       }
       toast({ title: 'Saved!' });
       fetchData();

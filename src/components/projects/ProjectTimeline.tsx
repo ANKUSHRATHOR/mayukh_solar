@@ -1,4 +1,5 @@
 import { Check, Circle, Loader2 } from 'lucide-react';
+import { involvesLoan, paymentTypeLabel } from '@/lib/payments';
 import { cn } from '@/lib/utils';
 
 type ProjectStatus = string;
@@ -46,7 +47,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 const buildFlow = (paymentType: 'cash' | 'loan') => [
   ...COMMON_PRE,
-  ...(paymentType === 'cash' ? CASH_BRANCH : LOAN_BRANCH),
+  ...(involvesLoan(paymentType) ? LOAN_BRANCH : CASH_BRANCH),
   ...COMMON_POST,
 ];
 
@@ -88,7 +89,7 @@ export default function ProjectTimeline({ status, paymentType, compact = false }
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {paymentType === 'cash' ? 'Cash' : 'Loan'} Workflow
+          {paymentTypeLabel(paymentType)} Workflow
         </p>
         <span className="text-xs font-semibold text-primary">{pct}% complete</span>
       </div>

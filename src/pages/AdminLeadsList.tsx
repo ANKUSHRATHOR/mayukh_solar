@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { canBulkAssignLeads, canBinLeads } from '@/lib/capabilities';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -543,7 +544,13 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
    * Everything else on this page is scoped by RLS and safe for any role that
    * has the CRM module.
    */
-  const canManageLeads = role === 'admin';
+  // Two different rights, previously collapsed into one admin check.
+  // bulk_assign_leads permits admin OR operator, so an operator was being
+  // denied a capability the database grants; bulk_bin_leads and the hard delete
+  // stay admin-only. Selection exists to serve either.
+  const canAssign = canBulkAssignLeads(role);
+  const canBin = canBinLeads(role);
+  const canManageLeads = canAssign || canBin;
 
   /** Anyone a lead can sit with — telecallers and sales reps. */
   const assignableStaff = useMemo(
@@ -791,6 +798,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
             <div className="flex items-center gap-2">
               {/* Picker and its action are joined into one segmented control, so the
                   assign flow reads as a single thing rather than two loose buttons. */}
+              {canAssign && (
               <div className="flex flex-1 sm:flex-none">
                 <Select value={bulkAssignee} onValueChange={setBulkAssignee}>
                   <SelectTrigger className="h-9 w-full rounded-r-none text-sm sm:w-[220px]">
@@ -816,9 +824,12 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                   {bulkAssigning ? 'Assigning…' : 'Assign'}
                 </Button>
               </div>
+              )}
 
               {/* Delete is held apart from Assign at every width — a mis-click here is
                   unrecoverable, and the two must never sit shoulder to shoulder. */}
+              {canBin && (
+              <>
               <Separator orientation="vertical" className="mx-1 h-6 shrink-0" />
               <Button
                 size="sm"
@@ -829,6 +840,8 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
               >
                 <Trash2 className="mr-1.5 h-4 w-4" /> Delete
               </Button>
+              </>
+              )}
             </div>
           </div>
         )}
@@ -1080,7 +1093,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                               </a>
                             </Button>
                           )}
-                          {canManageLeads && (
+                          {canBin && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1141,97 +1154,82 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                     navigate(`/leads/${lead.id}`);
                   }
                 }}
-                className="cursor-pointer rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-colors hover:bg-muted/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="cursor-pointer rounded-2xl border border-border/70 bg-card p-3 shadow-sm transition-colors hover:bg-muted/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                    {canManageLeads && (
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${lead.consumerName}`}
-                        className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border"
-                        checked={selectedIds.has(lead.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          setSelectedIds((prev) => {
-                            const next = new Set(prev);
-                            if (e.target.checked) next.add(lead.id);
-                            else next.delete(lead.id);
-                            return next;
-                          });
-                        }}
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="font-mono text-xs font-bold text-foreground">
+                {/* One header line and one meta line. This was four stacked
+                    blocks — K-Number/name/phone, then a labelled grid of Status
+                    and Assigned Staff, then a full-width Last Updated — each
+                    with its own uppercase label and its own divider, which made
+                    a card of eight short values nearly a screen tall on a phone.
+                    The labels were carrying almost no meaning a badge and a
+                    muted line do not. */}
+                <div className="flex items-start gap-2.5">
+                  {canManageLeads && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${lead.consumerName}`}
+                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border"
+                      checked={selectedIds.has(lead.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(lead.id);
+                          else next.delete(lead.id);
+                          return next;
+                        });
+                      }}
+                    />
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-mono text-xs font-bold text-foreground">
                         {lead.kNumber || (
                           <span className="font-sans font-normal text-muted-foreground/60">Not linked</span>
                         )}
-                      </div>
-                      <div
-                        className="mt-1 truncate text-sm font-semibold text-foreground"
-                        title={lead.consumerName}
-                      >
-                        {lead.consumerName}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
-                        <a
-                          href={`tel:${lead.mobile}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
-                        >
-                          <Phone className="h-3 w-3 shrink-0" /> {lead.mobile}
-                        </a>
-                        {lead.email && (
-                          <span className="max-w-[150px] truncate text-muted-foreground/80" title={lead.email}>
-                            • {lead.email}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                </div>
-
-                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-border/50 pt-3">
-                  <div className="min-w-0">
-                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Status
-                    </dt>
-                    <dd className="mt-1">
-                      <Badge className={`${statusColor[lead.status] || statusColor.new} border-0 px-2 py-0.5 text-[11px] font-medium`}>
+                      </span>
+                      {/* Status reads as an attribute of the lead, so it sits
+                          with the identity rather than under a label of its own. */}
+                      <Badge className={`${statusColor[lead.status] || statusColor.new} ml-auto shrink-0 border-0 px-2 py-0 text-[10px] font-medium`}>
                         {statusLabel(lead.status)}
                       </Badge>
-                    </dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Assigned Staff
-                    </dt>
-                    <dd className="mt-0.5 break-words text-xs font-medium text-foreground">
-                      {lead.assignedToName}
-                      {lead.assignedToRole && (
-                        <span className="block text-[10px] font-normal text-muted-foreground">
-                          {statusLabel(lead.assignedToRole)}
-                        </span>
-                      )}
-                    </dd>
-                  </div>
-                  <div className="col-span-2 min-w-0">
-                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Last Updated
-                    </dt>
-                    <dd className="mt-0.5 text-xs text-foreground">
-                      {formatDateTime(lead.lastActivityAt)}
-                      <span className="block truncate text-[10px] text-muted-foreground" title={lead.lastNote}>
-                        Note: {lead.lastNote}
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </div>
+
+                    <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
+                      <span className="truncate text-sm font-semibold text-foreground" title={lead.consumerName}>
+                        {lead.consumerName}
                       </span>
-                    </dd>
+                      <a
+                        href={`tel:${lead.mobile}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                      >
+                        <Phone className="h-3 w-3 shrink-0" /> {lead.mobile}
+                      </a>
+                    </div>
+
+                    {/* Assignee, when it was last touched, and the note — the
+                        three things you scan a list for — on one muted line. */}
+                    <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                      <span className={lead.assignedToName === 'Not assigned' ? 'italic' : 'font-medium text-foreground/80'}>
+                        {lead.assignedToName}
+                      </span>
+                      {lead.assignedToRole && ` (${statusLabel(lead.assignedToRole)})`}
+                      {' · '}
+                      {formatDateTime(lead.lastActivityAt)}
+                    </p>
+                    {lead.lastNote && (
+                      <p className="truncate text-[11px] text-muted-foreground/70" title={lead.lastNote}>
+                        {lead.lastNote}
+                      </p>
+                    )}
                   </div>
-                </dl>
+                </div>
 
                 <div
-                  className="mt-3 flex items-center gap-2 border-t border-border/50 pt-3"
+                  className="mt-2.5 flex items-center gap-1.5 border-t border-border/50 pt-2.5"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {lead.mobile && (
@@ -1276,7 +1274,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                   >
                     <Pencil className="h-4 w-4 text-muted-foreground" />
                   </Button>
-                  {canManageLeads && (
+                  {canBin && (
                     <Button
                       variant="ghost"
                       size="icon"

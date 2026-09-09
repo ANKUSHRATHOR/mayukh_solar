@@ -4,6 +4,8 @@ import {
   canStartFabrication,
   summarisePayments,
   scheduleFor,
+  involvesLoan,
+  paymentTypeLabel,
   dueStatusFor,
   allocationOf,
   CASH_SCHEDULE,
@@ -251,5 +253,50 @@ describe('allocationOf', () => {
 
   it('keeps deliberate general income out of the inbox', () => {
     expect(allocationOf({ project_id: null, no_project_needed: true })).toBe('general');
+  });
+});
+
+
+describe('loan_cash', () => {
+  // Part customer cash, part bank loan. Every gate used to ask
+  // `paymentType === 'loan'` and treat anything else as cash, which would have
+  // waved a loan_cash project straight past the bank gate.
+  it('counts as involving a loan', () => {
+    expect(involvesLoan('loan_cash')).toBe(true);
+    expect(involvesLoan('loan')).toBe(true);
+    expect(involvesLoan('cash')).toBe(false);
+    expect(involvesLoan(null)).toBe(false);
+    expect(involvesLoan(undefined)).toBe(false);
+  });
+
+  it('follows the loan schedule, not the cash one', () => {
+    expect(scheduleFor('loan_cash')).toBe(LOAN_SCHEDULE);
+    expect(scheduleFor('loan')).toBe(LOAN_SCHEDULE);
+    expect(scheduleFor('cash')).toBe(CASH_SCHEDULE);
+  });
+
+  // The whole point of the enum value: this gate must not open early.
+  it('blocks fabrication until the bank first instalment lands', () => {
+    expect(canStartFabrication('loan_cash', [])).toBe(false);
+    expect(
+      canStartFabrication('loan_cash', [
+        { amount: 100000, status: 'completed', milestone: 'loan_bank_first' },
+      ])
+    ).toBe(true);
+    // A pending claim is not money in the bank.
+    expect(
+      canStartFabrication('loan_cash', [
+        { amount: 100000, status: 'pending', milestone: 'loan_bank_first' },
+      ])
+    ).toBe(false);
+    // Cash is never blocked.
+    expect(canStartFabrication('cash', [])).toBe(true);
+  });
+
+  it('is labelled distinctly from a plain loan', () => {
+    expect(paymentTypeLabel('loan_cash')).toBe('Loan + Cash');
+    expect(paymentTypeLabel('loan')).toBe('Loan');
+    expect(paymentTypeLabel('cash')).toBe('Cash');
+    expect(paymentTypeLabel(null)).toBe('Cash');
   });
 });
