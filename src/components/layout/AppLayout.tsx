@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react';
 import AppSidebar from './AppSidebar';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
+import RoleViewSwitcher, { RoleViewBanner } from '@/components/layout/RoleViewSwitcher';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Menu, Sun, Moon } from 'lucide-react';
@@ -35,6 +36,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             <p className="truncate text-sm font-semibold text-foreground">Mayukh Solar</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+          <RoleViewSwitcher />
           <Button
             type="button"
             variant="ghost"
@@ -52,6 +54,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           )}
           </div>
         </header>
+        <RoleViewBanner />
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </main>

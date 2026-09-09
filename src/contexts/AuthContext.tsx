@@ -24,6 +24,14 @@ interface AuthContextType {
   staff: StaffProfile | null;
   permissions: Set<ModuleKey>;
   hasModule: (module: ModuleKey) => boolean;
+  /**
+   * The role the account actually holds. `role` above is what the UI should
+   * render as, which differs only while an admin is previewing another role.
+   */
+  realRole: AppRole | null;
+  /** Non-null while previewing. Admin-only, UI-only — see setViewAsRole. */
+  viewAsRole: AppRole | null;
+  setViewAsRole: (role: AppRole | null) => void;
   loading: boolean;
   profileResolved: boolean;
   /** The last profile fetch failed. Distinct from "this user has no role". */
@@ -75,6 +83,8 @@ const logEvent = async (action: 'login' | 'logout') => {
   }
 };
 
+const VIEW_AS_KEY = 'view-as-role';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -84,6 +94,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [profileResolved, setProfileResolved] = useState(false);
   const [profileError, setProfileError] = useState(false);
+
+  /**
+   * Role preview. Purely a rendering concern: RLS decides what the server
+   * returns from auth.uid(), which this cannot touch, so previewing can never
+   * grant access the account does not already have. It only answers "what does
+   * this role's app look like?".
+   *
+   * Session-scoped rather than persisted, so it dies with the tab and cannot
+   * quietly follow someone into tomorrow's session.
+   */
+  const [viewAsRole, setViewAsRoleState] = useState<AppRole | null>(() => {
+    try {
+      return (sessionStorage.getItem(VIEW_AS_KEY) as AppRole | null) ?? null;
+    } catch {
+      return null;
+    }
+  });
+  const [viewAsPermissions, setViewAsPermissions] = useState<Set<ModuleKey> | null>(null);
   const lastUserId = useRef<string | null>(null);
 
   const fetchProfile = async (userId: string) => {
@@ -192,12 +220,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.auth.signOut();
     lastUserId.current = null;
     setSession(null); setUser(null); setRole(null); setStaff(null); setPermissions(new Set()); setProfileResolved(true);
+    setViewAsRoleState(null);
+    try { sessionStorage.removeItem(VIEW_AS_KEY); } catch { /* private mode */ }
   };
 
-  const hasModule = (module: ModuleKey): boolean => role === 'admin' || permissions.has(module);
+  // Only an admin may preview, and only into a role that is not admin. A
+  // non-admin flipping to "admin" would get admin chrome over data the server
+  // still refuses — broken screens rather than a breach, but pointless.
+  const setViewAsRole = (next: AppRole | null) => {
+    if (role !== 'admin') return;
+    const value = next === 'admin' ? null : next;
+    setViewAsRoleState(value);
+    try {
+      if (value) sessionStorage.setItem(VIEW_AS_KEY, value);
+      else sessionStorage.removeItem(VIEW_AS_KEY);
+    } catch {
+      /* private mode */
+    }
+  };
+
+  // A preview is only meaningful for an admin; if the real role is anything
+  // else, ignore whatever sessionStorage held.
+  const previewing = role === 'admin' && viewAsRole !== null ? viewAsRole : null;
+  const effectiveRole: AppRole | null = previewing ?? role;
+  const effectivePermissions = previewing ? (viewAsPermissions ?? new Set<ModuleKey>()) : permissions;
+
+  useEffect(() => {
+    if (!previewing) {
+      setViewAsPermissions(null);
+      return;
+    }
+    let cancelled = false;
+    loadPermissions(previewing).then((p) => {
+      if (!cancelled) setViewAsPermissions(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewing]);
+
+  const hasModule = (module: ModuleKey): boolean =>
+    effectiveRole === 'admin' || effectivePermissions.has(module);
 
   return (
-    <AuthContext.Provider value={{ session, user, role, staff, permissions, hasModule, loading, profileResolved, profileError, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{
+      session,
+      user,
+      // Deliberately the effective role: every gate in the app already reads
+      // `role`, so a preview needs no per-page changes. `realRole` is there for
+      // the few places that must know the truth — the switcher itself.
+      role: effectiveRole,
+      realRole: role,
+      viewAsRole: previewing,
+      setViewAsRole,
+      staff,
+      permissions: effectivePermissions,
+      hasModule,
+      loading,
+      profileResolved,
+      profileError,
+      signOut,
+      refreshProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );

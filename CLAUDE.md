@@ -61,7 +61,9 @@ Preview the app through the `dev` config in `.claude/launch.json` rather than ru
 
 `src/lib/modules.ts` defines the six gateable modules (`crm`, `site_visits`, `projects`, `tasks`, `attendance`, `contacts`) and the in-code `DEFAULT_ROLE_MODULES` fallback used when `role_permissions` is empty. Dashboard, profile and settings are deliberately *not* modules — they are never gated. Admin bypasses both layers.
 
-Roles: `admin`, `telecaller`, `sales_person`, `operator`, `welder`, `electrician`. New signups land inactive with no role and see a "Pending Approval" screen until an admin activates them.
+Roles: `admin`, `telecaller`, `sales_person`, `operator`, `welder`, `electrician`.
+
+**Role preview** (`components/layout/RoleViewSwitcher.tsx`): an admin can point the app at another role from the header dropdown, which saves keeping six test logins. `AuthContext` exposes the previewed role as `role` — every gate in the app already reads it, so this needs no per-page changes — with the true role as `realRole` for the switcher's own admin check. Session-scoped, so it dies with the tab. **Rendering only**: RLS answers to `auth.uid()`, which this cannot touch, so a previewed welder sees the welder's navigation and dashboard over the admin's records. Good for layout and navigation, useless for confirming what another role can actually read — for that, sign in as one. New signups land inactive with no role and see a "Pending Approval" screen until an admin activates them.
 
 The auth state listener is subtle: it fires on `TOKEN_REFRESHED` and window focus too, so it only tears down the cached profile when the *user id actually changes*. Clearing it unconditionally used to flash "Pending Approval" and unmount pages mid-interaction. Preserve that behaviour when touching `AuthContext`.
 
