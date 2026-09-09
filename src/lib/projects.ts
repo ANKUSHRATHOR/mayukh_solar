@@ -22,6 +22,13 @@ export interface ProjectRow {
   inverter_brand: string;
   inverter_capacity: number;
   structure_type: string;
+  // Added by 20260907000200 so a project can hold the phase and wiring spec a
+  // lead already records; nullable, so older rows read as absent.
+  phase: string | null;
+  wiremake: string | null;
+  wire_size: string | null;
+  wire_material: string | null;
+  subsidy_amount: number | null;
   final_amount: number;
   discount: number | null;
   payment_type: 'cash' | 'loan';
@@ -176,4 +183,40 @@ export const projectIdentity = (project: ProjectRow) => {
     /** Single-line label for headings and page titles. */
     primary: kNumber ?? project.leads?.customer_name ?? project.consumer_name ?? 'Project',
   };
+};
+
+/** What `projects_kpis` returns. */
+export interface ProjectKpis {
+  /** False for roles that cannot read project_payments. */
+  payments_visible: boolean;
+  active: number;
+  awaiting_documents: number;
+  completed_this_month: number;
+  /** Null when payments are invisible — see the migration's note. */
+  blocked: number | null;
+  total_value: number;
+  balance_due: number | null;
+}
+
+/**
+ * The KPI row, in one round trip.
+ *
+ * Scoped by tab and search but deliberately NOT by stage: the tiles are
+ * themselves stage filters, so a tile has to count across stages or clicking it
+ * would show fewer rows than it promised. See
+ * supabase/migrations/20260907000000_projects_kpis.sql.
+ *
+ * `as any` because types.ts postdates the migration — the pattern CLAUDE.md
+ * documents for RPCs newer than the last generation.
+ */
+export const fetchProjectKpis = async (
+  tab: ProjectTab,
+  search: string
+): Promise<ProjectKpis> => {
+  const { data, error } = await supabase.rpc('projects_kpis' as any, {
+    _tab: tab,
+    _search: search.trim() || null,
+  });
+  if (error) throw new Error(error.message);
+  return data as unknown as ProjectKpis;
 };

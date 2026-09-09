@@ -200,7 +200,7 @@ const StaffDetailPage = () => {
           <>
             <SectionCard title="Contact details" icon={Phone}>
               <DetailGrid>
-                <DetailField label="Full name" value={staff.full_name} />
+                <DetailField label="Full name" value={staff.full_name} wide />
                 <DetailField
                   label="Mobile"
                   value={

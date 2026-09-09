@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { invokeApi } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { FileText, Loader2, ExternalLink, Printer, Download, Share2 } from 'lucide-react';
+import { FileText, Loader2, ExternalLink, Download, Share2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { fromProject } from '@/lib/quotationDocument';
+import { buildQuotationBody, buildQuotationHtml } from '@/lib/quotationTemplate';
+import { useQuotationContext } from '@/hooks/useQuotationContext';
+import { downloadQuotationPdf } from '@/lib/quotationPdf';
 
 interface Props {
   projectId: string;
@@ -34,6 +38,8 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
   const [viewerQ, setViewerQ] = useState<any | null>(null);
   const [viewerHtml, setViewerHtml] = useState<string>('');
   const [viewerLoading, setViewerLoading] = useState(false);
+  const [project, setProject] = useState<any | null>(null);
+  const quotationContext = useQuotationContext(open);
   const { toast } = useToast();
 
   const allowed = role === 'admin' || role === 'operator' || role === 'sales_person';
@@ -54,11 +60,14 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
     if (!open) return;
     loadHistory();
     (async () => {
+      // The document's bill of material comes from the project's own specs, so
+      // fetch the row rather than just its payment type.
       const { data: proj } = await supabase
         .from('projects')
-        .select('payment_type')
+        .select('*, leads(customer_name, mobile, address, village_city, district, state)')
         .eq('id', projectId)
         .maybeSingle();
+      setProject(proj);
       if ((proj as any)?.payment_type === 'loan') setQType('bank');
       else if ((proj as any)?.payment_type === 'cash') setQType('consumer');
 
@@ -79,23 +88,54 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
     if (!open) { setTab('history'); setViewerQ(null); setViewerHtml(''); }
   }, [open]);
 
+  /**
+   * The shared document for one stored quotation row.
+   *
+   * The `quotations` table keeps the number, the type and the chosen bank; the
+   * specs come from the project. Rendering here rather than asking the server
+   * for HTML is what makes this a real PDF instead of a print dialog.
+   */
+  const buildDoc = (q: any) => {
+    if (!project) return null;
+    const bank = banks.find((b) => b.id === (q?.bank_account_id ?? bankId)) ?? null;
+    return fromProject({
+      project: {
+        ...project,
+        // A quotation is a snapshot: prefer the amount it was raised at.
+        final_amount: Number(q?.total_amount ?? project.final_amount ?? 0),
+        payment_type: q?.quotation_type === 'bank' ? 'loan' : project.payment_type,
+      },
+      quotationNumber: q?.quotation_number ?? '',
+      createdAt: q?.created_at ?? null,
+      vendor: quotationContext.data?.vendor ?? null,
+      terms: quotationContext.data?.terms ?? [],
+      bomRows: quotationContext.data?.bomRows ?? [],
+      bankAccount: bank,
+    });
+  };
+
   const handleGenerate = async () => {
     setLoading(true);
     try {
+      // Still server-side: that route inserts the quotations row and mints the
+      // number. Its `html` is ignored — the document is rendered here so it
+      // matches the lead quotation and produces an actual PDF.
       const { data, error } = await invokeApi('generate-quotation', {
         body: { projectId, quotationType: qType, bankAccountId: bankId || null },
       });
       if (error) throw error;
-      if (!data?.html) throw new Error('No quotation generated');
 
-      const win = window.open('', '_blank');
-      if (win) {
-        win.document.write(data.html);
-        win.document.close();
-        setTimeout(() => win.print(), 300);
-      }
       await loadHistory();
       setTab('history');
+      const created = {
+        quotation_number: data?.quotation_number,
+        quotation_type: data?.quotation_type ?? qType,
+        bank_account_id: data?.bank_account_id ?? bankId,
+        total_amount: project?.final_amount,
+        created_at: new Date().toISOString(),
+      };
+      setViewerQ(created);
+      setViewerHtml(buildQuotationBody(buildDoc(created)!));
     } catch (err: any) {
       toast({ title: 'Error generating quotation', description: err.message, variant: 'destructive' });
     } finally {
@@ -103,37 +143,24 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
     }
   };
 
-  const openViewer = async (q: any) => {
-    setViewerQ(q); setViewerHtml(''); setViewerLoading(true);
-    try {
-      const { data, error } = await invokeApi('generate-quotation', { body: { quotationId: q.id } });
-      if (error) throw error;
-      setViewerHtml(data?.html || '');
-    } catch (e: any) {
-      toast({ title: 'Failed to open quotation', description: e.message, variant: 'destructive' });
-      setViewerQ(null);
-    } finally { setViewerLoading(false); }
+  const openViewer = (q: any) => {
+    setViewerQ(q);
+    const doc = buildDoc(q);
+    setViewerHtml(doc ? buildQuotationBody(doc) : '');
   };
 
-  const printViewer = () => {
-    const iframe = document.getElementById('qb-viewer-frame') as HTMLIFrameElement | null;
-    iframe?.contentWindow?.focus();
-    iframe?.contentWindow?.print();
+  /** A real PDF, from the same node the viewer shows. */
+  const downloadViewerPdf = () => {
+    const node = document.getElementById('qb-print-area');
+    if (!node || !viewerQ) return;
+    downloadQuotationPdf(node, viewerQ.quotation_number || 'quotation');
   };
 
   const openViewerNewTab = () => {
-    if (!viewerHtml) return;
+    const doc = viewerQ && buildDoc(viewerQ);
+    if (!doc) return;
     const w = window.open('', '_blank');
-    if (w) { w.document.write(viewerHtml); w.document.close(); }
-  };
-
-  const downloadViewer = () => {
-    if (!viewerQ) return;
-    const blob = new Blob([viewerHtml], { type: 'text/html;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${viewerQ.quotation_number || 'quotation'}.html`;
-    document.body.appendChild(a); a.click(); a.remove();
+    if (w) { w.document.write(buildQuotationHtml(doc)); w.document.close(); }
   };
 
   const shareViewer = async () => {
@@ -249,17 +276,19 @@ const QuotationButton = ({ projectId, size = 'sm', className }: Props) => {
               </DialogTitle>
               <div className="flex items-center gap-2 flex-wrap">
                 <Button size="sm" variant="outline" onClick={openViewerNewTab} disabled={!viewerHtml}><ExternalLink className="h-4 w-4 mr-1" />Open</Button>
-                <Button size="sm" variant="outline" onClick={printViewer} disabled={!viewerHtml}><Printer className="h-4 w-4 mr-1" />Print</Button>
-                <Button size="sm" variant="outline" onClick={downloadViewer} disabled={!viewerHtml}><Download className="h-4 w-4 mr-1" />Download</Button>
+                <Button size="sm" onClick={downloadViewerPdf} disabled={!viewerHtml}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
                 <Button size="sm" variant="outline" onClick={shareViewer}><Share2 className="h-4 w-4 mr-1" />Share</Button>
               </div>
             </div>
           </DialogHeader>
-          <div className="flex-1 bg-muted overflow-hidden">
+          <div className="flex-1 overflow-y-auto bg-muted p-6">
             {viewerLoading ? (
-              <div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
             ) : viewerHtml ? (
-              <iframe id="qb-viewer-frame" title="Quotation" srcDoc={viewerHtml} className="w-full h-full bg-white" />
+              // Rendered inline rather than in an iframe: html2pdf needs a node
+              // in this document to rasterise, and the document carries its own
+              // stylesheet so it is unaffected by the app's.
+              <div id="qb-print-area" className="mx-auto w-fit" dangerouslySetInnerHTML={{ __html: viewerHtml }} />
             ) : null}
           </div>
         </DialogContent>

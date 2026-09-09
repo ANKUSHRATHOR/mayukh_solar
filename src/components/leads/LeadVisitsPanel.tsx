@@ -17,7 +17,7 @@ import SectionCard from '@/components/common/SectionCard';
 import ErrorState from '@/components/common/ErrorState';
 import CompleteVisitDialog from './CompleteVisitDialog';
 import { cn } from '@/lib/utils';
-import { VISIT_OUTCOMES, fetchVisits, type SiteVisit } from '@/lib/visits';
+import { fetchVisits, outcomeLabel, type SiteVisit } from '@/lib/visits';
 
 interface Props {
   leadId: string;
@@ -31,9 +31,6 @@ interface Props {
    */
   variant?: 'card' | 'banner';
 }
-
-const outcomeLabel = (value: string | null) =>
-  VISIT_OUTCOMES.find((o) => o.value === value)?.label ?? value ?? '—';
 
 /**
  * Booked and completed site visits for a lead.

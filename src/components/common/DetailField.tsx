@@ -27,7 +27,7 @@ const DetailField = ({
   wide = false,
   className,
 }: DetailFieldProps) => (
-  <div className={cn('min-w-0', wide && 'sm:col-span-2 lg:col-span-3', className)}>
+  <div className={cn('min-w-0', wide && 'col-span-2 lg:col-span-3', className)}>
     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
       {label}
     </p>
@@ -42,7 +42,13 @@ const DetailField = ({
   </div>
 );
 
-/** Responsive grid sized for DetailField rows. */
+/**
+ * Responsive grid sized for DetailField rows.
+ *
+ * Two columns on a phone, not one. Most values here are short — a capacity, a
+ * brand, a date — and one per row turned six fields into a screenful of
+ * scrolling. Anything long enough to need the width says so with `wide`.
+ */
 export const DetailGrid = ({
   children,
   className,
@@ -50,7 +56,7 @@ export const DetailGrid = ({
   children: ReactNode;
   className?: string;
 }) => (
-  <div className={cn('grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3', className)}>
+  <div className={cn('grid grid-cols-2 gap-x-4 gap-y-4 sm:gap-x-6 lg:grid-cols-3', className)}>
     {children}
   </div>
 );

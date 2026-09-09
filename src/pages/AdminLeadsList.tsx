@@ -10,8 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2, Pencil } from 'lucide-react';
+import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2, Pencil, MoreVertical } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -696,18 +702,31 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           <div>
             <h1 className="text-2xl font-bold text-display text-foreground tracking-tight">Leads</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canManageLeads && (
-              <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)} className="border-primary/20 text-primary hover:bg-primary/5">
-                <Upload className="mr-1.5 h-4 w-4" /> Import Leads
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={exportRows} disabled={!filteredRows.length}>
-              <Download className="mr-1.5 h-4 w-4" /> Export CSV
-            </Button>
-            <Button onClick={() => navigate('/leads/new')} size="sm" className="bg-primary hover:bg-primary/95 text-primary-foreground shadow-sm">
+          {/* Create Lead is the one action people come here to take, so it is the
+              only accented control. Import and Export are occasional bulk-data
+              chores — they go behind the overflow menu rather than wrapping to a
+              second row on phones and competing with the primary on desktop. */}
+          <div className="flex shrink-0 items-center gap-2">
+            <Button onClick={() => navigate('/leads/new')} size="sm" className="h-9 flex-1 bg-primary text-primary-foreground shadow-sm hover:bg-primary/95 sm:flex-none">
               <PhoneCall className="mr-1.5 h-4 w-4" /> Create Lead
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="More lead actions">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canManageLeads && (
+                  <DropdownMenuItem onClick={() => setIsImportOpen(true)}>
+                    <Upload className="mr-2 h-4 w-4" /> Import Leads
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={exportRows} disabled={!filteredRows.length}>
+                  <Download className="mr-2 h-4 w-4" /> Export CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       )}
@@ -914,7 +933,10 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
             No leads found matching current filters.
           </div>
         ) : (
-          <div className="rounded-xl border overflow-hidden bg-card shadow-sm">
+          <>
+          {/* Desktop: the full column table. Hidden on phones, where seven
+              columns inside a horizontal scroller pushed Actions off-screen. */}
+          <div className="hidden md:block rounded-xl border overflow-hidden bg-card shadow-sm">
             {/* The body scrolls inside a viewport-height box instead of growing
                 the page, so the toolbar above and the pager below stay put and
                 the column headers remain visible while scrolling. */}
@@ -1086,6 +1108,191 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
               </table>
             </div>
           </div>
+
+          {/* Mobile: the same rows as stacked cards, matching the Site Visits
+              list. Same data, same handlers — only the layout differs. */}
+          <div className="space-y-2.5 md:hidden">
+            {canManageLeads && (
+              <label className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
+                <input
+                  type="checkbox"
+                  aria-label="Select all leads on this page"
+                  className="h-4 w-4 cursor-pointer rounded border-border"
+                  checked={filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id))}
+                  onChange={(e) =>
+                    setSelectedIds(
+                      e.target.checked ? new Set(filteredRows.map((r) => r.id)) : new Set()
+                    )
+                  }
+                />
+                Select all on this page
+              </label>
+            )}
+
+            {filteredRows.map((lead) => (
+              <div
+                key={lead.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/leads/${lead.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/leads/${lead.id}`);
+                  }
+                }}
+                className="cursor-pointer rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-colors hover:bg-muted/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                    {canManageLeads && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${lead.consumerName}`}
+                        className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-border"
+                        checked={selectedIds.has(lead.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(lead.id);
+                            else next.delete(lead.id);
+                            return next;
+                          });
+                        }}
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-xs font-bold text-foreground">
+                        {lead.kNumber || (
+                          <span className="font-sans font-normal text-muted-foreground/60">Not linked</span>
+                        )}
+                      </div>
+                      <div
+                        className="mt-1 truncate text-sm font-semibold text-foreground"
+                        title={lead.consumerName}
+                      >
+                        {lead.consumerName}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
+                        <a
+                          href={`tel:${lead.mobile}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                        >
+                          <Phone className="h-3 w-3 shrink-0" /> {lead.mobile}
+                        </a>
+                        {lead.email && (
+                          <span className="max-w-[150px] truncate text-muted-foreground/80" title={lead.email}>
+                            • {lead.email}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
+
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-border/50 pt-3">
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Status
+                    </dt>
+                    <dd className="mt-1">
+                      <Badge className={`${statusColor[lead.status] || statusColor.new} border-0 px-2 py-0.5 text-[11px] font-medium`}>
+                        {statusLabel(lead.status)}
+                      </Badge>
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Assigned Staff
+                    </dt>
+                    <dd className="mt-0.5 break-words text-xs font-medium text-foreground">
+                      {lead.assignedToName}
+                      {lead.assignedToRole && (
+                        <span className="block text-[10px] font-normal text-muted-foreground">
+                          {statusLabel(lead.assignedToRole)}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                  <div className="col-span-2 min-w-0">
+                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Last Updated
+                    </dt>
+                    <dd className="mt-0.5 text-xs text-foreground">
+                      {formatDateTime(lead.lastActivityAt)}
+                      <span className="block truncate text-[10px] text-muted-foreground" title={lead.lastNote}>
+                        Note: {lead.lastNote}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+
+                <div
+                  className="mt-3 flex items-center gap-2 border-t border-border/50 pt-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {lead.mobile && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 border-primary/20 bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground"
+                    >
+                      <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.consumerName}`}>
+                        <Phone className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  )}
+                  {lead.kNumber && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 rounded-md hover:bg-muted"
+                      title="Sync with Discom"
+                      aria-label={`Sync ${lead.consumerName} with Discom`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSyncKno(lead.id, lead.kNumber);
+                      }}
+                      disabled={syncingKno === lead.id}
+                    >
+                      <RefreshCw className={`h-4 w-4 text-muted-foreground ${syncingKno === lead.id ? 'animate-spin text-primary' : ''}`} />
+                    </Button>
+                  )}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9 rounded-md hover:bg-muted"
+                    title={lead.kNumber ? 'Edit K Number' : 'Add K Number'}
+                    aria-label={`Edit K Number for ${lead.consumerName}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setKnoTarget(lead);
+                      setKnoDraft(lead.kNumber ?? '');
+                    }}
+                  >
+                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  {canManageLeads && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto h-9 w-9 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      title="Move to Cancelled Bin"
+                      aria-label={`Delete ${lead.consumerName}`}
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(lead); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
         )}
 
         {!loading && total > 0 && (

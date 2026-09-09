@@ -32,27 +32,73 @@ export interface SiteVisit {
   status_updated_to: string | null;
 }
 
-/** Outcomes a surveyor can record. */
-export const VISIT_OUTCOMES = [
-  { value: 'feasible', label: 'Site feasible — proceed to quotation' },
-  { value: 'feasible_with_changes', label: 'Feasible with changes' },
-  { value: 'not_feasible', label: 'Not feasible' },
-  { value: 'customer_unavailable', label: 'Customer unavailable' },
-  { value: 'revisit_required', label: 'Revisit required' },
+/**
+ * Outcomes a surveyor can record, phrased as the decision the customer actually
+ * made on site rather than an engineering verdict on the roof.
+ *
+ * `requiresDocuments` is the gate on the paperwork below. Only a customer who
+ * has agreed to go ahead needs their Aadhaar and bill collected — asking for
+ * them when the customer just declined blocks the surveyor from closing the
+ * visit at all, so they either fake an upload or leave the visit open.
+ */
+export interface VisitOutcome {
+  value: string;
+  label: string;
+  /** Blocks completion until every required document is on file. */
+  requiresDocuments: boolean;
+  /** Collects a new date and books the follow-on visit. */
+  reschedules?: boolean;
+}
+
+export const VISIT_OUTCOMES: readonly VisitOutcome[] = [
+  { value: 'ready_to_proceed', label: 'Customer ready to move forward', requiresDocuments: true },
+  { value: 'not_interested', label: 'Customer does not want to proceed', requiresDocuments: false },
+  { value: 'follow_up_needed', label: 'Needs another follow-up', requiresDocuments: false },
+  { value: 'revisit_required', label: 'Another site visit needed', requiresDocuments: false },
+  { value: 'reschedule', label: 'Change the visit date', requiresDocuments: false, reschedules: true },
 ] as const;
+
+/**
+ * Labels for outcomes recorded before the list above replaced the old
+ * feasibility wording. Completed visits keep whatever value they were saved
+ * with, so without these the history renders raw enum strings.
+ */
+const LEGACY_OUTCOME_LABELS: Record<string, string> = {
+  feasible: 'Site feasible — proceed to quotation',
+  feasible_with_changes: 'Feasible with changes',
+  not_feasible: 'Not feasible',
+  customer_unavailable: 'Customer unavailable',
+};
+
+/** Display label for any outcome, current or historical. */
+export const outcomeLabel = (value: string | null | undefined): string =>
+  VISIT_OUTCOMES.find((o) => o.value === value)?.label ??
+  (value ? LEGACY_OUTCOME_LABELS[value] ?? value : '—');
+
+export const findOutcome = (value: string | null | undefined): VisitOutcome | undefined =>
+  VISIT_OUTCOMES.find((o) => o.value === value);
+
+/** Whether this outcome makes the required documents mandatory. */
+export const outcomeRequiresDocuments = (value: string | null | undefined): boolean =>
+  findOutcome(value)?.requiresDocuments ?? false;
 
 /** Lead status each outcome moves the lead to. */
 export const OUTCOME_TO_LEAD_STATUS: Record<string, string> = {
-  feasible: 'interested',
-  feasible_with_changes: 'interested',
-  not_feasible: 'not_interested',
-  customer_unavailable: 'follow_up',
+  ready_to_proceed: 'interested',
+  not_interested: 'not_interested',
+  follow_up_needed: 'follow_up',
   revisit_required: 'follow_up',
+  // A rescheduled visit is still an outstanding visit, so the lead stays where
+  // booking put it rather than falling back to a generic follow-up.
+  reschedule: 'visit_created',
 };
 
 /**
  * Documents a surveyor is expected to collect on site. These attach to the
  * lead, not a project — the project does not exist yet at this stage.
+ *
+ * `required` is conditional: it applies only when the outcome
+ * `requiresDocuments`. See VISIT_OUTCOMES.
  */
 export const VISIT_DOCUMENTS: { type: DocumentType; label: string; required: boolean }[] = [
   { type: 'electricity_bill', label: 'Electricity Bill', required: true },

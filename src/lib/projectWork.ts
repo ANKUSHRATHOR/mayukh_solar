@@ -203,3 +203,61 @@ export const mapsLinkFor = (job: TradeJob): string => {
     .join(', ');
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 };
+
+/* ─────────────────────────── assignment ─────────────────────────── */
+
+export interface TradeStaff {
+  user_id: string;
+  full_name: string;
+  mobile: string | null;
+}
+
+/**
+ * Active welders or electricians who can be assigned.
+ *
+ * Goes through `get_assignable_trade_staff` rather than joining `user_roles` in
+ * the client, which is what the operator page and the finalization form both do
+ * today. `user_roles` SELECT is admin-only, or your own row — so that join
+ * returns an **empty list for an operator**, the very role that does the
+ * assigning, and the dropdown silently has nothing in it.
+ */
+export const fetchAssignableTradeStaff = async (trade: Trade): Promise<TradeStaff[]> => {
+  const { data, error } = await supabase.rpc('get_assignable_trade_staff' as any, {
+    _trade: trade,
+  });
+  if (error) throw new Error(error.message);
+  return (data as unknown as TradeStaff[]) ?? [];
+};
+
+/**
+ * Assigns a trade to a project, or clears it with `null`.
+ *
+ * A plain column write is enough: `notify_worker_assigned` and
+ * `log_project_assignment` are AFTER UPDATE triggers, so the worker is notified
+ * and the change audited server-side.
+ *
+ * `.select('id')` is load-bearing — PostgREST answers 200 with an empty array
+ * when a policy filters the row out, so without it an RLS refusal looks exactly
+ * like success.
+ */
+export const assignTrade = async (
+  projectId: string,
+  trade: Trade,
+  userId: string | null
+): Promise<void> => {
+  const column = trade === 'welder' ? 'assigned_welder_id' : 'assigned_electrician_id';
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ [column]: userId } as any)
+    .eq('id', projectId)
+    .select('id');
+
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error('You do not have permission to change this assignment.');
+  }
+};
+
+/** Who may assign trades. Mirrors the projects UPDATE policies. */
+export const canAssignTrades = (role: string | null | undefined): boolean =>
+  role === 'admin' || role === 'operator';

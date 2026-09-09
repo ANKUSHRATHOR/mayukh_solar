@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { Eye, FileText, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Eye, FileText, MoreVertical, Pencil, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,6 +27,8 @@ import ErrorState from '@/components/common/ErrorState';
 import QuotationPreviewDialog from '@/components/leads/QuotationPreviewDialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { sendQuotationNotification } from '@/lib/whatsapp';
 import { toneClasses } from '@/lib/statusMeta';
 import {
   deleteLeadQuotation,
@@ -40,6 +42,11 @@ interface Props {
   leadId: string;
   /** Opens the quotation dialog prefilled for this quote. Omit to hide Edit. */
   onEdit?: (quote: LeadQuotation) => void;
+  /** Needed to send on WhatsApp. Omit either one to hide Send. */
+  customerName?: string | null;
+  customerMobile?: string | null;
+  /** Called after a successful send, so the page can refresh the lead status. */
+  onSent?: () => void;
 }
 
 const toneFor = (status: string | null | undefined) => {
@@ -58,14 +65,70 @@ const toneFor = (status: string | null | undefined) => {
 /**
  * Quotations raised for a lead.
  *
- * Shown on the visit page so a surveyor can see what has already been quoted.
- * Reads the same `leads.quotation_details` array as the lead record, and the
- * row actions mirror the lead page's (view / edit / delete) — creation stays
- * on the lead record, so a visit never mints a competing quotation.
+ * Shown on both the lead and visit pages, reading the same
+ * `leads.quotation_details` array, with the same row actions in both places:
+ * view, send on WhatsApp, edit, delete.
+ *
+ * Sending lives here rather than inside the create dialog so a quotation can
+ * be re-sent, and so the lead page can send at all.
  */
-const LeadQuotationsPanel = ({ leadId, onEdit }: Props) => {
+const LeadQuotationsPanel = ({
+  leadId,
+  onEdit,
+  customerName,
+  customerMobile,
+  onSent,
+}: Props) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const [sending, setSending] = useState<string | null>(null);
+  const canSend = Boolean(customerName && customerMobile);
+
+  /**
+   * Sending is deliberate and separate from creating. It used to ride along
+   * with the create dialog on the visit page only, which meant the lead page
+   * could not send at all and a quotation could never be re-sent.
+   */
+  const sendOnWhatsApp = async (q: LeadQuotation) => {
+    if (!customerName || !customerMobile) return;
+    setSending(q.quotation_number);
+    try {
+      const result = await sendQuotationNotification(
+        customerName,
+        customerMobile,
+        q.quotation_number,
+        quotedPrice(q),
+        q.capacity_kw ? `${q.capacity_kw} kW` : 'solar'
+      );
+
+      if (!result.success) {
+        toast({
+          title: 'Not sent',
+          description:
+            result.error ??
+            'WhatsApp is not configured. Set it up in Admin Settings and try again.',
+          variant: 'destructive',
+          duration: 12000,
+        });
+        return;
+      }
+
+      await supabase.from('leads').update({ status: 'quotation_sent' as any }).eq('id', leadId);
+      queryClient.invalidateQueries({ queryKey: ['lead-quotations', leadId] });
+      toast({ title: 'Sent on WhatsApp', description: `Delivered to ${customerMobile}.` });
+      onSent?.();
+    } catch (err) {
+      toast({
+        title: 'Could not send the quotation',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setSending(null);
+    }
+  };
+
 
   const [previewQuote, setPreviewQuote] = useState<LeadQuotation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LeadQuotation | null>(null);
@@ -175,6 +238,16 @@ const LeadQuotationsPanel = ({ leadId, onEdit }: Props) => {
                         >
                           <Eye className="h-4 w-4 text-muted-foreground" /> View
                         </DropdownMenuItem>
+                        {canSend && (
+                          <DropdownMenuItem
+                            onClick={() => void sendOnWhatsApp(q)}
+                            disabled={sending === q.quotation_number}
+                            className="gap-2 cursor-pointer text-sm"
+                          >
+                            <Send className="h-4 w-4 text-muted-foreground" />
+                            {sending === q.quotation_number ? 'Sending…' : 'Send on WhatsApp'}
+                          </DropdownMenuItem>
+                        )}
                         {onEdit && (
                           <DropdownMenuItem
                             onClick={() => onEdit(q)}

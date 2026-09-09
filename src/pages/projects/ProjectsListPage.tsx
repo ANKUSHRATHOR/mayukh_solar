@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Briefcase, Download, Landmark, Wallet } from 'lucide-react';
+import { AlertTriangle, Briefcase, CheckCircle2, Download, FileText, IndianRupee, Landmark, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,6 +23,7 @@ import { defaultSort } from '@/lib/tableQuery';
 import { downloadCsv } from '@/lib/exportCsv';
 import { allProjectStageMeta, PROJECT_STAGES } from '@/lib/projectStages';
 import {
+  fetchProjectKpis,
   fetchProjectTabCounts,
   fetchProjectsPage,
   projectIdentity,
@@ -30,11 +31,44 @@ import {
   type ProjectTab,
 } from '@/lib/projects';
 import { formatMoney } from '@/lib/payments';
+import { useAuth } from '@/contexts/AuthContext';
+import StatCard from '@/components/dashboard/StatCard';
 
-const ProjectsListPage = () => {
+interface Props {
+  /**
+   * Rendered inside the Admin Dashboard's Projects tab, which supplies its own
+   * page chrome — same convention as AdminLeadsList and Tasks.
+   */
+  isEmbedded?: boolean;
+}
+
+const ProjectsListPage = ({ isEmbedded = false }: Props) => {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<ProjectTab>('all');
-  const [stage, setStage] = useState<string>('');
+  const { role } = useAuth();
+
+  // Tab and stage live in the URL so a KPI tile, a dashboard card or a bookmark
+  // can point at a filtered list, and the back button steps between them.
+  // Both are validated on read: an unvalidated ?stage=foo reaches
+  // .eq('status', 'foo') and PostgREST rejects the enum cast with a 400.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const tab: ProjectTab =
+    rawTab === 'cash' || rawTab === 'loan' ? rawTab : 'all';
+  const rawStage = searchParams.get('stage') ?? '';
+  const stage = PROJECT_STAGES.some((s) => s.stage === rawStage) ? rawStage : '';
+
+  const setFilters = (next: { tab?: ProjectTab; stage?: string }) => {
+    const params = new URLSearchParams(searchParams);
+    const nextTab = next.tab ?? tab;
+    const nextStage = next.stage ?? stage;
+    if (nextTab === 'all') params.delete('tab');
+    else params.set('tab', nextTab);
+    if (!nextStage) params.delete('stage');
+    else params.set('stage', nextStage);
+    setSearchParams(params, { replace: true });
+  };
+  const setTab = (value: ProjectTab) => setFilters({ tab: value });
+  const setStage = (value: string) => setFilters({ stage: value });
 
   const filters = useMemo(() => ({ tab, stage: stage || undefined }), [tab, stage]);
 
@@ -50,6 +84,15 @@ const ProjectsListPage = () => {
     queryKey: ['projects', 'tab-counts'],
     queryFn: fetchProjectTabCounts,
   });
+
+  // One RPC for all six tiles. Six more head counts on top of the page query is
+  // the shape that blew the statement timeout on the leads screen — see
+  // supabase/migrations/20260802000000_leads_stage_counts.sql.
+  const kpiQuery = useQuery({
+    queryKey: ['projects', 'kpis', tab, table.search],
+    queryFn: () => fetchProjectKpis(tab, table.search),
+  });
+  const kpis = kpiQuery.data;
 
   const columns: DataTableColumn<ProjectRow>[] = [
     {
@@ -155,23 +198,88 @@ const ProjectsListPage = () => {
     { value: 'loan', label: 'Loan Projects', count: counts?.loan },
   ];
 
+  const Shell = isEmbedded
+    ? ({ children }: { children: React.ReactNode }) => (
+        <div className="space-y-5">{children}</div>
+      )
+    : PageContainer;
+
   return (
-    <PageContainer>
-      <PageHeader
-        title="Projects"
-        icon={Briefcase}
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={exportCurrentPage}
-            disabled={table.rows.length === 0}
-          >
-            <Download className="h-4 w-4" /> Export page
-          </Button>
-        }
-      />
+    <Shell>
+      {!isEmbedded && (
+        <PageHeader
+          title="Projects"
+          icon={Briefcase}
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={exportCurrentPage}
+              disabled={table.rows.length === 0}
+            >
+              <Download className="h-4 w-4" /> Export page
+            </Button>
+          }
+        />
+      )}
+
+      {/* Tiles are clickable filters, the pattern OperatorDashboard already uses.
+          They reflect the tab and search but not the stage — they are the stage
+          filter, so they must count across stages. Hidden entirely on error:
+          this is decoration around the list and must not take the page down. */}
+      {kpis && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
+          <StatCard
+            title="Active projects"
+            value={kpis.active}
+            icon={Briefcase}
+            accent="primary"
+            onClick={() => setStage('')}
+          />
+          <StatCard
+            title="Awaiting documents"
+            value={kpis.awaiting_documents}
+            icon={FileText}
+            accent="warning"
+            onClick={() => setStage('documents_pending')}
+          />
+          <StatCard
+            title="Completed this month"
+            value={kpis.completed_this_month}
+            icon={CheckCircle2}
+            accent="success"
+            onClick={() => setStage('project_completed')}
+          />
+          {/* Payment-derived: absent, not zero, for roles that cannot read
+              project_payments — a wrong number here is worse than none. */}
+          {kpis.payments_visible && kpis.blocked !== null && (
+            <StatCard
+              title="Blocked on bank"
+              value={kpis.blocked}
+              icon={AlertTriangle}
+              accent="destructive"
+              change={kpis.blocked > 0 ? 'Awaiting first installment' : 'None waiting'}
+              changeType={kpis.blocked > 0 ? 'down' : 'neutral'}
+              onClick={() => setFilters({ tab: 'loan', stage: '' })}
+            />
+          )}
+          <StatCard
+            title="Total value"
+            value={formatMoney(kpis.total_value)}
+            icon={IndianRupee}
+            accent="info"
+          />
+          {kpis.payments_visible && kpis.balance_due !== null && (
+            <StatCard
+              title="Balance due"
+              value={formatMoney(kpis.balance_due)}
+              icon={Wallet}
+              accent="warning"
+            />
+          )}
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as ProjectTab)}>
         <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
@@ -216,6 +324,7 @@ const ProjectsListPage = () => {
       />
 
       <DataTable
+        layout="cards"
         table={table}
         columns={columns}
         rowKey={(p) => p.id}
@@ -232,7 +341,7 @@ const ProjectsListPage = () => {
       />
 
       <TablePagination table={table} entityLabel="projects" />
-    </PageContainer>
+    </Shell>
   );
 };
 

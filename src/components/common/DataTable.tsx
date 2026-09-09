@@ -1,6 +1,14 @@
 import { ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ChevronsUpDown, ChevronRight, LucideIcon } from 'lucide-react';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import {
   Table,
   TableBody,
   TableCell,
@@ -47,6 +55,11 @@ interface DataTableProps<T> {
   emptyDescription?: string;
   emptyIcon?: LucideIcon;
   emptyAction?: ReactNode;
+  /**
+   * `auto` (default) is a table on desktop and cards below md.
+   * `cards` uses the card layout at every width, in a responsive grid.
+   */
+  layout?: 'auto' | 'cards';
   className?: string;
 }
 
@@ -80,6 +93,7 @@ function DataTable<T>({
   emptyDescription,
   emptyIcon,
   emptyAction,
+  layout = 'auto',
   className,
 }: DataTableProps<T>) {
   const { rows, isLoading, isFetching, error, refetch, sort, toggleSort, isSearching } = table;
@@ -89,7 +103,7 @@ function DataTable<T>({
   }
 
   if (isLoading) {
-    return <LoadingRows columns={columns} />;
+    return <LoadingRows columns={columns} layout={layout} />;
   }
 
   if (rows.length === 0) {
@@ -107,6 +121,16 @@ function DataTable<T>({
     );
   }
 
+  const sortableColumns = columns.filter((c) => c.sortKey);
+  // A list can be sorted by a column it doesn't display — Projects defaults to
+  // created_at. The table layout hid that harmlessly; a Select would just show
+  // blank, so the current order gets an entry of its own.
+  const sortOptions: { value: string; label: string }[] = [
+    ...(sort.column && !sortableColumns.some((c) => c.sortKey === sort.column)
+      ? [{ value: sort.column, label: 'Default order' }]
+      : []),
+    ...sortableColumns.map((c) => ({ value: c.sortKey!, label: c.header })),
+  ];
   const visibleOnMobile = columns.filter((c) => c.mobile !== 'hidden');
   const titleColumn = visibleOnMobile.find((c) => c.mobile === 'title') ?? visibleOnMobile[0];
   const subtitleColumn = visibleOnMobile.find((c) => c.mobile === 'subtitle');
@@ -119,7 +143,8 @@ function DataTable<T>({
       {/* Dim during background refetches so paging reads as "loading" without
           tearing the current page down. */}
       <div className={cn('transition-opacity', isFetching && 'pointer-events-none opacity-60')}>
-        {/* Desktop */}
+        {/* Desktop table — omitted entirely when the caller asked for cards */}
+        {layout === 'auto' && (
         <div className="hidden overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-card md:block">
           <Table>
             <TableHeader>
@@ -194,9 +219,58 @@ function DataTable<T>({
             </TableBody>
           </Table>
         </div>
+        )}
 
-        {/* Mobile */}
-        <div className="space-y-2.5 md:hidden">
+        {/* Cards. In `cards` mode they are the only layout, so they lay out in a
+            grid on wider screens rather than one very wide card per row, and the
+            sort control moves here — the table headers that normally carry it
+            are gone. */}
+        {layout === 'cards' && sortableColumns.length > 0 && (
+          <div className="mb-2.5 flex items-center justify-end gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Sort
+            </span>
+            <Select
+              value={sort.column ?? ''}
+              onValueChange={(value) => toggleSort(value)}
+            >
+              <SelectTrigger className="h-8 w-[160px] text-xs" aria-label="Sort by">
+                <SelectValue placeholder="Choose a field" />
+              </SelectTrigger>
+              <SelectContent>
+                {sortOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => sort.column && toggleSort(sort.column)}
+              disabled={!sort.column}
+              aria-label={sort.direction === 'asc' ? 'Sort descending' : 'Sort ascending'}
+              title={sort.direction === 'asc' ? 'Ascending' : 'Descending'}
+            >
+              {sort.direction === 'asc' ? (
+                <ArrowUp className="h-4 w-4" />
+              ) : (
+                <ArrowDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        )}
+
+        <div
+          className={cn(
+            layout === 'cards'
+              ? 'grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3'
+              : 'space-y-2.5 md:hidden'
+          )}
+        >
           {rows.map((row) => (
             <div
               key={rowKey(row)}
@@ -257,8 +331,15 @@ function DataTable<T>({
   );
 }
 
-const LoadingRows = <T,>({ columns }: { columns: DataTableColumn<T>[] }) => (
+const LoadingRows = <T,>({
+  columns,
+  layout = 'auto',
+}: {
+  columns: DataTableColumn<T>[];
+  layout?: 'auto' | 'cards';
+}) => (
   <div>
+    {layout === 'auto' && (
     <div className="hidden overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card md:block">
       <div className="flex gap-4 border-b border-border/60 px-4 py-3">
         {columns.map((col) => (
@@ -273,8 +354,13 @@ const LoadingRows = <T,>({ columns }: { columns: DataTableColumn<T>[] }) => (
         </div>
       ))}
     </div>
-    <div className="space-y-2.5 md:hidden">
-      {Array.from({ length: 4 }).map((_, i) => (
+    )}
+    <div
+      className={cn(
+        layout === 'cards' ? 'grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-2.5 md:hidden'
+      )}
+    >
+      {Array.from({ length: layout === 'cards' ? 6 : 4 }).map((_, i) => (
         <div key={i} className="rounded-2xl border border-border/70 bg-card p-4 shadow-card">
           <Skeleton className="h-4 w-2/3" />
           <Skeleton className="mt-2 h-3 w-1/3" />

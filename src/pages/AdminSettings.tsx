@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { MapPin, FileText, Building2, Plus, Trash2, Save, Landmark, Star, Settings, MessageCircle, Copy, Link, Shield } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchSystemConfig } from '@/lib/systemConfig';
+import type { BomTemplateRow } from '@/lib/quotationDocument';
 import { apiEndpointUrl } from '@/lib/apiClient';
 
 const AdminSettings = () => {
@@ -103,11 +104,44 @@ const AdminSettings = () => {
   });
   const [v, setV] = useState<any>({});
   const vRow = { ...vendor, ...v };
+  const [uploading, setUploading] = useState<'logo' | 'signature' | null>(null);
+
+  /**
+   * Uploads a letterhead logo or a signature to the public `branding` bucket.
+   *
+   * Public rather than signed: html2canvas fetches these while rasterising the
+   * quotation, and a signed URL would expire mid-document.
+   */
+  const uploadBranding = async (kind: 'logo' | 'signature', file: File) => {
+    setUploading(kind);
+    try {
+      const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+      const path = `${kind}.${ext}`;
+      const { error } = await supabase.storage
+        .from('branding')
+        .upload(path, file, { upsert: true, cacheControl: '3600' });
+      if (error) throw new Error(error.message);
+      const { data } = supabase.storage.from('branding').getPublicUrl(path);
+      // Cache-bust so a replaced file is not served from the old URL.
+      setV((prev: any) => ({ ...prev, [`${kind}_url`]: `${data.publicUrl}?v=${Date.now()}` }));
+      toast({ title: `${kind === 'logo' ? 'Logo' : 'Signature'} uploaded`, description: 'Save the vendor profile to apply it.' });
+    } catch (err) {
+      toast({
+        title: 'Upload failed',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(null);
+    }
+  };
+
   const saveVendor = async () => {
     const payload: any = {
       firm_name: vRow.firm_name, gstin: vRow.gstin || null, mobile: vRow.mobile || null, email: vRow.email || null,
       address: vRow.address || null, bank_name: vRow.bank_name || null, account_no: vRow.account_no || null,
       ifsc: vRow.ifsc || null, account_type: vRow.account_type || null, license_no: vRow.license_no || null,
+      logo_url: vRow.logo_url || null, signature_url: vRow.signature_url || null,
       is_default: true,
     };
     if (vendor?.id) {
@@ -211,6 +245,42 @@ const AdminSettings = () => {
     }
   };
 
+  /**
+   * The standing rows of the quotation's bill of material — the components that
+   * repeat on every quote. Brands like Havells and Schneider change, so they are
+   * settings rather than template code. The first three rows are generated from
+   * each quotation's own specs and are not editable here.
+   */
+  const { data: bomConfig } = useQuery({
+    queryKey: ['quotation-bom-rows'],
+    queryFn: () => fetchSystemConfig<BomTemplateRow[]>('quotation_bom_rows'),
+  });
+  const [bomRows, setBomRows] = useState<BomTemplateRow[] | null>(null);
+  const bomList: BomTemplateRow[] = bomRows ?? (Array.isArray(bomConfig) ? bomConfig : []);
+
+  const saveBom = async () => {
+    const clean = bomList
+      .map((r) => ({
+        description: r.description.trim(),
+        spec: r.spec.trim(),
+        qty: r.qty.trim(),
+      }))
+      .filter((r) => r.description);
+
+    const { error } = await supabase.from('system_configs' as any).upsert({
+      key: 'quotation_bom_rows',
+      value: clean,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      toast({ title: 'Failed to save', description: error.message, variant: 'destructive' });
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ['quotation-bom-rows'] });
+    qc.invalidateQueries({ queryKey: ['quotation-context'] });
+    toast({ title: 'Bill of material saved' });
+  };
+
   // WhatsApp Integration Settings
   const { data: whatsappConfig } = useQuery({
     queryKey: ['whatsapp-config'],
@@ -266,6 +336,7 @@ const AdminSettings = () => {
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="geofences"><MapPin className="h-4 w-4 mr-1" />Geofences</TabsTrigger>
           <TabsTrigger value="terms"><FileText className="h-4 w-4 mr-1" />T&amp;C Templates</TabsTrigger>
+          <TabsTrigger value="bom"><FileText className="h-4 w-4 mr-1" />Bill of Material</TabsTrigger>
           <TabsTrigger value="vendor"><Building2 className="h-4 w-4 mr-1" />Vendor Profile</TabsTrigger>
           <TabsTrigger value="banks"><Landmark className="h-4 w-4 mr-1" />Bank Accounts</TabsTrigger>
           <TabsTrigger value="dropdowns"><Settings className="h-4 w-4 mr-1" />Plant Dropdowns</TabsTrigger>
@@ -337,6 +408,66 @@ const AdminSettings = () => {
           </div>
         </TabsContent>
 
+        {/* Standing bill-of-material rows, beside the T&C they ship with. */}
+        <TabsContent value="bom" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Quotation bill of material</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                These rows appear on every quotation after the panel, structure and
+                inverter, which are taken from each quotation&rsquo;s own specification.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {bomList.map((row, i) => (
+                <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1.1fr_1.6fr_0.6fr_auto]">
+                  <Input
+                    value={row.description}
+                    placeholder="Description"
+                    onChange={(e) =>
+                      setBomRows(bomList.map((r, j) => (j === i ? { ...r, description: e.target.value } : r)))
+                    }
+                  />
+                  <Input
+                    value={row.spec}
+                    placeholder="Make / specification"
+                    onChange={(e) =>
+                      setBomRows(bomList.map((r, j) => (j === i ? { ...r, spec: e.target.value } : r)))
+                    }
+                  />
+                  <Input
+                    value={row.qty}
+                    placeholder="Qty"
+                    onChange={(e) =>
+                      setBomRows(bomList.map((r, j) => (j === i ? { ...r, qty: e.target.value } : r)))
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label={`Remove ${row.description || 'row'}`}
+                    onClick={() => setBomRows(bomList.filter((_, j) => j !== i))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <div className="flex gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  onClick={() => setBomRows([...bomList, { description: '', spec: '', qty: '' }])}
+                >
+                  Add row
+                </Button>
+                <Button onClick={saveBom} className="gradient-primary text-primary-foreground">
+                  <Save className="h-4 w-4 mr-1" /> Save bill of material
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="vendor" className="space-y-4">
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base">Default vendor profile (used in quotations)</CardTitle></CardHeader>
@@ -355,6 +486,49 @@ const AdminSettings = () => {
                 <Label>Address</Label>
                 <Textarea rows={2} value={vRow?.address ?? ''} onChange={(e) => setV({ ...v, address: e.target.value })} />
               </div>
+
+              {/* Both are optional: the quotation letterhead falls back to a
+                  brand initial, and the signature block to a printed rule. */}
+              {(['logo', 'signature'] as const).map((kind) => (
+                <div key={kind} className="space-y-1.5">
+                  <Label className="capitalize">{kind} image</Label>
+                  <div className="flex items-center gap-3">
+                    {vRow?.[`${kind}_url`] ? (
+                      <img
+                        src={vRow[`${kind}_url`]}
+                        alt=""
+                        className="h-12 w-12 rounded border border-border object-contain bg-background"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded border border-dashed border-border text-[10px] text-muted-foreground">
+                        None
+                      </div>
+                    )}
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      className="h-9 text-xs"
+                      disabled={uploading !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void uploadBranding(kind, file);
+                        e.target.value = '';
+                      }}
+                    />
+                    {vRow?.[`${kind}_url`] && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 shrink-0 text-xs"
+                        onClick={() => setV({ ...v, [`${kind}_url`]: '' })}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
               <div className="md:col-span-2">
                 <Button onClick={saveVendor} className="gradient-primary text-primary-foreground"><Save className="h-4 w-4 mr-1" /> Save vendor</Button>
               </div>

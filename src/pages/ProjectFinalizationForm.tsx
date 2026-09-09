@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { coerceStructureType, parseUnit } from '@/lib/plantDetails';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -85,7 +86,7 @@ const ProjectFinalizationForm = () => {
 
       if (error || !data) {
         toast({ title: 'Project not found', variant: 'destructive' });
-        navigate('/admin/projects');
+        navigate('/projects');
         return;
       }
 
@@ -141,10 +142,17 @@ const ProjectFinalizationForm = () => {
             quote = data.quotation_details;
           }
           
-          const rawCapacity = quote.capacity_kw ? String(quote.capacity_kw) : (data.kw_interest ? String(data.kw_interest) : (plant.inverter_wt ? String(plant.inverter_wt).replace(/[^0-9.]/g, '') : ''));
-          const rawPanelWatt = quote.panel_watt ? String(quote.panel_watt) : (plant.panel_wt ? String(plant.panel_wt).replace(/[^0-9.]/g, '') : '');
-          const rawPanelQty = quote.panel_qty ? String(quote.panel_qty) : (plant.panel_qty ? String(plant.panel_qty) : '');
-          const rawInvCapacity = quote.inverter_capacity ? String(quote.inverter_capacity) : (plant.inverter_wt ? String(plant.inverter_wt).replace(/[^0-9.]/g, '') : '');
+          // parseUnit rather than a local regex: the lead stores "540W" and
+          // "3 kW", and each place that stripped units its own way got it
+          // subtly wrong. See src/lib/plantDetails.ts.
+          const num = (v: unknown) => {
+            const parsed = parseUnit(v);
+            return parsed === null ? '' : String(parsed);
+          };
+          const rawCapacity = num(quote.capacity_kw) || num(data.kw_interest) || num(plant.inverter_wt);
+          const rawPanelWatt = num(quote.panel_watt) || num(plant.panel_wt);
+          const rawPanelQty = num(quote.panel_qty) || num(plant.panel_qty);
+          const rawInvCapacity = num(quote.inverter_capacity) || num(plant.inverter_wt);
           
           setForm({
             k_number: data.k_number || '',
@@ -154,7 +162,10 @@ const ProjectFinalizationForm = () => {
             panel_brand: quote.panel_brand || plant.panel_make || '',
             inverter_capacity: rawInvCapacity || rawCapacity,
             inverter_brand: quote.inverter_brand || plant.inverter || '',
-            structure_type: quote.structure_type || plant.structure_type_gauge_make || '',
+            structure_type:
+              coerceStructureType(quote.structure_type) ??
+              coerceStructureType(plant.structure_type_gauge_make) ??
+              '',
             final_amount: quote.quote_price ? String(quote.quote_price) : (plant.total_cost ? String(plant.total_cost) : ''),
             discount: plant.discount_amount ? String(plant.discount_amount) : '',
             payment_type: '',
