@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { canBulkAssignLeads, canBinLeads } from '@/lib/capabilities';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -543,7 +544,13 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
    * Everything else on this page is scoped by RLS and safe for any role that
    * has the CRM module.
    */
-  const canManageLeads = role === 'admin';
+  // Two different rights, previously collapsed into one admin check.
+  // bulk_assign_leads permits admin OR operator, so an operator was being
+  // denied a capability the database grants; bulk_bin_leads and the hard delete
+  // stay admin-only. Selection exists to serve either.
+  const canAssign = canBulkAssignLeads(role);
+  const canBin = canBinLeads(role);
+  const canManageLeads = canAssign || canBin;
 
   /** Anyone a lead can sit with — telecallers and sales reps. */
   const assignableStaff = useMemo(
@@ -791,6 +798,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
             <div className="flex items-center gap-2">
               {/* Picker and its action are joined into one segmented control, so the
                   assign flow reads as a single thing rather than two loose buttons. */}
+              {canAssign && (
               <div className="flex flex-1 sm:flex-none">
                 <Select value={bulkAssignee} onValueChange={setBulkAssignee}>
                   <SelectTrigger className="h-9 w-full rounded-r-none text-sm sm:w-[220px]">
@@ -816,9 +824,12 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                   {bulkAssigning ? 'Assigning…' : 'Assign'}
                 </Button>
               </div>
+              )}
 
               {/* Delete is held apart from Assign at every width — a mis-click here is
                   unrecoverable, and the two must never sit shoulder to shoulder. */}
+              {canBin && (
+              <>
               <Separator orientation="vertical" className="mx-1 h-6 shrink-0" />
               <Button
                 size="sm"
@@ -829,6 +840,8 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
               >
                 <Trash2 className="mr-1.5 h-4 w-4" /> Delete
               </Button>
+              </>
+              )}
             </div>
           </div>
         )}
@@ -1080,7 +1093,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                               </a>
                             </Button>
                           )}
-                          {canManageLeads && (
+                          {canBin && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1276,7 +1289,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                   >
                     <Pencil className="h-4 w-4 text-muted-foreground" />
                   </Button>
-                  {canManageLeads && (
+                  {canBin && (
                     <Button
                       variant="ghost"
                       size="icon"
