@@ -45,7 +45,7 @@ export interface RouteGate {
  */
 export const NAV_EXCLUSIONS: Partial<Record<AppRole, string[]>> = {
   telecaller: ['/leads/new'],
-  sales_person: ['/leads/new', '/deals'],
+  sales_person: ['/leads/new'],
 };
 
 export const NAV_ROUTE_GATES: Record<string, RouteGate> = {
@@ -55,7 +55,6 @@ export const NAV_ROUTE_GATES: Record<string, RouteGate> = {
 
   '/leads': { module: 'crm' },
   '/leads/new': { module: 'crm' },
-  '/deals': { module: 'crm' },
   '/leads/bin': { roles: ['admin'] },
 
   '/visits': { module: 'site_visits' },
@@ -87,7 +86,6 @@ export const adminNav: NavSection[] = [
     items: [
       { label: 'All Leads', icon: PhoneCall, path: '/leads' },
       { label: 'Site Visits', icon: MapPin, path: '/visits' },
-      { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
       { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
     ],
   },
@@ -150,7 +148,6 @@ export const buildNav = (
     ? [
         { label: 'My Leads', icon: PhoneCall, path: '/leads' },
         { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
-        { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
       ].filter((item) => !(NAV_EXCLUSIONS[role ?? 'admin'] ?? []).includes(item.path))
     : [];
   if (hasModule('site_visits')) crm.push({ label: 'Site Visits', icon: MapPin, path: '/visits' });

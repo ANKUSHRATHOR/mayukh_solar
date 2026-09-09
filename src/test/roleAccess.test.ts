@@ -73,26 +73,21 @@ describe('role access', () => {
       expect(paths('operator')).toContain('/leads/new');
     });
 
-    it('sales does not carry Deals Dashboard', () => {
-      expect(paths('sales_person')).not.toContain('/deals');
-      expect(paths('telecaller')).toContain('/deals');
-      expect(paths('operator')).toContain('/deals');
-    });
-
     // Excluding a path must never revoke access — the route stays open, so the
     // page is still reachable from wherever it is linked.
     it('leaves the excluded routes reachable', () => {
       expect(canEnter('sales_person', '/leads/new')).toBe(true);
-      expect(canEnter('sales_person', '/deals')).toBe(true);
       expect(canEnter('telecaller', '/leads/new')).toBe(true);
     });
   });
 
-  it('Field Visit is gone from the app', () => {
+  // Deals was a second view over `projects` with an approval step, not a
+  // separate entity — a lead now becomes a project directly.
+  it.each(['/field-visit', '/deals'])('%s is gone from the app', (path) => {
     for (const role of ALL_ROLES) {
-      expect(paths(role)).not.toContain('/field-visit');
+      expect(paths(role)).not.toContain(path);
     }
-    expect('/field-visit' in NAV_ROUTE_GATES).toBe(false);
+    expect(path in NAV_ROUTE_GATES).toBe(false);
   });
 
   it('admin can reach attendance and the directory from the sidebar', () => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { involvesLoan } from '@/lib/payments';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { coerceStructureType, parseUnit } from '@/lib/plantDetails';
@@ -232,7 +233,7 @@ const ProjectFinalizationForm = () => {
           final_amount: parseNum(form.final_amount) || null,
           discount: form.discount ? parseFloat(form.discount) : 0,
           payment_type: form.payment_type as PaymentType || null,
-          loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
+          loan_bank: involvesLoan(form.payment_type) ? form.loan_bank.trim() : null,
           expected_install_date: form.expected_install_date || null,
           special_notes: form.special_notes.trim() || null,
         };
@@ -266,7 +267,7 @@ const ProjectFinalizationForm = () => {
           final_amount: parseNum(form.final_amount) || null,
           discount: form.discount ? parseFloat(form.discount) : 0,
           payment_type: form.payment_type as PaymentType || null,
-          loan_bank: form.payment_type === 'loan' ? form.loan_bank.trim() : null,
+          loan_bank: involvesLoan(form.payment_type) ? form.loan_bank.trim() : null,
           expected_install_date: form.expected_install_date || null,
           special_notes: form.special_notes.trim() || null,
           created_by_user_id: user!.id,
@@ -279,14 +280,22 @@ const ProjectFinalizationForm = () => {
         if (error) throw error;
         project = data;
 
-        await supabase.from('leads').update({ status: 'interested' }).eq('id', leadId);
+        // The lead is converted, not merely interested. Nothing else sets
+        // 'final' now that the Deals approval is gone, and leaving it at
+        // 'interested' would park a converted lead back in the pipeline.
+        await supabase.from('leads').update({ status: 'final' }).eq('id', leadId);
       }
 
       toast({
-        title: projectId ? 'Deal Updated!' : 'Deal Created!',
-        description: projectId ? 'Deal details saved successfully.' : `Deal ${project.project_code} created. You can now manage documents and quotations on the Deals Dashboard.`,
+        title: projectId ? 'Project updated' : 'Project created',
+        description: projectId
+          ? 'Changes saved.'
+          : 'Upload the customer documents to move it past Documents Pending.',
       });
-      navigate('/deals');
+      // Straight to the project itself. This used to land on the Deals
+      // dashboard, which no longer exists — and the project is where the next
+      // step actually happens.
+      navigate(`/projects/${project.id}`);
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -391,16 +400,20 @@ const ProjectFinalizationForm = () => {
           <div className="space-y-1.5">
             <Label>Payment Type *</Label>
             <Select value={form.payment_type} onValueChange={v => updateField('payment_type', v)}>
-              <SelectTrigger className="h-11"><SelectValue placeholder="Cash or Loan" /></SelectTrigger>
+              <SelectTrigger className="h-11"><SelectValue placeholder="How is this being paid for?" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="cash">Cash</SelectItem>
                 <SelectItem value="loan">Loan</SelectItem>
+                {/* Part customer cash, part bank. Follows the loan schedule and
+                    the same bank gate — a real type since 20260910000000, not a
+                    note on a loan project as the Deals dashboard stored it. */}
+                <SelectItem value="loan_cash">Loan + Cash</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Loan bank (conditional) */}
-          {form.payment_type === 'loan' && (
+          {involvesLoan(form.payment_type) && (
             <div className="space-y-1.5">
               <Label>Loan Bank Name *</Label>
               <Input value={form.loan_bank} onChange={e => updateField('loan_bank', e.target.value)} placeholder="Bank name" className="h-11" />

@@ -2176,7 +2176,7 @@ export type Database = {
         | "quotation_sent"
         | "quotation_accepted"
         | "quotation_rejected"
-      payment_type: "cash" | "loan"
+      payment_type: "cash" | "loan" | "loan_cash"
       project_status:
         | "pending_documents"
         | "pending_operator_review"
@@ -2399,7 +2399,7 @@ export const Constants = {
         "quotation_accepted",
         "quotation_rejected",
       ],
-      payment_type: ["cash", "loan"],
+      payment_type: ["cash", "loan", "loan_cash"],
       project_status: [
         "pending_documents",
         "pending_operator_review",

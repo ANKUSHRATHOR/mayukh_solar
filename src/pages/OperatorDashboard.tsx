@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { involvesLoan, paymentTypeLabel } from '@/lib/payments';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -343,7 +344,7 @@ const OperatorDashboard = () => {
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-sm text-muted-foreground">
                           {project.consumer_name && <span>{project.consumer_name}</span>}
                           <span>{project.capacity_kw} kW</span>
-                          <span>{project.payment_type === 'loan' ? '🏦 Loan' : '💵 Cash'}</span>
+                          <span>{involvesLoan(project.payment_type) ? `🏦 ${paymentTypeLabel(project.payment_type)}` : '💵 Cash'}</span>
                           {project.k_number && <span>K: {project.k_number}</span>}
                         </div>
                         <p className="text-xs text-muted-foreground/70 mt-1">

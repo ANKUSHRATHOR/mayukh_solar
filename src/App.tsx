@@ -42,7 +42,6 @@ import PasswordResetLogs from "./pages/PasswordResetLogs.tsx";
 import StaffProfile from "./pages/StaffProfile.tsx";
 import KNumberLookup from "./pages/KNumberLookup.tsx";
 import StaffContacts from "./pages/StaffContacts.tsx";
-import DealsDashboard from "./pages/DealsDashboard.tsx";
 import VisitsListPage from "./pages/visits/VisitsListPage.tsx";
 import VisitDetailPage from "./pages/visits/VisitDetailPage.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
@@ -235,14 +234,6 @@ const App = () => (
                 destination re-gates, and an admin-only gate here would 403 an
                 operator following an old bookmark instead of forwarding them. */}
             <Route path="/admin/projects" element={<Navigate to="/projects" replace />} />
-            <Route
-              path="/deals"
-              element={
-                <ProtectedRoute module="crm">
-                  <DealsDashboard />
-                </ProtectedRoute>
-              }
-            />
             <Route
               path="/activity-logs"
               element={

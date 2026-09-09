@@ -21,7 +21,7 @@ interface Props {
 
 /**
  * The project payments ledger in a dialog, for the two screens that reach money
- * from a list rather than a detail page (Deals Dashboard, Operator project).
+ * from a list rather than a detail page (the Operator project console).
  *
  * A wrapper rather than a second implementation: ProjectPaymentsPanel is also
  * the project detail page's Payments tab, so the totals, the collection-window
