@@ -187,3 +187,117 @@ export const canStartFabrication = (
 
 export const formatMoney = (value: number | null | undefined): string =>
   `₹${Number(value ?? 0).toLocaleString('en-IN')}`;
+
+// ---------------------------------------------------------------------------
+// Collection window
+// ---------------------------------------------------------------------------
+
+/**
+ * When a customer's money is due.
+ *
+ * The clock starts when the plant goes live — the `net_meter_installed` stage —
+ * and the customer has `dueDays` (admin-configurable, 2 by default) to settle
+ * the balance.
+ *
+ * It deliberately does NOT start at `project_completed`: `can_advance_project`
+ * refuses that stage unless the project is already fully paid, so a completed
+ * project with an outstanding balance cannot exist and the dues list anchored
+ * there would always be empty.
+ */
+export type DueStatus = 'not_applicable' | 'upcoming' | 'due_today' | 'overdue';
+
+export const DEFAULT_PAYMENT_DUE_DAYS = 2;
+
+export interface DueStatusInput {
+  /** When the project reached `net_meter_installed`. Null before it does. */
+  netMeterInstalledAt: string | Date | null | undefined;
+  /** Outstanding amount. Nothing is chased once this reaches zero. */
+  balance: number;
+  dueDays?: number;
+  /** Injectable for tests. */
+  now?: Date;
+}
+
+/**
+ * The business runs on Asia/Kolkata, and `project_dues` compares calendar dates
+ * in that zone. Comparing UTC instants instead would put anything stamped after
+ * 18:30 IST on the previous day and make the boundary off by one.
+ */
+const istDateKey = (value: Date): string =>
+  value.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+const wholeDaysBetween = (from: Date, to: Date): number => {
+  const [fy, fm, fd] = istDateKey(from).split('-').map(Number);
+  const [ty, tm, td] = istDateKey(to).split('-').map(Number);
+  return Math.round(
+    (Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000
+  );
+};
+
+export const dueStatusFor = ({
+  netMeterInstalledAt,
+  balance,
+  dueDays = DEFAULT_PAYMENT_DUE_DAYS,
+  now = new Date(),
+}: DueStatusInput): { status: DueStatus; daysOverdue: number; daysElapsed: number } => {
+  const idle = { status: 'not_applicable' as const, daysOverdue: 0, daysElapsed: 0 };
+
+  if (balance <= 0 || !netMeterInstalledAt) return idle;
+
+  const start = netMeterInstalledAt instanceof Date
+    ? netMeterInstalledAt
+    : new Date(netMeterInstalledAt);
+  if (Number.isNaN(start.getTime())) return idle;
+
+  const daysElapsed = wholeDaysBetween(start, now);
+  const daysOverdue = daysElapsed - dueDays;
+
+  // Strictly greater: on the last day of the window the money is due today, not
+  // yet late. Mirrors the `>` in project_dues.is_overdue.
+  const status: DueStatus =
+    daysOverdue > 0 ? 'overdue' : daysOverdue === 0 ? 'due_today' : 'upcoming';
+
+  return { status, daysOverdue: Math.max(daysOverdue, 0), daysElapsed };
+};
+
+export const dueStatusLabels: Record<DueStatus, string> = {
+  not_applicable: 'Nothing outstanding',
+  upcoming: 'Payment window open',
+  due_today: 'Due today',
+  overdue: 'Overdue',
+};
+
+// ---------------------------------------------------------------------------
+// Allocation
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a payment sits.
+ *
+ * `unallocated` is an inbox, not a resting place — money logged before anyone
+ * knew which project it belonged to. `general` is the deliberate opt-out for
+ * income that will never have a project, so it stops appearing in the inbox.
+ */
+export type Allocation = 'linked' | 'unallocated' | 'general';
+
+export const allocationOf = (payment: {
+  project_id?: string | null;
+  no_project_needed?: boolean | null;
+}): Allocation => {
+  if (payment.project_id) return 'linked';
+  return payment.no_project_needed ? 'general' : 'unallocated';
+};
+
+export const allocationLabels: Record<Allocation, string> = {
+  linked: 'Linked to project',
+  unallocated: 'Unallocated',
+  general: 'General income',
+};
+
+export const paymentModeLabels: Record<string, string> = {
+  cash: 'Cash',
+  bank_transfer: 'Bank transfer',
+  cheque: 'Cheque',
+  upi: 'UPI',
+  other: 'Other',
+};

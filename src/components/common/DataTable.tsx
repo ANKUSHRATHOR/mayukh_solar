@@ -58,10 +58,20 @@ interface DataTableProps<T> {
   /**
    * `auto` (default) is a table on desktop and cards below md.
    * `cards` uses the card layout at every width, in a responsive grid.
+   * `table` is always a table, scrolling sideways when it has to — for lists
+   * that offer the reader an explicit Table/Cards choice, where `auto` would
+   * silently ignore "Table" on a narrow window.
    */
-  layout?: 'auto' | 'cards';
+  layout?: 'auto' | 'cards' | 'table';
   className?: string;
 }
+
+/** Whether the desktop table renders at all, and from which width. */
+const tableWrapperClasses: Record<'auto' | 'cards' | 'table', string | null> = {
+  auto: 'hidden md:block',
+  table: 'block',
+  cards: null,
+};
 
 const hideBelowClasses: Record<NonNullable<DataTableColumn<any>['hideBelow']>, string> = {
   sm: 'hidden sm:table-cell',
@@ -144,8 +154,13 @@ function DataTable<T>({
           tearing the current page down. */}
       <div className={cn('transition-opacity', isFetching && 'pointer-events-none opacity-60')}>
         {/* Desktop table — omitted entirely when the caller asked for cards */}
-        {layout === 'auto' && (
-        <div className="hidden overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-card md:block">
+        {layout !== 'cards' && (
+        <div
+          className={cn(
+            'overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-card',
+            tableWrapperClasses[layout]
+          )}
+        >
           <Table>
             <TableHeader>
               <TableRow className="border-border/60 bg-muted/50 hover:bg-muted/50">
@@ -264,6 +279,7 @@ function DataTable<T>({
           </div>
         )}
 
+        {layout !== 'table' && (
         <div
           className={cn(
             layout === 'cards'
@@ -326,6 +342,7 @@ function DataTable<T>({
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   );
@@ -336,11 +353,16 @@ const LoadingRows = <T,>({
   layout = 'auto',
 }: {
   columns: DataTableColumn<T>[];
-  layout?: 'auto' | 'cards';
+  layout?: 'auto' | 'cards' | 'table';
 }) => (
   <div>
-    {layout === 'auto' && (
-    <div className="hidden overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card md:block">
+    {layout !== 'cards' && (
+    <div
+      className={cn(
+        'overflow-hidden rounded-2xl border border-border/70 bg-card shadow-card',
+        tableWrapperClasses[layout]
+      )}
+    >
       <div className="flex gap-4 border-b border-border/60 px-4 py-3">
         {columns.map((col) => (
           <Skeleton key={col.id} className="h-3 flex-1" />
@@ -355,6 +377,7 @@ const LoadingRows = <T,>({
       ))}
     </div>
     )}
+    {layout !== 'table' && (
     <div
       className={cn(
         layout === 'cards' ? 'grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-2.5 md:hidden'
@@ -371,6 +394,7 @@ const LoadingRows = <T,>({
         </div>
       ))}
     </div>
+    )}
   </div>
 );
 

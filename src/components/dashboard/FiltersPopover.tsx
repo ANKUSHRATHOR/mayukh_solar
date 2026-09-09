@@ -17,12 +17,16 @@ const FiltersPopover = ({ activeCount, onClear, children, align = 'end' }: Filte
         <Button
           variant="outline"
           size="sm"
-          className="h-9 gap-2 relative border-border bg-card hover:bg-accent/40"
+          aria-label="Filters"
+          className="relative h-11 w-11 shrink-0 gap-0 border-border bg-card p-0 hover:bg-accent/40 sm:h-9 sm:w-auto sm:gap-2 sm:px-3"
         >
           <SlidersHorizontal className="h-4 w-4" />
-          <span className="text-sm font-medium">Filters</span>
+          {/* Icon-only below sm so the toolbar stays one row on a phone. The
+              corner dot still reports that filters are applied; the count badge
+              would not fit a square button. */}
+          <span className="hidden text-sm font-medium sm:inline">Filters</span>
           {activeCount > 0 && (
-            <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+            <span className="ml-1 hidden items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold sm:inline-flex">
               {activeCount}
             </span>
           )}

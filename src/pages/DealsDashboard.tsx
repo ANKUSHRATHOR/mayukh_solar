@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { FileText, Loader2, Phone, MapPin, Briefcase, ChevronRight, CheckCircle2, XCircle, Search, Edit, CreditCard } from 'lucide-react';
 import QuotationButton from '@/components/projects/QuotationButton';
 import DocumentPoolDialog from '@/components/projects/DocumentPoolDialog';
-import ManagePaymentsDialog from '@/components/projects/ManagePaymentsDialog';
+import ProjectPaymentsDialog from '@/components/projects/ProjectPaymentsDialog';
 import StatusBadge from '@/components/common/StatusBadge';
 import { allProjectStageMeta } from '@/lib/projectStages';
 
@@ -35,6 +35,7 @@ interface DealProject {
   lead_id: string;
   k_number: string | null;
   status: string | null;
+  net_meter_installed_at: string | null;
   leads: {
     id: string;
     customer_name: string;
@@ -95,6 +96,7 @@ export default function DealsDashboard() {
           lead_id,
           k_number,
           status,
+          net_meter_installed_at,
           leads!inner(
             id,
             customer_name,
@@ -453,15 +455,17 @@ export default function DealsDashboard() {
         />
       )}
 
-      {/* Manage Payments Dialog */}
+      {/* Payments. Identity follows the house order: K-Number, then name. */}
       {selectedDeal && (
-        <ManagePaymentsDialog
+        <ProjectPaymentsDialog
           open={isPaymentsOpen}
           onOpenChange={setIsPaymentsOpen}
           projectId={selectedDeal.id}
           finalAmount={selectedDeal.final_amount}
-          paymentType={selectedDeal.payment_type || 'cash'}
-          customerName={selectedDeal.leads.customer_name}
+          paymentType={selectedDeal.payment_type === 'loan' ? 'loan' : 'cash'}
+          projectLabel={selectedDeal.k_number ?? selectedDeal.leads.customer_name}
+          netMeterInstalledAt={selectedDeal.net_meter_installed_at}
+          onChanged={fetchDeals}
         />
       )}
 

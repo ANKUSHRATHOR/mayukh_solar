@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       attendance: {
@@ -256,6 +231,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "documents_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "documents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_dues"
+            referencedColumns: ["project_id"]
+          },
+          {
             foreignKeyName: "documents_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -314,6 +310,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_visits_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_visits_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "field_visits_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_dues"
+            referencedColumns: ["project_id"]
           },
           {
             foreignKeyName: "field_visits_project_id_fkey"
@@ -607,46 +624,72 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          created_by: string | null
           id: string
           milestone: string | null
+          no_project_needed: boolean
           notes: string | null
+          payer_name: string | null
           payment_date: string
           payment_mode: string
-          project_id: string
+          project_id: string | null
           reference_number: string | null
           source: string
           status: string
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           amount: number
           created_at?: string
+          created_by?: string | null
           id?: string
           milestone?: string | null
+          no_project_needed?: boolean
           notes?: string | null
+          payer_name?: string | null
           payment_date?: string
           payment_mode: string
-          project_id: string
+          project_id?: string | null
           reference_number?: string | null
           source: string
           status?: string
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           amount?: number
           created_at?: string
+          created_by?: string | null
           id?: string
           milestone?: string | null
+          no_project_needed?: boolean
           notes?: string | null
+          payer_name?: string | null
           payment_date?: string
           payment_mode?: string
-          project_id?: string
+          project_id?: string | null
           reference_number?: string | null
           source?: string
           status?: string
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_payments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_payments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_dues"
+            referencedColumns: ["project_id"]
+          },
           {
             foreignKeyName: "project_payments_project_id_fkey"
             columns: ["project_id"]
@@ -710,6 +753,20 @@ export type Database = {
             foreignKeyName: "project_status_notes_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_status_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_dues"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_status_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -748,18 +805,25 @@ export type Database = {
           loan_bank: string | null
           loan_disbursed: boolean | null
           loan_disbursed_at: string | null
+          net_meter_installed_at: string | null
           net_meter_number: string | null
           net_metering_file_number: string | null
           panel_brand: string
           panel_qty: number
           panel_watt: number
+          payment_due_notified_at: string | null
           payment_type: Database["public"]["Enums"]["payment_type"]
+          phase: string | null
           project_code: string
           special_notes: string | null
           status: Database["public"]["Enums"]["project_status"]
           structure_type: Database["public"]["Enums"]["structure_type"]
+          subsidy_amount: number | null
           updated_at: string
           welder_work_done_at: string | null
+          wire_material: string | null
+          wire_size: string | null
+          wiremake: string | null
         }
         Insert: {
           assigned_electrician_id?: string | null
@@ -793,18 +857,25 @@ export type Database = {
           loan_bank?: string | null
           loan_disbursed?: boolean | null
           loan_disbursed_at?: string | null
+          net_meter_installed_at?: string | null
           net_meter_number?: string | null
           net_metering_file_number?: string | null
           panel_brand: string
           panel_qty: number
           panel_watt: number
+          payment_due_notified_at?: string | null
           payment_type: Database["public"]["Enums"]["payment_type"]
+          phase?: string | null
           project_code: string
           special_notes?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           structure_type: Database["public"]["Enums"]["structure_type"]
+          subsidy_amount?: number | null
           updated_at?: string
           welder_work_done_at?: string | null
+          wire_material?: string | null
+          wire_size?: string | null
+          wiremake?: string | null
         }
         Update: {
           assigned_electrician_id?: string | null
@@ -838,18 +909,25 @@ export type Database = {
           loan_bank?: string | null
           loan_disbursed?: boolean | null
           loan_disbursed_at?: string | null
+          net_meter_installed_at?: string | null
           net_meter_number?: string | null
           net_metering_file_number?: string | null
           panel_brand?: string
           panel_qty?: number
           panel_watt?: number
+          payment_due_notified_at?: string | null
           payment_type?: Database["public"]["Enums"]["payment_type"]
+          phase?: string | null
           project_code?: string
           special_notes?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           structure_type?: Database["public"]["Enums"]["structure_type"]
+          subsidy_amount?: number | null
           updated_at?: string
           welder_work_done_at?: string | null
+          wire_material?: string | null
+          wire_size?: string | null
+          wiremake?: string | null
         }
         Relationships: [
           {
@@ -857,6 +935,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: true
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads_list"
             referencedColumns: ["id"]
           },
         ]
@@ -1024,10 +1109,48 @@ export type Database = {
             foreignKeyName: "quotations_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "quotations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_dues"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "quotations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
+      }
+      role_permissions: {
+        Row: {
+          allowed: boolean
+          id: string
+          module: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+        }
+        Insert: {
+          allowed?: boolean
+          id?: string
+          module: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Update: {
+          allowed?: boolean
+          id?: string
+          module?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Relationships: []
       }
       salary_advances: {
         Row: {
@@ -1191,6 +1314,20 @@ export type Database = {
             foreignKeyName: "serial_numbers_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "serial_numbers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_dues"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "serial_numbers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -1257,6 +1394,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_visits_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
             referencedColumns: ["id"]
           },
         ]
@@ -1391,6 +1535,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_dues"
+            referencedColumns: ["project_id"]
+          },
+          {
             foreignKeyName: "tasks_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -1473,8 +1638,10 @@ export type Database = {
           ifsc: string | null
           is_default: boolean
           license_no: string | null
+          logo_url: string | null
           mobile: string | null
           raw_text: string | null
+          signature_url: string | null
           updated_at: string
         }
         Insert: {
@@ -1490,8 +1657,10 @@ export type Database = {
           ifsc?: string | null
           is_default?: boolean
           license_no?: string | null
+          logo_url?: string | null
           mobile?: string | null
           raw_text?: string | null
+          signature_url?: string | null
           updated_at?: string
         }
         Update: {
@@ -1507,15 +1676,135 @@ export type Database = {
           ifsc?: string | null
           is_default?: boolean
           license_no?: string | null
+          logo_url?: string | null
           mobile?: string | null
           raw_text?: string | null
+          signature_url?: string | null
           updated_at?: string
         }
         Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      leads_list: {
+        Row: {
+          address: string | null
+          alt_mobile: string | null
+          assigned_operator_id: string | null
+          assigned_to_user_id: string | null
+          cancelled_reason:
+            | Database["public"]["Enums"]["cancellation_reason"]
+            | null
+          cancelled_reason_other: string | null
+          created_at: string | null
+          created_by_user_id: string | null
+          customer_name: string | null
+          district: string | null
+          email: string | null
+          follow_up_date: string | null
+          has_quotation: boolean | null
+          id: string | null
+          is_in_bin: boolean | null
+          k_number: string | null
+          kno_details: Json | null
+          kw_interest: number | null
+          last_activity_at: string | null
+          last_visit_at: string | null
+          last_visit_notes: string | null
+          last_visit_staff_id: string | null
+          last_visit_status: Database["public"]["Enums"]["lead_status"] | null
+          latitude: number | null
+          longitude: number | null
+          mobile: string | null
+          notes: string | null
+          plant_details: Json | null
+          project_id: string | null
+          project_status: Database["public"]["Enums"]["project_status"] | null
+          project_type: Database["public"]["Enums"]["payment_type"] | null
+          quotation_details: Json | null
+          quotation_response_at: string | null
+          quotation_response_message: string | null
+          reference_name: string | null
+          source: Database["public"]["Enums"]["lead_source"] | null
+          state: string | null
+          status: Database["public"]["Enums"]["lead_status"] | null
+          updated_at: string | null
+          village_city: string | null
+        }
+        Relationships: []
+      }
+      payments_list: {
+        Row: {
+          allocation: string | null
+          amount: number | null
+          assigned_sales_person_id: string | null
+          created_at: string | null
+          created_by: string | null
+          customer_name: string | null
+          final_amount: number | null
+          id: string | null
+          k_number: string | null
+          milestone: string | null
+          mobile: string | null
+          no_project_needed: boolean | null
+          notes: string | null
+          payer_name: string | null
+          payment_date: string | null
+          payment_mode: string | null
+          payment_type: Database["public"]["Enums"]["payment_type"] | null
+          project_code: string | null
+          project_id: string | null
+          project_status: Database["public"]["Enums"]["project_status"] | null
+          reference_number: string | null
+          source: string | null
+          status: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_payments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_payments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_dues"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_payments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_dues: {
+        Row: {
+          assigned_sales_person_id: string | null
+          balance: number | null
+          customer_name: string | null
+          days_overdue: number | null
+          days_since_net_meter: number | null
+          final_amount: number | null
+          is_overdue: boolean | null
+          k_number: string | null
+          mobile: string | null
+          net_meter_installed_at: string | null
+          payment_type: Database["public"]["Enums"]["payment_type"] | null
+          project_code: string | null
+          project_id: string | null
+          project_status: Database["public"]["Enums"]["project_status"] | null
+          received: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_delete_staff: { Args: { _staff_id: string }; Returns: boolean }
@@ -1558,6 +1847,11 @@ export type Database = {
           total_km: number
         }[]
       }
+      bulk_assign_leads: {
+        Args: { _assignee: string; _lead_ids: string[] }
+        Returns: Json
+      }
+      bulk_bin_leads: { Args: { _lead_ids: string[] }; Returns: Json }
       can_advance_project: {
         Args: {
           _project_id: string
@@ -1629,6 +1923,14 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_assignable_trade_staff: {
+        Args: { _trade: string }
+        Returns: {
+          full_name: string
+          mobile: string
+          user_id: string
+        }[]
+      }
       get_last_saved_bike_reading: {
         Args: {
           _exclude_attendance_event?: string
@@ -1681,6 +1983,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      leads_stage_counts: {
+        Args: {
+          _assigned?: string
+          _creator?: string
+          _from?: string
+          _operator?: string
+          _project_type?: Database["public"]["Enums"]["payment_type"]
+          _scope?: string
+          _scope_user?: string
+          _search?: string
+          _to?: string
+          _unassigned?: boolean
+        }
+        Returns: Json
+      }
       log_user_event: {
         Args: { _action: string; _meta?: Json }
         Returns: undefined
@@ -1719,9 +2036,15 @@ export type Database = {
         Args: { _project_id: string; _trade: string }
         Returns: Json
       }
+      payment_due_days: { Args: never; Returns: number }
+      payments_kpis: { Args: never; Returns: Json }
       project_payment_summary: { Args: { _project_id: string }; Returns: Json }
       project_stage_requirements: {
         Args: { _project_id: string }
+        Returns: Json
+      }
+      projects_kpis: {
+        Args: { _search?: string; _tab?: string }
         Returns: Json
       }
       punch_attendance: {
@@ -1912,12 +2235,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1941,11 +2264,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1966,11 +2289,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1991,11 +2314,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2008,11 +2331,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2022,9 +2345,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: [

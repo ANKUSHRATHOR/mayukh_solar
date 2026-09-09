@@ -11,9 +11,10 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { MapPin, FileText, Building2, Plus, Trash2, Save, Landmark, Star, Settings, MessageCircle, Copy, Link, Shield } from 'lucide-react';
+import { MapPin, FileText, Building2, Plus, Trash2, Save, Landmark, Star, Settings, MessageCircle, Copy, Link, Shield, IndianRupee } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fetchSystemConfig } from '@/lib/systemConfig';
+import { fetchSystemConfig, saveSystemConfig } from '@/lib/systemConfig';
+import { DEFAULT_PAYMENT_DUE_DAYS } from '@/lib/payments';
 import type { BomTemplateRow } from '@/lib/quotationDocument';
 import { apiEndpointUrl } from '@/lib/apiClient';
 
@@ -328,6 +329,47 @@ const AdminSettings = () => {
     }
   };
 
+  // Payments — how long a customer has to settle up after the plant goes live.
+  // Read by project_dues and payment_due_days() in Postgres as well as the UI,
+  // so this one number drives both the dues list and the overdue push.
+  const { data: dueDaysConfig } = useQuery({
+    queryKey: ['config', 'payment_due_days'],
+    queryFn: () => fetchSystemConfig<number>('payment_due_days'),
+  });
+  const [dueDays, setDueDays] = useState('');
+  const [savingDueDays, setSavingDueDays] = useState(false);
+
+  useEffect(() => {
+    if (dueDaysConfig != null) setDueDays(String(dueDaysConfig));
+  }, [dueDaysConfig]);
+
+  const savePaymentDueDays = async () => {
+    const parsed = Number(dueDays);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 365) {
+      toast({
+        title: 'Enter a whole number of days',
+        description: 'Between 0 and 365.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setSavingDueDays(true);
+    try {
+      await saveSystemConfig('payment_due_days', parsed);
+      qc.invalidateQueries({ queryKey: ['config', 'payment_due_days'] });
+      qc.invalidateQueries({ queryKey: ['payments'] });
+      toast({ title: `Payments are now due within ${parsed} day${parsed === 1 ? '' : 's'}.` });
+    } catch (error) {
+      toast({
+        title: 'Could not save',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingDueDays(false);
+    }
+  };
+
   return (
     <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-foreground">Admin Settings</h1>
@@ -340,6 +382,7 @@ const AdminSettings = () => {
           <TabsTrigger value="vendor"><Building2 className="h-4 w-4 mr-1" />Vendor Profile</TabsTrigger>
           <TabsTrigger value="banks"><Landmark className="h-4 w-4 mr-1" />Bank Accounts</TabsTrigger>
           <TabsTrigger value="dropdowns"><Settings className="h-4 w-4 mr-1" />Plant Dropdowns</TabsTrigger>
+          <TabsTrigger value="payments"><IndianRupee className="h-4 w-4 mr-1" />Payments</TabsTrigger>
           <TabsTrigger value="whatsapp"><MessageCircle className="h-4 w-4 mr-1" />WhatsApp Config</TabsTrigger>
         </TabsList>
 
@@ -657,6 +700,39 @@ const AdminSettings = () => {
               <div className="pt-2">
                 <Button onClick={saveDropdowns} className="gradient-primary text-primary-foreground">
                   <Save className="h-4 w-4 mr-1.5" /> Save Dropdown Config
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Collection window</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                How many days a customer has to clear the balance once the net meter is installed
+                and the plant is live. Past this, the project shows as overdue on the Payments page
+                and admins get a push reminder.
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="payment-due-days">Days to pay</Label>
+                  <Input
+                    id="payment-due-days"
+                    type="number"
+                    min="0"
+                    max="365"
+                    className="w-32"
+                    value={dueDays}
+                    onChange={(e) => setDueDays(e.target.value)}
+                    placeholder={String(DEFAULT_PAYMENT_DUE_DAYS)}
+                  />
+                </div>
+                <Button className="gap-2" onClick={savePaymentDueDays} disabled={savingDueDays}>
+                  <Save className="h-4 w-4" /> Save
                 </Button>
               </div>
             </CardContent>
