@@ -25,12 +25,36 @@ describe('role access model', () => {
     });
   });
 
-  it('welder, electrician and operator get projects but not crm or site_visits', () => {
-    (['welder', 'electrician', 'operator'] as AppRole[]).forEach((role) => {
+  it('trade roles get projects but not crm or site_visits', () => {
+    (['welder', 'electrician'] as AppRole[]).forEach((role) => {
       expect(defaultAllowed(role, 'projects')).toBe(true);
       expect(defaultAllowed(role, 'crm')).toBe(false);
       expect(defaultAllowed(role, 'site_visits')).toBe(false);
     });
+  });
+
+  // Operator was grouped with the trades until an admin switched crm on for
+  // them in production on 2026-08-01; the defaults now match that intent rather
+  // than contradicting the live table.
+  it('operator gets crm and operations but not site_visits', () => {
+    expect(defaultAllowed('operator', 'crm')).toBe(true);
+    expect(defaultAllowed('operator', 'operations')).toBe(true);
+    expect(defaultAllowed('operator', 'projects')).toBe(true);
+    expect(defaultAllowed('operator', 'site_visits')).toBe(false);
+  });
+
+  // The projects module used to unlock the payments pages too, which handed a
+  // ledger to three roles that project_payments gives no rows to.
+  it('payments and operations are narrower than projects', () => {
+    (['telecaller', 'welder', 'electrician'] as AppRole[]).forEach((role) => {
+      expect(defaultAllowed(role, 'projects')).toBe(true);
+      expect(defaultAllowed(role, 'payments')).toBe(false);
+      expect(defaultAllowed(role, 'operations')).toBe(false);
+    });
+    expect(defaultAllowed('sales_person', 'payments')).toBe(true);
+    expect(defaultAllowed('sales_person', 'operations')).toBe(false);
+    expect(defaultAllowed('admin', 'payments')).toBe(true);
+    expect(defaultAllowed('admin', 'operations')).toBe(true);
   });
 
   it('every role gets the common utility modules by default', () => {

@@ -1,145 +1,18 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Users,
-  LogOut,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  PhoneCall,
-  Briefcase,
-  ClipboardCheck,
-  Trash2,
-  ShieldCheck,
-  CalendarCheck,
-  Wallet,
-  MapPin,
-  CheckSquare,
-  UserCircle,
-  Contact,
-  IndianRupee,
-  X,
-} from 'lucide-react';
+import { LogOut, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import logo from '@/assets/mayukh-solar-logo.png';
-import type { ModuleKey } from '@/lib/modules';
+import { adminNav, buildNav, type NavSection } from '@/lib/nav';
 
 interface AppSidebarProps {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
-interface NavItem {
-  label: string;
-  icon: React.ElementType;
-  path: string;
-}
 
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
-
-const adminNav: NavSection[] = [
-  {
-    title: 'Overview',
-    items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }],
-  },
-  {
-    title: 'Sales & Leads',
-    items: [
-      { label: 'All Leads', icon: PhoneCall, path: '/leads' },
-      { label: 'Site Visits', icon: MapPin, path: '/visits' },
-      { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
-      { label: 'Cancelled Bin', icon: Trash2, path: '/leads/bin' },
-    ],
-  },
-  {
-    title: 'Operations',
-    items: [
-      { label: 'Projects', icon: Briefcase, path: '/projects' },
-      { label: 'Tasks', icon: CheckSquare, path: '/tasks' },
-    ],
-  },
-  {
-    title: 'People',
-    items: [
-      { label: 'User Management', icon: Users, path: '/users' },
-      { label: 'Performance', icon: ShieldCheck, path: '/admin/performance' },
-      { label: 'Attendance', icon: CalendarCheck, path: '/admin/attendance' },
-    ],
-  },
-  {
-    title: 'Finance',
-    items: [
-      { label: 'Payments', icon: IndianRupee, path: '/payments' },
-      { label: 'Salary', icon: Wallet, path: '/admin/salary' },
-    ],
-  },
-  {
-    title: 'System',
-    items: [
-      { label: 'Activity Logs', icon: ShieldCheck, path: '/activity-logs' },
-      { label: 'Admin Settings', icon: Settings, path: '/admin/settings' },
-      { label: 'My Profile', icon: UserCircle, path: '/profile' },
-      { label: 'Settings', icon: Settings, path: '/settings' },
-    ],
-  },
-];
-
-/**
- * Non-admin navigation is derived from the role's configurable module access
- * (hasModule), so the sidebar always reflects the Roles & Access settings.
- * Overview + Account are always shown; feature sections appear only when the
- * matching module is granted. Empty sections are dropped.
- */
-const buildNav = (hasModule: (m: ModuleKey) => boolean): NavSection[] => {
-  const sections: NavSection[] = [
-    { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
-  ];
-
-  // "My Leads" is the same list the admin sees at /leads; RLS scopes the rows to
-  // the ones this user created or was assigned, so the label reflects what they
-  // actually get rather than the admin's "All Leads".
-  const crm: NavItem[] = hasModule('crm')
-    ? [
-        { label: 'My Leads', icon: PhoneCall, path: '/leads' },
-        { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
-        { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
-        { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
-      ]
-    : [];
-  if (hasModule('site_visits')) crm.push({ label: 'Site Visits', icon: MapPin, path: '/visits' });
-  if (crm.length) sections.push({ title: 'Sales & Leads', items: crm });
-
-  const ops: NavItem[] = [];
-  if (hasModule('projects')) {
-    ops.push({ label: 'Projects', icon: ClipboardCheck, path: '/projects' });
-    ops.push({ label: 'Payments', icon: IndianRupee, path: '/payments' });
-  }
-  if (hasModule('tasks')) ops.push({ label: 'My Tasks', icon: CheckSquare, path: '/tasks' });
-  if (ops.length) sections.push({ title: 'Work', items: ops });
-
-  if (hasModule('attendance')) {
-    sections.push({
-      title: 'Attendance',
-      items: [
-        { label: 'Punch In/Out', icon: CalendarCheck, path: '/attendance' },
-        { label: 'My Monthly', icon: CalendarCheck, path: '/my-attendance' },
-      ],
-    });
-  }
-
-  if (hasModule('contacts')) {
-    sections.push({ title: 'Team', items: [{ label: 'Staff Contacts', icon: Contact, path: '/contacts' }] });
-  }
-
-  sections.push({ title: 'Account', items: [{ label: 'My Profile', icon: UserCircle, path: '/profile' }] });
-  return sections;
-};
 
 const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
   const { staff, role, signOut, hasModule } = useAuth();

@@ -196,7 +196,7 @@ const App = () => (
             <Route
               path="/operator/projects/:projectId"
               element={
-                <ProtectedRoute module="projects">
+                <ProtectedRoute module="operations">
                   <OperatorProjectDetail />
                 </ProtectedRoute>
               }
@@ -204,19 +204,20 @@ const App = () => (
             <Route
               path="/projects/:projectId/material-dispatch"
               element={
-                <ProtectedRoute module="projects">
+                <ProtectedRoute module="operations">
                   <MaterialDispatch />
                 </ProtectedRoute>
               }
             />
-            {/* Inward payments across every project. Gated by the projects
-                module rather than a seventh module of its own; project_payments
-                RLS narrows it further, so a role with the module but no payment
-                access sees an empty list rather than an error. */}
+            {/* Inward payments across every project. Its own module since
+                20260909100000: gating on `projects` handed a ledger to every
+                role, and project_payments admits only admin, operator and
+                sales-on-own — so three roles were advertised a page that could
+                never show them a row. */}
             <Route
               path="/payments"
               element={
-                <ProtectedRoute module="projects">
+                <ProtectedRoute module="payments">
                   <PaymentsListPage />
                 </ProtectedRoute>
               }
@@ -224,7 +225,7 @@ const App = () => (
             <Route
               path="/payments/:paymentId"
               element={
-                <ProtectedRoute module="projects">
+                <ProtectedRoute module="payments">
                   <PaymentDetailPage />
                 </ProtectedRoute>
               }
