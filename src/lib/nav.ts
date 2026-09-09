@@ -122,7 +122,10 @@ export const adminNav: NavSection[] = [
  * Overview + Account are always shown; feature sections appear only when the
  * matching module is granted. Empty sections are dropped.
  */
-export const buildNav = (hasModule: (m: ModuleKey) => boolean): NavSection[] => {
+export const buildNav = (
+  hasModule: (m: ModuleKey) => boolean,
+  role: AppRole | null,
+): NavSection[] => {
   const sections: NavSection[] = [
     { title: 'Overview', items: [{ label: 'Dashboard', icon: LayoutDashboard, path: '/' }] },
   ];
@@ -133,7 +136,12 @@ export const buildNav = (hasModule: (m: ModuleKey) => boolean): NavSection[] => 
   const crm: NavItem[] = hasModule('crm')
     ? [
         { label: 'My Leads', icon: PhoneCall, path: '/leads' },
-        { label: 'Create Lead', icon: PhoneCall, path: '/leads/new' },
+        // A telecaller creates leads from the My Leads page, which carries
+        // Create Lead as its primary action — a second entry in the sidebar is
+        // the same destination twice.
+        ...(role === 'telecaller'
+          ? []
+          : [{ label: 'Create Lead', icon: PhoneCall, path: '/leads/new' }]),
         { label: 'Deals Dashboard', icon: Briefcase, path: '/deals' },
         { label: 'Field Visit', icon: MapPin, path: '/field-visit' },
       ]

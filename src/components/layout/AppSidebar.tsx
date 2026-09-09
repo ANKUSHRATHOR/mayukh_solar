@@ -20,7 +20,7 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navSections: NavSection[] = role === 'admin' ? adminNav : role ? buildNav(hasModule) : [];
+  const navSections: NavSection[] = role === 'admin' ? adminNav : role ? buildNav(hasModule, role) : [];
 
 
 

@@ -16,7 +16,7 @@ import { ALL_ROLES, DEFAULT_ROLE_MODULES, type AppRole, type ModuleKey } from '@
 const hasModuleFor = (role: AppRole) => (m: ModuleKey) =>
   role === 'admin' || DEFAULT_ROLE_MODULES[role].includes(m);
 
-const navFor = (role: AppRole) => (role === 'admin' ? adminNav : buildNav(hasModuleFor(role)));
+const navFor = (role: AppRole) => (role === 'admin' ? adminNav : buildNav(hasModuleFor(role), role));
 
 const paths = (role: AppRole) => navFor(role).flatMap((s) => s.items.map((i) => i.path));
 
@@ -60,6 +60,15 @@ describe('role access', () => {
         expect(paths(role)).toContain('/payments');
       }
     });
+  });
+
+  it('telecaller creates leads from My Leads, not a second sidebar entry', () => {
+    expect(paths('telecaller')).toContain('/leads');
+    expect(paths('telecaller')).not.toContain('/leads/new');
+    // The duplication is only removed where it was asked for; the other CRM
+    // roles still have the shortcut.
+    expect(paths('sales_person')).toContain('/leads/new');
+    expect(paths('operator')).toContain('/leads/new');
   });
 
   it('admin can reach attendance and the directory from the sidebar', () => {
