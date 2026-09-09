@@ -140,6 +140,12 @@ export const fetchDuesPage = async (
 };
 
 export interface PaymentKpis {
+  /**
+   * False for a role that cannot read project_payments. The figures below are
+   * then all zero because nothing is visible, not because nothing is owed — so
+   * the UI must drop the tiles rather than present zeroes as fact.
+   */
+  payments_visible: boolean;
   received_this_month: number;
   outstanding: number;
   overdue_amount: number;
