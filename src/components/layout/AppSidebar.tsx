@@ -18,6 +18,7 @@ import {
   CheckSquare,
   UserCircle,
   Contact,
+  IndianRupee,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -73,7 +74,10 @@ const adminNav: NavSection[] = [
   },
   {
     title: 'Finance',
-    items: [{ label: 'Salary', icon: Wallet, path: '/admin/salary' }],
+    items: [
+      { label: 'Payments', icon: IndianRupee, path: '/payments' },
+      { label: 'Salary', icon: Wallet, path: '/admin/salary' },
+    ],
   },
   {
     title: 'System',
@@ -112,7 +116,10 @@ const buildNav = (hasModule: (m: ModuleKey) => boolean): NavSection[] => {
   if (crm.length) sections.push({ title: 'Sales & Leads', items: crm });
 
   const ops: NavItem[] = [];
-  if (hasModule('projects')) ops.push({ label: 'Projects', icon: ClipboardCheck, path: '/projects' });
+  if (hasModule('projects')) {
+    ops.push({ label: 'Projects', icon: ClipboardCheck, path: '/projects' });
+    ops.push({ label: 'Payments', icon: IndianRupee, path: '/payments' });
+  }
   if (hasModule('tasks')) ops.push({ label: 'My Tasks', icon: CheckSquare, path: '/tasks' });
   if (ops.length) sections.push({ title: 'Work', items: ops });
 

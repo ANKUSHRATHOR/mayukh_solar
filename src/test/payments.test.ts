@@ -4,6 +4,8 @@ import {
   canStartFabrication,
   summarisePayments,
   scheduleFor,
+  dueStatusFor,
+  allocationOf,
   CASH_SCHEDULE,
   LOAN_SCHEDULE,
   type PaymentLike,
@@ -165,5 +167,89 @@ describe('summarisePayments', () => {
 
   it('is not fully paid when nothing is owed and nothing received', () => {
     expect(summarisePayments(0, []).fullyPaid).toBe(false);
+  });
+});
+
+describe('dueStatusFor', () => {
+  // IST noon, so the calendar-date arithmetic can't be nudged over a boundary
+  // by the UTC offset.
+  const at = (iso: string) => new Date(`${iso}T12:00:00+05:30`);
+
+  it('is not applicable before the plant goes live', () => {
+    expect(
+      dueStatusFor({ netMeterInstalledAt: null, balance: 100000, now: at('2026-09-07') }).status
+    ).toBe('not_applicable');
+  });
+
+  it('is not applicable once the balance is settled', () => {
+    expect(
+      dueStatusFor({
+        netMeterInstalledAt: at('2026-08-01'),
+        balance: 0,
+        now: at('2026-09-07'),
+      }).status
+    ).toBe('not_applicable');
+  });
+
+  it('is upcoming inside the window', () => {
+    const result = dueStatusFor({
+      netMeterInstalledAt: at('2026-09-06'),
+      balance: 50000,
+      now: at('2026-09-07'),
+    });
+    expect(result.status).toBe('upcoming');
+    expect(result.daysOverdue).toBe(0);
+  });
+
+  // The boundary the SQL `>` and this `> 0` have to agree on: on day 2 of a
+  // 2-day window the money is due, not yet late.
+  it('is due today on the last day of the window', () => {
+    expect(
+      dueStatusFor({
+        netMeterInstalledAt: at('2026-09-05'),
+        balance: 50000,
+        now: at('2026-09-07'),
+      }).status
+    ).toBe('due_today');
+  });
+
+  it('is overdue the day after the window closes', () => {
+    const result = dueStatusFor({
+      netMeterInstalledAt: at('2026-09-04'),
+      balance: 50000,
+      now: at('2026-09-07'),
+    });
+    expect(result.status).toBe('overdue');
+    expect(result.daysOverdue).toBe(1);
+  });
+
+  it('honours a custom window', () => {
+    const input = {
+      netMeterInstalledAt: at('2026-09-04'),
+      balance: 50000,
+      now: at('2026-09-07'),
+    };
+    expect(dueStatusFor({ ...input, dueDays: 7 }).status).toBe('upcoming');
+    expect(dueStatusFor({ ...input, dueDays: 0 }).daysOverdue).toBe(3);
+  });
+
+  it('treats an unparseable timestamp as no timestamp', () => {
+    expect(
+      dueStatusFor({ netMeterInstalledAt: 'not a date', balance: 50000 }).status
+    ).toBe('not_applicable');
+  });
+});
+
+describe('allocationOf', () => {
+  it('files a payment with a project as linked', () => {
+    expect(allocationOf({ project_id: 'abc', no_project_needed: false })).toBe('linked');
+  });
+
+  it('files an unlinked payment into the inbox', () => {
+    expect(allocationOf({ project_id: null, no_project_needed: false })).toBe('unallocated');
+  });
+
+  it('keeps deliberate general income out of the inbox', () => {
+    expect(allocationOf({ project_id: null, no_project_needed: true })).toBe('general');
   });
 });

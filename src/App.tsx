@@ -24,6 +24,8 @@ import WelderDashboard from "./pages/WelderDashboard.tsx";
 import ElectricianDashboard from "./pages/ElectricianDashboard.tsx";
 import ProjectsListPage from "./pages/projects/ProjectsListPage.tsx";
 import ProjectDetailPage from "./pages/projects/ProjectDetailPage.tsx";
+import PaymentsListPage from "./pages/payments/PaymentsListPage.tsx";
+import PaymentDetailPage from "./pages/payments/PaymentDetailPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import ActivityLogs from "./pages/ActivityLogs.tsx";
 import InstallApp from "./pages/InstallApp.tsx";
@@ -207,6 +209,27 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            {/* Inward payments across every project. Gated by the projects
+                module rather than a seventh module of its own; project_payments
+                RLS narrows it further, so a role with the module but no payment
+                access sees an empty list rather than an error. */}
+            <Route
+              path="/payments"
+              element={
+                <ProtectedRoute module="projects">
+                  <PaymentsListPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/payments/:paymentId"
+              element={
+                <ProtectedRoute module="projects">
+                  <PaymentDetailPage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* The legacy admin projects table was replaced by /projects.
                 Left outside ProtectedRoute like the /staff redirects: the
                 destination re-gates, and an admin-only gate here would 403 an

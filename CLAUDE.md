@@ -85,7 +85,13 @@ Sort and page size persist to localStorage via `useStickyState`; page index and 
 
 **Read [`DESIGN-SYSTEM.md`](DESIGN-SYSTEM.md) before touching any UI file.** It is the normative spec for color tokens, spacing, type scale, radius, elevation, breakpoints, component states, and the rules for forms, tables and toasts. `appuiux.md` is historical background only. It also lists known violations — don't copy the patterns it flags.
 
-shadcn/ui (Radix) + Tailwind, path alias `@/` → `src/`. Change design at the token or primitive level — `src/index.css` custom properties and `tailwind.config.ts` — not per page. Shared shells in `src/components/common/` (`PageHeader`, `PageContainer`, `SectionCard`, `DetailShell`, `FormShell`, `DataTable`, `StatusBadge`, `EmptyState`, `ErrorState`) give every screen the same rhythm; reach for those before hand-rolling layout. One accent colour (solar orange) marks primary actions. Field staff are on phones: tables collapse to cards, 44px tap targets.
+shadcn/ui (Radix) + Tailwind, path alias `@/` → `src/`. `DialogContent` is a CSS grid and carries `[&>*]:min-w-0` — grid items default to `min-width: auto`, so without it a child that cannot shrink below its content (a long unbroken customer name, a table) widens the track past the dialog's `max-w-*` and spills outside the rounded box, and neither `truncate` nor an `overflow-x-auto` scroller inside can work. Change design at the token or primitive level — `src/index.css` custom properties and `tailwind.config.ts` — not per page. Shared shells in `src/components/common/` (`PageHeader`, `PageContainer`, `SectionCard`, `DetailShell`, `FormShell`, `DataTable`, `StatusBadge`, `EmptyState`, `ErrorState`) give every screen the same rhythm; reach for those before hand-rolling layout. `DataTable`'s `layout` is `auto` (table on `md`+, cards below), `cards` (cards at every width) or `table` (always a table, scrolling sideways when it must) — use `table` whenever the reader is offered an explicit Table/Cards control, since `auto` would silently ignore "Table" on a narrow window. One accent colour (solar orange) marks primary actions. Field staff are on phones: tables collapse to cards, 44px tap targets.
+
+Mobile rules these shells now enforce, so don't re-solve them per page:
+- **`StatCard`** puts its icon inline with the label below `sm` (boxed at top-right from `sm` up). Two tiles per row on a 375px screen leave ~95px beside a boxed icon, which clipped long labels mid-word and cut money figures in lakhs; inline, the value gets the card's full width and the accent glow still carries the colour.
+- **44px tap targets below `sm`** on `TablePagination`, `TableToolbar`'s search and `FiltersPopover` — all `h-11 sm:h-*`, so desktop is unchanged. Still short of 44px app-wide: `DataTable`'s in-table sort headers and `ui/tabs` triggers (page-level `TabsTrigger`s pass `h-11 sm:h-8` where it matters).
+- **`TableToolbar` is one row below `sm`.** Search collapses to an icon and expands across the row (with Cancel) when tapped; `FiltersPopover` goes icon-only and reports active filters with its corner dot. A full-width field plus a button row cost two lines of a phone screen before any data appeared. The field stays open while a term is live and Cancel clears it — a term must never hide behind a collapsed icon, which is the same "filter applied with no visible control" trap the `filters` prop guards against.
+- A **page's header actions** should be `w-full` and evenly split below `sm`. An icon-only secondary button beside a wide primary one reads as unfinished on a phone.
 
 ### Identity conventions
 
@@ -142,7 +148,7 @@ Chrome: `AppLayout` + `AppSidebar`. The admin sidebar is a hardcoded six-section
 | Route | Gate | Page |
 |---|---|---|
 | `/projects` | `module=projects` | `projects/ProjectsListPage.tsx` |
-| `/projects/:projectId` | `module=projects` | `projects/ProjectDetailPage.tsx` — tabs: Customer, Plant, Documents |
+| `/projects/:projectId` | `module=projects` | `projects/ProjectDetailPage.tsx` — tabs: Customer, Plant, Payments, Documents |
 | `/projects/new`, `/projects/:projectId/edit` | admin, sales_person | `ProjectFinalizationForm.tsx` |
 | `/projects/:projectId/documents` | `module=projects` | `ProjectDocuments.tsx` |
 | `/projects/:projectId/material-dispatch` | `module=projects` | `MaterialDispatch.tsx` |
@@ -154,8 +160,25 @@ Chrome: `AppLayout` + `AppSidebar`. The admin sidebar is a hardcoded six-section
 - Payments (`lib/payments.ts`): cash is 30% advance → 60% post-installation → 10% commissioning; loan is customer margin → bank first → bank final. **Fabrication on a loan file is blocked until `loan_bank_first` is received** — enforced in `can_advance_project` and mirrored in the UI.
 - Trade work (`lib/projectWork.ts`) completes through `mark_trade_work_done` with photo proof.
 - Subsidy (`lib/subsidy.ts`): PM Surya Ghar is **slab-based by capacity, not flat** — ₹30k/₹60k/₹78k. Admins override slabs in `system_configs`; the hardcoded slabs are only a fallback so a failed fetch never renders ₹0.
-- Supporting components in `components/projects/`: `StageChecklist`, `ProjectTimeline`, `ManagePaymentsDialog`, `MarkWorkDoneDialog`, `DocumentPoolDialog`, `QuotationButton`.
+- Supporting components in `components/projects/`: `StageChecklist`, `ProjectTimeline`, `ProjectPaymentsPanel`/`ProjectPaymentsDialog`, `MarkWorkDoneDialog`, `DocumentPoolDialog`, `QuotationButton`.
 - `ProjectFinalizationForm` mints the code via `generate_project_code` — but remember projects are *identified to users* by K-Number → name → mobile.
+
+### Payments
+
+| Route | Gate | Page |
+|---|---|---|
+| `/payments` | `module=projects` | `payments/PaymentsListPage.tsx` |
+| `/payments/:paymentId` | `module=projects` | `payments/PaymentDetailPage.tsx` |
+
+Every inward payment, across every project. Gated by the **`projects` module** — deliberately not a seventh module — with `project_payments` RLS narrowing it further, so a role holding the module but no payment access gets an empty list rather than an error.
+
+- Data access is `lib/paymentsData.ts` over two `security_invoker` views: **`payments_list`** (payments flattened against project + lead, so K-Number/name/mobile search is one query) and **`project_dues`** (what is still owed, and how late). Tiles come from the single `payments_kpis` RPC — one round trip, same reason as `projects_kpis`.
+- The list opens as a **table** — a ledger is read by comparing rows — with a Table/Cards toggle persisted to `payments-list:view`. The toggle renders at every width (labels collapse to icons below `sm`) and maps to `DataTable`'s `table`/`cards` layouts, never `auto`: `auto` swaps to cards below `md`, so on a 758px window picking "Table" did nothing at all. A narrow table scrolls inside its own container. Only the *initial* value is width-aware — under `sm` it starts on cards, per the design system's mobile card fallback — and an explicit choice then wins at every width. A row opens the payment's own page, never the project; edit, assign-to-project and delete all live there, so there is one place that owns them.
+- Four tabs: **All** · **Unallocated** · **Dues** · **General**. `project_payments.project_id` is nullable, so money can be logged the moment it arrives: with no project it lands in the **unallocated inbox** and is matched later, or is flagged `no_project_needed` as general income that will never have one. A check constraint keeps those two states mutually exclusive.
+- **No milestones here.** Balance is `final_amount − sum(completed receipts)`. `milestone`, `buildSchedule` and `scheduleFor` survive only for the quotation document.
+- Collection window: the balance is due within `payment_due_days` (a `system_configs` key, default 2, editable in Admin Settings → Payments) of the project reaching **`net_meter_installed`**, stamped by the `stamp_project_stage_timestamps` trigger into `projects.net_meter_installed_at`. Not `project_completed` — `can_advance_project` refuses that stage unless the project is already fully paid, so anchoring there would make the dues list empty by construction. `dueStatusFor` in `lib/payments.ts` mirrors the SQL boundary exactly; both are unit-tested.
+- Overdue fires a digest push to **admins only** via the `notify-payment-dues` edge function, which stamps `payment_due_notified_at` so a project is not re-announced for a week. Its daily schedule needs `pg_cron` (available but not yet installed) — the migration self-skips until it is.
+- Writes: admins edit and delete, everyone else adds only. Every write leaves an `audit_logs` row.
 
 ### Attendance, tasks, people, finance
 

@@ -49,6 +49,12 @@ export interface ProjectRow {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  // Stamped by stamp_project_stage_timestamps (20260908000000) the first time
+  // the project reaches net_meter_installed. Starts the payment collection
+  // window; NULL on rows that got there before the trigger existed and left no
+  // audit trail to backfill from.
+  net_meter_installed_at: string | null;
+  payment_due_notified_at: string | null;
   leads?: {
     id: string;
     customer_name: string;

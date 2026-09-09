@@ -24,10 +24,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import DocumentPoolDialog from '@/components/projects/DocumentPoolDialog';
 import StageChecklist from '@/components/projects/StageChecklist';
 import QuotationButton from '@/components/projects/QuotationButton';
-import ManagePaymentsDialog from '@/components/projects/ManagePaymentsDialog';
+import ProjectPaymentsDialog from '@/components/projects/ProjectPaymentsDialog';
 import { sendStatusChangeNotification, sendBillNotification } from '@/lib/whatsapp';
 import { allProjectStageMeta, nextStage, stageIndex } from '@/lib/projectStages';
 import { humanizeStatus } from '@/lib/statusMeta';
+import { formatMoney, summarisePayments } from '@/lib/payments';
 
 import type { Database } from '@/integrations/supabase/types';
 
@@ -116,6 +117,7 @@ const OperatorProjectDetail = () => {
   const [isDocOpen, setIsDocOpen] = useState(false);
   const [isPaymentsOpen, setIsPaymentsOpen] = useState(false);
   const [payments, setPayments] = useState<any[]>([]);
+  const paymentTotals = summarisePayments(Number(project?.final_amount ?? 0), payments);
   
   // WhatsApp phone prompt state
   const [isPhonePromptOpen, setIsPhonePromptOpen] = useState(false);
@@ -586,9 +588,12 @@ const OperatorProjectDetail = () => {
                 <p className="font-bold text-foreground mt-0.5">₹{Number(project.final_amount || 0).toLocaleString('en-IN')}</p>
               </div>
               <div>
+                {/* summarisePayments, not a raw subtraction: only completed
+                    receipts count, and an overpayment shows as ₹0 owing rather
+                    than a negative balance in green. */}
                 <p className="text-[10px] uppercase font-mono tracking-wider text-muted-foreground">Remaining Balance</p>
-                <p className={`font-bold mt-0.5 ${(project.final_amount - payments.reduce((sum, p) => sum + p.amount, 0)) > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                  ₹{(project.final_amount - payments.reduce((sum, p) => sum + p.amount, 0)).toLocaleString('en-IN')}
+                <p className={`font-bold mt-0.5 ${paymentTotals.balance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {formatMoney(paymentTotals.balance)}
                 </p>
               </div>
             </div>
@@ -1173,19 +1178,21 @@ const OperatorProjectDetail = () => {
         title={`Project Document Pool: ${project.project_code}`}
       />
 
-      {/* Manage Payments Dialog */}
-      <ManagePaymentsDialog
+      {/* Payments. Identity follows the house order: K-Number, then name. */}
+      <ProjectPaymentsDialog
         open={isPaymentsOpen}
         onOpenChange={(open) => {
           setIsPaymentsOpen(open);
           if (!open) {
-            fetchData(); // re-fetch payments list to update summary stats on main page when dialog is closed
+            fetchData(); // refresh the summary stats behind the dialog
           }
         }}
         projectId={project.id}
         finalAmount={project.final_amount}
-        paymentType={project.payment_type || 'cash'}
-        customerName={project.leads?.customer_name || 'Customer'}
+        paymentType={project.payment_type === 'loan' ? 'loan' : 'cash'}
+        projectLabel={project.k_number || project.leads?.customer_name || 'Customer'}
+        netMeterInstalledAt={project.net_meter_installed_at ?? null}
+        onChanged={fetchData}
       />
 
       {/* WhatsApp Phone Prompt Dialog */}

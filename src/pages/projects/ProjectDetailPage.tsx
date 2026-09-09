@@ -27,7 +27,7 @@ import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import StatusBadge from '@/components/common/StatusBadge';
 import ProjectDocumentsTab from './ProjectDocumentsTab';
 import ProjectWorkPanel from './ProjectWorkPanel';
-import ManagePaymentsDialog from '@/components/projects/ManagePaymentsDialog';
+import ProjectPaymentsPanel from '@/components/projects/ProjectPaymentsPanel';
 import PlantDetailsDialog from '@/components/projects/PlantDetailsDialog';
 import { fromProject, structureTypeLabel } from '@/lib/plantDetails';
 import { allProjectStageMeta, pipelineFor, stageIndex, stageProgress } from '@/lib/projectStages';
@@ -46,7 +46,6 @@ const ProjectDetailPage = () => {
   // Stages already behind the project are hidden by default — they are history,
   // and twelve rows of it pushed the current stage and Commercials off-screen.
   const [showDoneStages, setShowDoneStages] = useState(false);
-  const [paymentsOpen, setPaymentsOpen] = useState(false);
   const [plantOpen, setPlantOpen] = useState(false);
 
   const tab = searchParams.get('tab') ?? 'customer';
@@ -240,7 +239,7 @@ const ProjectDetailPage = () => {
                   variant="outline"
                   size="sm"
                   className="mt-3 w-full gap-2"
-                  onClick={() => setPaymentsOpen(true)}
+                  onClick={() => setTab('payments')}
                 >
                   <Wallet className="h-4 w-4" /> Review payments
                 </Button>
@@ -297,10 +296,11 @@ const ProjectDetailPage = () => {
     >
       {project && (
         <Tabs value={tab} onValueChange={setTab}>
-          {/* Three fixed tabs, so they split the width evenly on phones. The
-              strip ran to 385px in a 375px viewport, leaving Documents to be
-              found by dragging sideways. */}
-          <TabsList className="grid h-auto w-full grid-cols-3 sm:inline-flex sm:h-10 sm:w-auto">
+          {/* Four fixed tabs splitting the width evenly on phones. Four cells
+              in 375px is ~85px each, so Documents shortens to "Docs" below sm —
+              at its full length it ran past its cell, which is the same
+              overflow that made it undiscoverable when there were three. */}
+          <TabsList className="grid h-auto w-full grid-cols-4 sm:inline-flex sm:h-10 sm:w-auto">
             <TabsTrigger value="customer" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
               <User className="h-3.5 w-3.5 shrink-0" />
               <span className="sm:hidden">Customer</span>
@@ -311,9 +311,14 @@ const ProjectDetailPage = () => {
               <span className="sm:hidden">Plant</span>
               <span className="hidden sm:inline">Plant Details</span>
             </TabsTrigger>
+            <TabsTrigger value="payments" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
+              <Wallet className="h-3.5 w-3.5 shrink-0" />
+              <span>Payments</span>
+            </TabsTrigger>
             <TabsTrigger value="documents" className="h-11 gap-1.5 px-2 text-xs sm:h-auto sm:px-3 sm:text-sm">
               <FileText className="h-3.5 w-3.5 shrink-0" />
-              <span>Documents</span>
+              <span className="sm:hidden">Docs</span>
+              <span className="hidden sm:inline">Documents</span>
             </TabsTrigger>
           </TabsList>
 
@@ -472,15 +477,30 @@ const ProjectDetailPage = () => {
             </SectionCard>
           </TabsContent>
 
+          <TabsContent value="payments" className="mt-4">
+            <ProjectPaymentsPanel
+              projectId={project.id}
+              finalAmount={project.final_amount}
+              paymentType={project.payment_type}
+              projectLabel={identity?.primary ?? 'this project'}
+              netMeterInstalledAt={project.net_meter_installed_at}
+              onChanged={() => {
+                projectQuery.refetch();
+                // The stage gate reads balance_due and fully_paid, and the
+                // list's money tiles read final_amount against receipts.
+                requirementsQuery.refetch();
+                queryClient.invalidateQueries({ queryKey: ['projects'] });
+                queryClient.invalidateQueries({ queryKey: ['payments'] });
+              }}
+            />
+          </TabsContent>
+
           <TabsContent value="documents" className="mt-4">
             <ProjectDocumentsTab projectId={project.id} />
           </TabsContent>
         </Tabs>
       )}
 
-      {/* "Review payments" used to switch to a `payments` tab this page never
-          had, so the click did nothing at all. Payments open here instead, the
-          same dialog the operator and deals views use. */}
       {project && (
         <PlantDetailsDialog
           open={plantOpen}
@@ -496,22 +516,6 @@ const ProjectDetailPage = () => {
         />
       )}
 
-      {project && (
-        <ManagePaymentsDialog
-          open={paymentsOpen}
-          onOpenChange={(open) => {
-            setPaymentsOpen(open);
-            if (!open) {
-              projectQuery.refetch();
-              requirementsQuery.refetch();
-            }
-          }}
-          projectId={project.id}
-          finalAmount={project.final_amount}
-          paymentType={project.payment_type || 'cash'}
-          customerName={identity?.name ?? 'Customer'}
-        />
-      )}
     </DetailShell>
   );
 };
