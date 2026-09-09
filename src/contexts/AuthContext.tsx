@@ -26,6 +26,8 @@ interface AuthContextType {
   hasModule: (module: ModuleKey) => boolean;
   loading: boolean;
   profileResolved: boolean;
+  /** The last profile fetch failed. Distinct from "this user has no role". */
+  profileError: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -81,26 +83,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [permissions, setPermissions] = useState<Set<ModuleKey>>(new Set());
   const [loading, setLoading] = useState(true);
   const [profileResolved, setProfileResolved] = useState(false);
+  const [profileError, setProfileError] = useState(false);
   const lastUserId = useRef<string | null>(null);
 
   const fetchProfile = async (userId: string) => {
     try {
       setProfileResolved(false);
-      const { data: roleData } = await supabase.rpc('get_user_role', { _user_id: userId });
-      const resolvedRole = (roleData as AppRole) ?? null;
-      setRole(resolvedRole);
-      const { data: staffData } = await supabase
+      setProfileError(false);
+
+      // PostgREST reports failures in `error` rather than throwing, so reading
+      // only `data` turned a timeout into `undefined` — indistinguishable from
+      // "this user has no role". Under load that told an active admin their
+      // account was pending approval.
+      const { data: roleData, error: roleError } = await supabase.rpc('get_user_role', {
+        _user_id: userId,
+      });
+      if (roleError) throw roleError;
+
+      const { data: staffData, error: staffError } = await supabase
         .from('staff')
         .select('id, user_id, full_name, mobile, email, is_active, must_change_password, last_login')
         .eq('user_id', userId)
         .maybeSingle();
+      if (staffError) throw staffError;
+
+      const resolvedRole = (roleData as AppRole) ?? null;
+      setRole(resolvedRole);
       setStaff(staffData ?? null);
       setPermissions(resolvedRole ? await loadPermissions(resolvedRole) : new Set());
     } catch (err) {
       console.error('Error fetching profile:', err);
-      setRole(null);
-      setStaff(null);
-      setPermissions(new Set());
+      // Deliberately does NOT clear role/staff. This runs in the background on
+      // TOKEN_REFRESHED and on window focus, so wiping the cached profile on a
+      // transient failure is what made an already-loaded page fall back to
+      // "Pending Approval". A user who genuinely has no role never had them set.
+      setProfileError(true);
     } finally {
       setProfileResolved(true);
     }
@@ -180,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasModule = (module: ModuleKey): boolean => role === 'admin' || permissions.has(module);
 
   return (
-    <AuthContext.Provider value={{ session, user, role, staff, permissions, hasModule, loading, profileResolved, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, role, staff, permissions, hasModule, loading, profileResolved, profileError, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
