@@ -6,12 +6,13 @@ import SalesPersonDashboard from './SalesPersonDashboard';
 import OperatorDashboard from './OperatorDashboard';
 import WelderDashboard from './WelderDashboard';
 import ElectricianDashboard from './ElectricianDashboard';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
-  const { user, role, staff, loading, profileResolved } = useAuth();
+  const { user, role, staff, loading, profileResolved, profileError, refreshProfile } = useAuth();
 
   if (loading || (user && !profileResolved)) {
     return (
@@ -27,6 +28,28 @@ const Index = () => {
 
   if (staff?.must_change_password) {
     return <Navigate to="/set-password" replace />;
+  }
+
+  // A failed lookup is not the same as a missing role. Saying "pending approval"
+  // to an admin whose role query timed out sends them to the wrong person.
+  if (profileError && (!staff || !role)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-lg space-y-3">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Couldn't load your profile</AlertTitle>
+            <AlertDescription>
+              We could not reach the server to check your role. This is usually temporary — your
+              account is fine.
+            </AlertDescription>
+          </Alert>
+          <Button onClick={() => refreshProfile()} className="w-full gap-2">
+            <RefreshCw className="h-4 w-4" /> Try again
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (!staff || !role || !staff.is_active) {
