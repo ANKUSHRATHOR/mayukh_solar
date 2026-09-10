@@ -101,6 +101,17 @@ export const paymentTypeLabel = (paymentType: string | null | undefined): string
   paymentTypeLabels[paymentType ?? ''] ?? 'Cash';
 
 /**
+ * Badge meta for the payment type, so no page keeps its own map. A page-local one
+ * omitted `loan_cash` and StatusBadge fell back to titlecasing the raw enum, which
+ * is how a "Loan + Cash" project came to be badged "Loan Cash".
+ */
+export const paymentTypeMeta: Record<string, { label: string; tone: 'success' | 'info' }> = {
+  cash: { label: paymentTypeLabels.cash, tone: 'success' },
+  loan: { label: paymentTypeLabels.loan, tone: 'info' },
+  loan_cash: { label: paymentTypeLabels.loan_cash, tone: 'info' },
+};
+
+/**
  * A loan_cash project follows the loan schedule: the customer's share is the
  * margin, and the bank still pays in two instalments. The difference from a pure
  * loan is how much margin the customer carries, which the schedule already

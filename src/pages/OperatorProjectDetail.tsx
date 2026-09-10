@@ -28,7 +28,7 @@ import ProjectPaymentsDialog from '@/components/projects/ProjectPaymentsDialog';
 import { sendStatusChangeNotification, sendBillNotification } from '@/lib/whatsapp';
 import { allProjectStageMeta, nextStage, stageIndex } from '@/lib/projectStages';
 import { humanizeStatus } from '@/lib/statusMeta';
-import { formatMoney, summarisePayments } from '@/lib/payments';
+import { formatMoney, involvesLoan, paymentTypeLabel, summarisePayments } from '@/lib/payments';
 
 import type { Database } from '@/integrations/supabase/types';
 
@@ -455,7 +455,7 @@ const OperatorProjectDetail = () => {
         <ArrowLeft className="mr-2 h-4 w-4" /> Back
       </Button>
 
-      {project.payment_type === 'loan' && !project.loan_disbursed && (
+      {involvesLoan(project.payment_type) && !project.loan_disbursed && (
         <Card className="border-amber-500/25 bg-amber-500/5 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="font-semibold text-amber-700 flex items-center gap-1.5 text-sm">
@@ -510,12 +510,13 @@ const OperatorProjectDetail = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <Badge
                 className={
-                  project.payment_type === 'loan'
+                  involvesLoan(project.payment_type)
                     ? 'bg-blue-600 text-white hover:bg-blue-600'
                     : 'bg-emerald-600 text-white hover:bg-emerald-600'
                 }
               >
-                {project.payment_type === 'loan' ? '🏦 LOAN FILE' : '💵 CASH FILE'}
+                {involvesLoan(project.payment_type) ? '🏦' : '💵'}{' '}
+                {paymentTypeLabel(project.payment_type).toUpperCase()} FILE
               </Badge>
               <Badge className="gradient-primary text-primary-foreground">{labelOf(project.status as ProjectStatus)}</Badge>
             </div>
@@ -531,11 +532,11 @@ const OperatorProjectDetail = () => {
             <div><p className="text-muted-foreground text-xs">Inverter</p><p className="font-medium">{project.inverter_brand} ({project.inverter_capacity} kW)</p></div>
             <div>
               <p className="text-muted-foreground text-xs">Payment Type</p>
-              <p className={`font-semibold ${project.payment_type === 'loan' ? 'text-blue-600' : 'text-emerald-600'}`}>
-                {project.payment_type === 'loan' ? 'LOAN' : 'CASH'}
+              <p className={`font-semibold ${involvesLoan(project.payment_type) ? 'text-blue-600' : 'text-emerald-600'}`}>
+                {paymentTypeLabel(project.payment_type).toUpperCase()}
               </p>
             </div>
-            {project.payment_type === 'loan' && (
+            {involvesLoan(project.payment_type) && (
               <div>
                 <p className="text-muted-foreground text-xs">Loan Status</p>
                 <p className={`font-semibold text-xs ${project.loan_disbursed ? 'text-emerald-600' : 'text-amber-500 animate-pulse'}`}>
@@ -551,7 +552,7 @@ const OperatorProjectDetail = () => {
                 {lead?.source === 'reference' && lead?.reference_name ? ` (${lead.reference_name})` : ''}
               </p>
             </div>
-            {project.payment_type === 'loan' && project.loan_bank && (
+            {involvesLoan(project.payment_type) && project.loan_bank && (
               <div><p className="text-muted-foreground text-xs">Loan Bank</p><p className="font-medium">{project.loan_bank}</p></div>
             )}
           </div>
@@ -891,7 +892,7 @@ const OperatorProjectDetail = () => {
       )}
 
       {/* Loan Bank Input */}
-      {project.status === 'registration_done' && project.payment_type === 'loan' && (
+      {project.status === 'registration_done' && involvesLoan(project.payment_type) && (
         <Card className="shadow-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -1112,7 +1113,7 @@ const OperatorProjectDetail = () => {
                 );
               })}
             </div>
-            {project.payment_type === 'loan' && nextStatuses.includes('loan_process' as ProjectStatus) && !loanBank.trim() && (
+            {involvesLoan(project.payment_type) && nextStatuses.includes('loan_process' as ProjectStatus) && !loanBank.trim() && (
               <p className="text-xs text-destructive">Please enter bank name above before proceeding to loan stage</p>
             )}
             {nextStatuses.includes('installation_pending' as ProjectStatus) && !selectedWelder && (
@@ -1189,7 +1190,7 @@ const OperatorProjectDetail = () => {
         }}
         projectId={project.id}
         finalAmount={project.final_amount}
-        paymentType={project.payment_type === 'loan' ? 'loan' : 'cash'}
+        paymentType={involvesLoan(project.payment_type) ? 'loan' : 'cash'}
         projectLabel={project.k_number || project.leads?.customer_name || 'Customer'}
         netMeterInstalledAt={project.net_meter_installed_at ?? null}
         onChanged={fetchData}

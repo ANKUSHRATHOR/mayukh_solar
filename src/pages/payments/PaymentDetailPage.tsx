@@ -31,7 +31,7 @@ import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import PaymentFormDialog from '@/components/payments/PaymentFormDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { allocationLabels, formatMoney, paymentModeLabels } from '@/lib/payments';
+import { allocationLabels, formatMoney, paymentModeLabels, paymentTypeLabel } from '@/lib/payments';
 import {
   deletePayment,
   fetchPayment,
@@ -305,7 +305,7 @@ const PaymentDetailPage = () => {
                 />
                 <DetailField
                   label="Payment type"
-                  value={payment.payment_type === 'loan' ? 'Loan' : 'Cash'}
+                  value={paymentTypeLabel(payment.payment_type)}
                 />
               </DetailGrid>
             ) : payment.no_project_needed ? (

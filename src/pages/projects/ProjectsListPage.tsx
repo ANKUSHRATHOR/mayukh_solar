@@ -30,7 +30,7 @@ import {
   type ProjectRow,
   type ProjectTab,
 } from '@/lib/projects';
-import { formatMoney } from '@/lib/payments';
+import { formatMoney, involvesLoan, paymentTypeLabel } from '@/lib/payments';
 import { useAuth } from '@/contexts/AuthContext';
 import StatStrip, { type StatItem } from '@/components/common/StatStrip';
 
@@ -145,15 +145,12 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
       mobile: 'meta',
       cell: (p) => (
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-          {p.payment_type === 'loan' ? (
-            <>
-              <Landmark className="h-3.5 w-3.5 text-muted-foreground" /> Loan
-            </>
+          {involvesLoan(p.payment_type) ? (
+            <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
-            <>
-              <Wallet className="h-3.5 w-3.5 text-muted-foreground" /> Cash
-            </>
+            <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
           )}
+          {paymentTypeLabel(p.payment_type)}
         </span>
       ),
     },
