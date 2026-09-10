@@ -32,7 +32,8 @@ import { fetchConsumerDetails } from '@/lib/discom';
 import TablePagination from '@/components/common/TablePagination';
 import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
-import TableToolbar from '@/components/common/TableToolbar';
+import TableToolbar, { type ToolbarView } from '@/components/common/TableToolbar';
+import { type TableView } from '@/components/common/ViewToggle';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -221,6 +222,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useStickyState<number>('admin-leads:pageSize', 50);
+  const [view, setView] = useStickyState<TableView>('admin-leads:view', 'table');
   const [total, setTotal] = useState(0);
   const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
   const [deleting, setDeleting] = useState(false);
@@ -593,8 +595,10 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     })).sort((a, b) => (b.created + b.assigned) - (a.created + a.assigned)).slice(0, 8);
   }, [filteredRows]);
 
+  // Stage is deliberately absent: it has its own dropdown in the toolbar row, so
+  // counting it here would badge the popover for a filter it does not contain —
+  // the mirror of the "applied with no visible control" trap the popover guards.
   const activeFilterCount = [
-    filterStatus !== 'all',
     filterCreator !== 'all',
     filterAssigned !== 'all',
     filterOperator !== 'all',
@@ -667,7 +671,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   };
 
   const resetFilters = () => {
-    setFilterStatus('all');
+    // Not the stage — Clear empties the popover, and the stage lives outside it.
     setFilterCreator('all');
     setFilterAssigned('all');
     setFilterOperator('all');
@@ -703,6 +707,20 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
    * own state to that shape rather than being rewritten onto the hook. The
    * previous `as any` cast into TablePagination is what this replaces.
    */
+  // "All" carries the unfiltered total; each stage carries its own tally, so the
+  // dropdown says as much as the tab strip did without spending a row on it.
+  const stageViews: ToolbarView[] = useMemo(
+    () => [
+      { value: 'all', label: 'All', count: total },
+      ...STAGE_BAR_STAGES.map((stage) => ({
+        value: stage.value,
+        label: stage.label,
+        count: stageCounts[stage.value] ?? 0,
+      })),
+    ],
+    [total, stageCounts]
+  );
+
   const leadsTable: ServerTable<LeadRow> = useMemo(
     () => ({
       rows: leadRows,
@@ -980,40 +998,27 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         </Tabs>
       )}
 
-      {/* Stage filter as pill tabs, the same control every other list uses.
-          This was a bespoke chevron pipeline; the order it conveyed is worth
-          less than one filter control behaving identically across the app. */}
-      <Tabs
-        value={filterStatus}
-        onValueChange={(v) => { setFilterStatus(v as StatusFilter); setPage(0); }}
-      >
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-          <TabsTrigger value="all" className="h-11 gap-2 text-xs sm:h-8 sm:text-sm">
-            All
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">{total}</span>
-          </TabsTrigger>
-          {STAGE_BAR_STAGES.map((stage) => (
-            <TabsTrigger key={stage.value} value={stage.value} className="h-11 gap-2 text-xs sm:h-8 sm:text-sm">
-              {stage.label}
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                {stageCounts[stage.value] ?? 0}
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
       {selectedIds.size > 0 && bulkBar}
 
+      {/* Nine stages plus All. As a tab strip that was a sideways-scrolling band
+          hiding its own last options; as a dropdown it is one control in the
+          same row as search, filters and the layout toggle. */}
       <TableToolbar
         table={leadsTable}
         searchPlaceholder="Search by K-Number, name or mobile…"
+        views={stageViews}
+        activeView={filterStatus}
+        onViewChange={(v) => { setFilterStatus(v as StatusFilter); setPage(0); }}
+        viewsLabel="Filter by stage"
+        layout={view}
+        onLayoutChange={setView}
         activeFilterCount={activeFilterCount}
         onClearFilters={resetFilters}
         filters={filterControls}
       />
 
       <DataTable
+        layout={view}
         table={leadsTable}
         columns={columns}
         rowKey={(lead) => lead.id}

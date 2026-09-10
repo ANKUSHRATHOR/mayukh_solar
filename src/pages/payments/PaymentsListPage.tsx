@@ -7,16 +7,13 @@ import {
   Download,
   IndianRupee,
   Inbox,
-  LayoutGrid,
   Landmark,
   Plus,
-  Rows3,
   Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -410,27 +407,17 @@ const PaymentsListPage = () => {
         />
       )}
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as PaymentTab)}>
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-          {tabs.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="h-11 gap-2 text-xs sm:h-8 sm:text-sm">
-              {t.label}
-              {typeof t.count === 'number' && t.count > 0 && (
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                  {t.count}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
       {showDues ? (
         <>
           <TableToolbar
             table={dues}
             searchPlaceholder="Search by K-Number, customer name or mobile…"
-            actions={<ViewToggle view={view} onChange={setView} />}
+            views={tabs}
+            activeView={tab}
+            onViewChange={(v) => setTab(v as PaymentTab)}
+            viewsLabel="Filter payments"
+            layout={view}
+            onLayoutChange={setView}
           />
           <DataTable
             layout={layout}
@@ -451,7 +438,12 @@ const PaymentsListPage = () => {
             searchPlaceholder="Search by K-Number, name, mobile or reference…"
             activeFilterCount={mode ? 1 : 0}
             onClearFilters={() => setMode('')}
-            actions={<ViewToggle view={view} onChange={setView} />}
+            views={tabs}
+            activeView={tab}
+            onViewChange={(v) => setTab(v as PaymentTab)}
+            viewsLabel="Filter payments"
+            layout={view}
+            onLayoutChange={setView}
             filters={
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Mode</Label>
@@ -506,42 +498,5 @@ const PaymentsListPage = () => {
     </PageContainer>
   );
 };
-
-/**
- * Table or cards, the reader's choice.
- *
- * Shown at every width. It was `hidden md:flex`, which meant a window even a
- * few pixels under 768px got the card layout and no way to leave it — the
- * control disappeared exactly when it was needed. On a phone the label still
- * hides, but the icons stay tappable.
- */
-const ViewToggle = ({
-  view,
-  onChange,
-}: {
-  view: 'table' | 'cards';
-  onChange: (value: 'table' | 'cards') => void;
-}) => (
-  <div className="flex h-11 items-center rounded-lg border border-border/70 p-0.5 sm:h-9">
-    {([
-      { value: 'table', label: 'Table', icon: Rows3 },
-      { value: 'cards', label: 'Cards', icon: LayoutGrid },
-    ] as const).map(({ value, label, icon: Icon }) => (
-      <Button
-        key={value}
-        type="button"
-        variant={view === value ? 'secondary' : 'ghost'}
-        size="sm"
-        className="h-full gap-1.5 px-3 text-xs font-semibold sm:px-2"
-        onClick={() => onChange(value)}
-        aria-pressed={view === value}
-        aria-label={`Show as ${label.toLowerCase()}`}
-      >
-        <Icon className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">{label}</span>
-      </Button>
-    ))}
-  </div>
-);
 
 export default PaymentsListPage;

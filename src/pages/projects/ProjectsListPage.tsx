@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Briefcase, CheckCircle2, Download, FileText, IndianRupee, Landmark, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -16,6 +15,8 @@ import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
+import { type TableView } from '@/components/common/ViewToggle';
+import { useStickyState } from '@/hooks/useStickyState';
 import TablePagination from '@/components/common/TablePagination';
 import StatusBadge from '@/components/common/StatusBadge';
 import { useServerTable } from '@/hooks/useServerTable';
@@ -51,6 +52,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
   // Both are validated on read: an unvalidated ?stage=foo reaches
   // .eq('status', 'foo') and PostgREST rejects the enum cast with a 400.
   const [searchParams, setSearchParams] = useSearchParams();
+  const [view, setView] = useStickyState<TableView>('projects-list:view', 'table');
   const rawTab = searchParams.get('tab');
   const tab: ProjectTab =
     rawTab === 'cash' || rawTab === 'loan' ? rawTab : 'all';
@@ -266,24 +268,15 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
         />
       )}
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as ProjectTab)}>
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-          {tabs.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="gap-2 text-xs sm:text-sm">
-              {t.label}
-              {typeof t.count === 'number' && (
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                  {t.count}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
       <TableToolbar
         table={table}
         searchPlaceholder="Search by K-Number, customer name or mobile…"
+        views={tabs}
+        activeView={tab}
+        onViewChange={(v) => setTab(v as ProjectTab)}
+        viewsLabel="Filter by payment type"
+        layout={view}
+        onLayoutChange={setView}
         activeFilterCount={stage ? 1 : 0}
         onClearFilters={() => setStage('')}
         filters={
@@ -309,6 +302,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
       />
 
       <DataTable
+        layout={view}
         table={table}
         columns={columns}
         rowKey={(p) => p.id}
