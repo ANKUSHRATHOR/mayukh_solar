@@ -148,3 +148,109 @@ describe('DataTable', () => {
     expect(screen.queryByRole('button', { name: 'Add record' })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The card shape lives here, not on the pages.
+ *
+ * Four list pages each rendered the same fields differently — the customer name
+ * was 12px semibold on two of them, 12px muted regular on a third and 14px
+ * semibold on the fourth. Columns now declare a role and this component
+ * composes the card, so these tests are what stop that drifting again.
+ */
+describe('DataTable card roles', () => {
+  const roleColumns: DataTableColumn<Row>[] = [
+    { id: 'name', header: 'Customer', mobile: 'title', cell: (r) => r.name },
+    { id: 'status', header: 'Status', mobile: 'badge', cell: () => <span>ACTIVE</span> },
+    { id: 'phone', header: 'Phone', mobile: 'subtitle', cell: () => <span>9929430472</span> },
+    { id: 'amount', header: 'Amount', mobile: 'meta', cell: (r) => `₹${r.amount}` },
+    { id: 'kw', header: 'Capacity', mobile: 'meta', cell: () => '3 kW' },
+    { id: 'ref', header: 'Reference', mobile: 'hidden', cell: () => 'REF-1' },
+  ];
+
+  it('renders every non-hidden role and omits the hidden one', () => {
+    render(<DataTable table={makeTable()} columns={roleColumns} rowKey={(r) => r.id} layout="cards" />);
+    expect(screen.getAllByText('Ramesh Kumar').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('ACTIVE').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('9929430472').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('3 kW').length).toBeGreaterThan(0);
+    expect(screen.queryByText('REF-1')).toBeNull();
+  });
+
+  it('keeps an unassigned column rather than dropping it silently', () => {
+    // A column with no `mobile` role must still reach the card — vanishing data
+    // is worse than an inconsistent label.
+    render(<DataTable table={makeTable()} columns={columns} rowKey={(r) => r.id} layout="cards" />);
+    expect(screen.getAllByText('₹1,50,000').length).toBeGreaterThan(0);
+  });
+});
+
+describe('DataTable selection', () => {
+  it('reports the row and the whole page, and reflects what is selected', () => {
+    const onSelectionChange = vi.fn();
+    const { rerender } = render(
+      <DataTable
+        table={makeTable()}
+        columns={columns}
+        rowKey={(r) => r.id}
+        layout="table"
+        selectable
+        selectedIds={new Set()}
+        onSelectionChange={onSelectionChange}
+      />
+    );
+
+    const boxes = screen.getAllByRole('checkbox');
+    fireEvent.click(boxes[1]); // first body row
+    expect(onSelectionChange).toHaveBeenCalledWith(new Set(['1']));
+
+    fireEvent.click(boxes[0]); // select-all
+    expect(onSelectionChange).toHaveBeenLastCalledWith(new Set(['1', '2']));
+
+    rerender(
+      <DataTable
+        table={makeTable()}
+        columns={columns}
+        rowKey={(r) => r.id}
+        layout="table"
+        selectable
+        selectedIds={new Set(['1'])}
+        onSelectionChange={onSelectionChange}
+      />
+    );
+    expect((screen.getAllByRole('checkbox')[1] as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('shows no checkboxes unless asked', () => {
+    render(<DataTable table={makeTable()} columns={columns} rowKey={(r) => r.id} layout="table" />);
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+  });
+});
+
+describe('DataTable row actions', () => {
+  it('renders them per row without triggering the row click', () => {
+    const onRowClick = vi.fn();
+    const onAction = vi.fn();
+    render(
+      <DataTable
+        table={makeTable()}
+        columns={columns}
+        rowKey={(r) => r.id}
+        layout="table"
+        onRowClick={onRowClick}
+        rowActions={(r) => (
+          <button type="button" onClick={() => onAction(r.id)}>
+            Call
+          </button>
+        )}
+      />
+    );
+
+    const buttons = screen.getAllByRole('button', { name: 'Call' });
+    expect(buttons).toHaveLength(rows.length);
+
+    fireEvent.click(buttons[0]);
+    expect(onAction).toHaveBeenCalledWith('1');
+    // The action lives inside a clickable row; it must not open the record too.
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+});
