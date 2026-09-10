@@ -953,7 +953,6 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       {!isEmbedded && (
         <PageHeader
           title="Leads"
-          icon={PhoneCall}
           actions={
             // Create Lead is the one action people come here for, so it is the
             // only accented control; the bulk-data chores sit behind overflow.
