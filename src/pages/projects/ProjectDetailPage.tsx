@@ -387,6 +387,7 @@ const ProjectDetailPage = () => {
                   size="sm"
                   className="h-8 gap-1.5 text-xs font-semibold"
                   onClick={() => setPlantOpen(true)}
+                  aria-label="Edit system specification"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Edit</span>

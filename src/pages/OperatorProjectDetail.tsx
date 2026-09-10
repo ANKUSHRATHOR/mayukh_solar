@@ -758,10 +758,23 @@ const OperatorProjectDetail = () => {
                 </div>
                 {doc.file_url && (
                   <div className="flex gap-1.5">
-                    <Button size="sm" variant="outline" onClick={() => handleViewDoc(doc.file_url!)}>
+                    {/* These collapse to bare icons below sm, and four identical
+                        unlabelled buttons repeat once per document — so each names
+                        the document it acts on rather than just its own verb. */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleViewDoc(doc.file_url!)}
+                      aria-label={`View ${docLabels[doc.document_type]}`}
+                    >
                       <Eye className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">View</span>
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}
+                      aria-label={`Download ${docLabels[doc.document_type]}`}
+                    >
                       <Download className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Download</span>
                     </Button>
                     <Button 
@@ -769,11 +782,17 @@ const OperatorProjectDetail = () => {
                       variant="outline" 
                       onClick={() => handleSendDocWhatsApp(doc.file_url!, docLabels[doc.document_type])}
                       className="border-emerald-100 text-emerald-800 bg-white hover:bg-emerald-50 gap-1 font-semibold"
+                      aria-label={`Send ${docLabels[doc.document_type]} on WhatsApp`}
                     >
                       <MessageCircle className="h-4 w-4 text-emerald-600" />
                       <span className="hidden sm:inline">WhatsApp</span>
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleShareDoc(doc.file_url!, docLabels[doc.document_type])}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleShareDoc(doc.file_url!, docLabels[doc.document_type])}
+                      aria-label={`Share ${docLabels[doc.document_type]}`}
+                    >
                       <Share2 className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Share</span>
                     </Button>
                   </div>

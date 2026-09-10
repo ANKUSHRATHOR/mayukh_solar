@@ -184,6 +184,7 @@ const PaymentDetailPage = () => {
                 size="sm"
                 className="h-11 gap-2 text-destructive hover:text-destructive sm:h-9"
                 onClick={() => setConfirmOpen(true)}
+                aria-label="Delete this payment"
               >
                 <Trash2 className="h-4 w-4" />
                 <span className="hidden sm:inline">Delete</span>

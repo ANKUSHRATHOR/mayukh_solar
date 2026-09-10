@@ -924,7 +924,7 @@ const LeadDetail = () => {
               title="Customer Contact Details"
               icon={<User className="h-4 w-4" />}
               action={
-                <Button variant="outline" size="sm" onClick={handleOpenEditContact} className="h-8 gap-1 text-xs font-semibold">
+                <Button variant="outline" size="sm" onClick={handleOpenEditContact} className="h-8 gap-1 text-xs font-semibold" aria-label="Edit customer contact details">
                   <Edit className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Edit</span>
                 </Button>
@@ -969,6 +969,7 @@ const LeadDetail = () => {
                   disabled={syncingKno}
                   onClick={handleSyncKno}
                   className="h-8 shrink-0 gap-1.5 px-3 text-xs font-semibold"
+                  aria-label="Sync DISCOM connection specs"
                 >
                   <RefreshCw className={`h-3 w-3 ${syncingKno ? 'animate-spin' : ''}`} />
                   <span className="hidden sm:inline">Sync Specs</span>
@@ -1123,6 +1124,7 @@ const LeadDetail = () => {
                   size="sm"
                   onClick={() => setIsPlantDetailsOpen(true)}
                   className="h-8 gap-1.5 text-xs font-semibold"
+                  aria-label={`${hasPlantDetails ? 'Edit' : 'Add'} plant details`}
                 >
                   {hasPlantDetails ? <Edit className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
                   <span className="hidden sm:inline">{hasPlantDetails ? 'Edit' : 'Add'} plant details</span>
