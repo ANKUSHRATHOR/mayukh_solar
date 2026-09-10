@@ -707,7 +707,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       {!isEmbedded && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
           <div>
-            <h1 className="text-2xl font-bold text-display text-foreground tracking-tight">Leads</h1>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">Leads</h1>
           </div>
           {/* Create Lead is the one action people come here to take, so it is the
               only accented control. Import and Export are occasional bulk-data

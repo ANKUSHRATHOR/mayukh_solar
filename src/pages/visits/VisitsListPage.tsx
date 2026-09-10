@@ -10,6 +10,7 @@ import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
 import TablePagination from '@/components/common/TablePagination';
+import StatusBadge from '@/components/common/StatusBadge';
 import { useServerTable } from '@/hooks/useServerTable';
 import { defaultSort } from '@/lib/tableQuery';
 import {
@@ -84,6 +85,7 @@ const VisitsListPage = () => {
     },
     {
       id: 'location',
+      mobile: 'meta',
       header: 'Area',
       hideBelow: 'lg',
       cell: (v) => (
@@ -94,6 +96,7 @@ const VisitsListPage = () => {
     },
     {
       id: 'when',
+      mobile: 'meta',
       header: tab === 'open' ? 'Scheduled' : 'Completed',
       sortKey: tab === 'open' ? 'scheduled_for' : 'completed_at',
       cell: (v) => {
@@ -106,9 +109,11 @@ const VisitsListPage = () => {
               {format(new Date(when), 'dd MMM, h:mm a')}
             </span>
             {overdue && (
-              <Badge className="border-transparent bg-destructive/15 px-1.5 py-0 text-[9px] font-bold uppercase text-destructive">
-                Overdue
-              </Badge>
+              <StatusBadge
+                value="overdue"
+                map={{ overdue: { label: 'Overdue', tone: 'danger' } }}
+                size="sm"
+              />
             )}
           </div>
         );
@@ -117,6 +122,7 @@ const VisitsListPage = () => {
     {
       id: 'outcome',
       header: tab === 'open' ? 'Status' : 'Outcome',
+      mobile: 'badge',
       cell: (v) =>
         tab === 'open' ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-warning">
@@ -166,7 +172,6 @@ const VisitsListPage = () => {
       />
 
       <DataTable
-        layout="cards"
         table={table}
         columns={columns}
         rowKey={(v) => v.id}

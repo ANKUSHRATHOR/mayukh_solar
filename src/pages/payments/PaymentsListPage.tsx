@@ -29,7 +29,8 @@ import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
 import TablePagination from '@/components/common/TablePagination';
-import StatCard from '@/components/dashboard/StatCard';
+import StatusBadge from '@/components/common/StatusBadge';
+import StatStrip from '@/components/common/StatStrip';
 import PaymentFormDialog from '@/components/payments/PaymentFormDialog';
 import { useServerTable } from '@/hooks/useServerTable';
 import { useStickyState } from '@/hooks/useStickyState';
@@ -187,6 +188,7 @@ const PaymentsListPage = () => {
       id: 'payment_date',
       header: 'Received',
       sortKey: 'payment_date',
+      mobile: 'meta',
       cell: (p) => (
         <span className="whitespace-nowrap text-xs">
           {format(new Date(p.payment_date), 'dd MMM yyyy')}
@@ -197,6 +199,7 @@ const PaymentsListPage = () => {
       id: 'payment_mode',
       header: 'Mode',
       sortKey: 'payment_mode',
+      mobile: 'meta',
       cell: (p) => (
         <span className="text-xs font-medium">
           {paymentModeLabels[p.payment_mode] ?? p.payment_mode}
@@ -208,6 +211,7 @@ const PaymentsListPage = () => {
       header: 'Paid by',
       sortKey: 'source',
       hideBelow: 'lg',
+      mobile: 'meta',
       cell: (p) => (
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
           {p.source === 'bank' ? (
@@ -226,6 +230,7 @@ const PaymentsListPage = () => {
       id: 'reference_number',
       header: 'Reference',
       hideBelow: 'xl',
+      mobile: 'hidden',
       cell: (p) => (
         <span className="break-all text-xs text-muted-foreground">{p.reference_number || '—'}</span>
       ),
@@ -245,7 +250,7 @@ const PaymentsListPage = () => {
       header: 'Outstanding',
       sortKey: 'balance',
       align: 'right',
-      mobile: 'subtitle',
+      mobile: 'meta',
       cell: (d) => (
         <span className="font-bold tabular-nums text-warning">{formatMoney(d.balance)}</span>
       ),
@@ -280,17 +285,21 @@ const PaymentsListPage = () => {
       id: 'is_overdue',
       header: 'Status',
       sortKey: 'is_overdue',
+      mobile: 'badge',
       cell: (d) =>
-        d.is_overdue ? (
-          <Badge variant="outline" className="gap-1 border-destructive/40 bg-destructive/10 text-destructive">
-            <AlertTriangle className="h-3 w-3" />
-            {d.days_overdue} day{d.days_overdue === 1 ? '' : 's'} late
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            In window
-          </Badge>
-        ),
+        // StatusBadge, not a hand-rolled Badge: these were text-xs sentence
+        // case while every other status chip in the app is text-[10px] upper.
+        <StatusBadge
+          value={d.is_overdue ? 'overdue' : 'in_window'}
+          map={{
+            overdue: {
+              label: `${d.days_overdue} day${d.days_overdue === 1 ? '' : 's'} late`,
+              tone: 'danger',
+            },
+            in_window: { label: 'In window', tone: 'neutral' },
+          }}
+          size="sm"
+        />,
     },
   ];
 
@@ -364,48 +373,41 @@ const PaymentsListPage = () => {
         }
       />
 
+      {/* The same compact strip every list uses. Absent, not zeroed, for a role
+          that cannot read project_payments — "Outstanding ₹0" would read as
+          "nothing is owed" rather than "you cannot see this". */}
       {kpis?.payments_visible && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
-          <StatCard
-            title="This month"
-            value={formatMoney(kpis.received_this_month)}
-            icon={IndianRupee}
-            accent="success"
-          />
-          <StatCard
-            title="Outstanding"
-            value={formatMoney(kpis.outstanding)}
-            icon={Wallet}
-            accent="warning"
-            onClick={() => setTab('dues')}
-          />
-          <StatCard
-            title="Overdue"
-            value={formatMoney(kpis.overdue_amount)}
-            icon={AlertTriangle}
-            accent="destructive"
-            change={
-              kpis.overdue_count > 0
-                ? `${kpis.overdue_count} project${kpis.overdue_count === 1 ? '' : 's'} past ${kpis.due_days} day${kpis.due_days === 1 ? '' : 's'}`
-                : 'Nothing late'
-            }
-            changeType={kpis.overdue_count > 0 ? 'down' : 'neutral'}
-            onClick={() => setTab('dues')}
-          />
-          <StatCard
-            title="Unallocated"
-            value={kpis.unallocated_count}
-            icon={Inbox}
-            accent="info"
-            change={
-              kpis.unallocated_count > 0
-                ? `${formatMoney(kpis.unallocated_amount)} to match`
-                : 'Inbox clear'
-            }
-            changeType={kpis.unallocated_count > 0 ? 'down' : 'neutral'}
-            onClick={() => setTab('unallocated')}
-          />
-        </div>
+        <StatStrip
+          items={[
+            { label: 'This month', value: formatMoney(kpis.received_this_month), tone: 'success' },
+            {
+              label: 'Outstanding',
+              value: formatMoney(kpis.outstanding),
+              tone: 'warning',
+              onClick: () => setTab('dues'),
+            },
+            {
+              label: 'Overdue',
+              value: formatMoney(kpis.overdue_amount),
+              tone: 'danger',
+              hint:
+                kpis.overdue_count > 0
+                  ? `${kpis.overdue_count} past ${kpis.due_days}d`
+                  : 'nothing late',
+              onClick: () => setTab('dues'),
+            },
+            {
+              label: 'Unallocated',
+              value: kpis.unallocated_count,
+              tone: kpis.unallocated_count > 0 ? 'info' : 'neutral',
+              hint:
+                kpis.unallocated_count > 0
+                  ? `${formatMoney(kpis.unallocated_amount)} to match`
+                  : 'inbox clear',
+              onClick: () => setTab('unallocated'),
+            },
+          ]}
+        />
       )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as PaymentTab)}>

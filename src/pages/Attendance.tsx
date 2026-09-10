@@ -656,7 +656,7 @@ const Attendance = () => {
     <div className="p-4 lg:p-8 max-w-3xl mx-auto space-y-6 animate-in-up">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-display text-2xl sm:text-3xl">My Attendance</h1>
+          <h1 className="text-2xl sm:text-3xl">My Attendance</h1>
           <p className="text-sm text-muted-foreground mt-1">{format(new Date(), "EEEE, dd MMM yyyy")}</p>
         </div>
         <Link to="/my-attendance" className="text-sm text-primary underline shrink-0">

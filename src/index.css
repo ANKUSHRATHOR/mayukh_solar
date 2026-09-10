@@ -177,10 +177,10 @@
 @layer utilities {
   .gradient-primary { background: var(--gradient-primary); }
   .gradient-card { background: hsl(var(--card)); }
-  .shadow-card { box-shadow: var(--shadow-card); }
-  .shadow-elevated { box-shadow: var(--shadow-elevated); }
-  .shadow-glow { box-shadow: var(--shadow-glow); }
-  .shadow-bento { box-shadow: var(--shadow-bento); }
+  /* shadow-card / -elevated / -glow / -bento are now Tailwind boxShadow tokens
+     (tailwind.config.ts), so they compose with hover: and dark:. Defining them
+     here as well would shadow the generated utilities and break the modifiers
+     again. */
 
   /* Simple clean headers/glass - no neon overlays */
   .glass {
@@ -189,7 +189,7 @@
 
   /* Bento card representation without neon background */
   .bento {
-    @apply bg-card border border-border shadow-card rounded-lg overflow-hidden;
+    @apply bg-card border border-border shadow-card rounded-2xl overflow-hidden;
   }
 
   .glow-border {
@@ -205,10 +205,6 @@
 
   .text-gradient {
     @apply text-primary;
-  }
-
-  .text-display {
-    @apply text-foreground;
   }
 
   .ambient-glow {

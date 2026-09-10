@@ -55,7 +55,7 @@ const PageHeader = ({
         )}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-xl font-extrabold leading-tight text-foreground text-display sm:text-2xl">
+            <h1 className="truncate text-xl font-extrabold leading-tight text-foreground sm:text-2xl">
               {title}
             </h1>
             {meta}

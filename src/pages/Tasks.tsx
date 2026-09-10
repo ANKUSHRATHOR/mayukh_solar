@@ -165,7 +165,7 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       {!isEmbedded && (
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-display">Tasks</h1>
+            <h1 className="text-2xl font-bold">Tasks</h1>
             <p className="text-sm text-muted-foreground mt-1">
               {isAdminOrOp ? 'Assign and track extra work for sales persons.' : 'Your assigned tasks.'}
             </p>

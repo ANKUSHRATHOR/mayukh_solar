@@ -52,7 +52,7 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
                   for a single unbroken one. */}
               <span className="min-w-0 break-words">{title}</span>
             </p>
-            <p className="text-[22px] sm:text-3xl font-extrabold mt-1.5 sm:mt-2 text-display tabular-nums leading-none">{value}</p>
+            <p className="text-[22px] sm:text-3xl font-extrabold mt-1.5 sm:mt-2 tabular-nums leading-none">{value}</p>
             {change && (
               <p className={cn(
                 'text-[11px] sm:text-xs mt-1.5 sm:mt-2 font-medium inline-flex items-center gap-1',

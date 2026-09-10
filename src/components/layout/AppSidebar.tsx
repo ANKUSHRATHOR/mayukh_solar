@@ -52,7 +52,7 @@ const AppSidebar = ({ mobileOpen = false, onMobileClose }: AppSidebarProps) => {
       <div className="flex min-h-20 items-center gap-3 border-b border-sidebar-border bg-sidebar p-4 text-sidebar-foreground">
         <img src={logo} alt="Mayukh Solar" width={44} height={44} className="h-11 w-11 shrink-0 rounded-xl bg-background/60 p-1 ring-1 ring-primary/30 lg:h-9 lg:w-9" />
         <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
-          <p className="truncate text-base font-bold leading-tight text-display lg:text-sm">Mayukh Solar</p>
+          <p className="truncate text-base font-bold leading-tight lg:text-sm">Mayukh Solar</p>
           <p className="mt-0.5 truncate text-[11px] uppercase tracking-[0.14em] text-sidebar-foreground/60">{roleLabel}</p>
         </div>
         <button

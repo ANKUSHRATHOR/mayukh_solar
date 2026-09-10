@@ -41,7 +41,7 @@ const StaffPerformance = () => {
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6 animate-in-up">
       <div>
-        <h1 className="text-2xl font-bold text-display">Staff Performance</h1>
+        <h1 className="text-2xl font-bold">Staff Performance</h1>
         <p className="text-sm text-muted-foreground mt-1">KPI summary across leads, projects and attendance.</p>
       </div>
 
