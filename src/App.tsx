@@ -46,8 +46,34 @@ import VisitsListPage from "./pages/visits/VisitsListPage.tsx";
 import VisitDetailPage from "./pages/visits/VisitDetailPage.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
+import { isRetryable } from "@/lib/retry";
 
-const queryClient = new QueryClient();
+/**
+ * react-query's defaults are `staleTime: 0` and `refetchOnWindowFocus: true`,
+ * which together mean every mounted query refetches every time the tab regains
+ * focus. On a desktop that reads as the screen reloading whenever you come back
+ * to it; on a phone it fires every time the app is resumed, on a connection
+ * where a refetch is not free. Attendance had already opted out query by query,
+ * which is the drift a shared default exists to prevent.
+ *
+ * A page that genuinely needs fresher data asks for it — by refetching after
+ * its own mutation, through its realtime subscription, or with a shorter
+ * staleTime of its own.
+ *
+ * `retry` is narrowed for the same reason the leads list retries: three
+ * attempts is right for a connection that dropped, and pointless for a
+ * permission error, which returns the same answer however many times it is
+ * asked. `isRetryable` is the single definition of which is which.
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+      retry: (failureCount, error) => failureCount < 2 && isRetryable(error),
+    },
+  },
+});
 
 // Preserve the :id when redirecting the old /staff/:id[/edit] URLs to /users/:id.
 const StaffRedirect = ({ edit = false }: { edit?: boolean }) => {
