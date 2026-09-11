@@ -25,6 +25,7 @@ import {
   Send,
 } from "lucide-react";
 import { format } from "date-fns";
+import { isDriveRef, uploadFile } from "@/lib/fileStore";
 import { compressImage, estimateBlur } from "@/lib/capture";
 import { Link } from "react-router-dom";
 
@@ -522,11 +523,13 @@ const Attendance = () => {
       if (imageFile) {
         setPhase("Uploading image...");
         setProgress(10);
-        const path = `${staff.user_id}/${today}/${crypto.randomUUID()}.jpg`;
-        const { error: upErr } = await supabase.storage
-          .from("attendance-media")
-          .upload(path, imageFile, { contentType: "image/jpeg", upsert: false, cacheControl: "3600" });
-        if (upErr) throw upErr;
+        const path = await uploadFile({
+          scope: "attendance",
+          ownerId: staff.user_id,
+          file: imageFile,
+          filename: `${today}-${crypto.randomUUID()}.jpg`,
+          label: "Attendance photo",
+        });
         imagePath = path;
         uploadedImagePath = path;
         setProgress(70);
@@ -612,7 +615,12 @@ const Attendance = () => {
         ]);
         return;
       }
-      if (uploadedImagePath) {
+      // No rollback for a Drive upload: deleting a file is authorised by the
+      // row it hangs off, and the punch that would have created that row is
+      // exactly what just failed. The orphan is the user's own selfie in their
+      // own month folder -- harmless, and cheaper than opening an
+      // unauthenticated delete-by-id path just to tidy it.
+      if (uploadedImagePath && !isDriveRef(uploadedImagePath)) {
         void supabase.storage.from("attendance-media").remove([uploadedImagePath]);
       }
       toast({ title: "Failed", description: e.message || "Unknown error", variant: "destructive" });

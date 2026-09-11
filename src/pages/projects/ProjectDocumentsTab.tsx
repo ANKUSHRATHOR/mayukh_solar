@@ -1,32 +1,28 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import {
-  CheckCircle2,
-  Clock,
-  Download,
-  Eye,
-  FileText,
-  Loader2,
-  XCircle,
-} from 'lucide-react';
+import { Check, CheckCircle2, Clock, FileText, Loader2, Upload, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import DocumentActions from '@/components/common/DocumentActions';
 import SectionCard from '@/components/common/SectionCard';
 import ErrorState from '@/components/common/ErrorState';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
   DOCUMENT_SPECS,
   GROUP_LABELS,
   GROUP_ORDER,
-  downloadDocument,
   fetchProjectDocuments,
-  getDocumentUrl,
+  handleFor,
+  saveProjectDocumentText,
   specsInGroup,
   summariseDocuments,
+  uploadProjectDocument,
   type DocumentSpec,
   type ProjectDocument,
 } from '@/lib/documents';
@@ -43,8 +39,18 @@ interface Props {
  * blank labels and three could not be uploaded at all.
  */
 const ProjectDocumentsTab = ({ projectId }: Props) => {
+  const { role, user } = useAuth();
   const { toast } = useToast();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // Verification is the operator's and admin's job, so removing a wrong
+  // document is theirs too. Sales and trades upload and review only.
+  const canDelete = role === 'admin' || role === 'operator';
+
+  // One shared file input rather than seventeen hidden ones; the row that
+  // opened it is remembered here.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingSpec = useRef<DocumentSpec | null>(null);
+  const [busyType, setBusyType] = useState<string | null>(null);
+  const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
 
   const documentsQuery = useQuery({
     queryKey: ['project-documents', projectId],
@@ -59,36 +65,52 @@ const ProjectDocumentsTab = ({ projectId }: Props) => {
       (d) => d.document_type === spec.type && (d.file_url !== null || d.text_value !== null)
     );
 
-  const view = async (doc: ProjectDocument) => {
-    if (!doc.file_url) return;
-    setBusyId(doc.id);
-    try {
-      const url = await getDocumentUrl(doc.file_url);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      toast({
-        title: 'Could not open the document',
-        description: err instanceof Error ? err.message : String(err),
-        variant: 'destructive',
-      });
-    } finally {
-      setBusyId(null);
+  const chooseFile = (spec: DocumentSpec) => {
+    pendingSpec.current = spec;
+    // Reset first: choosing the same file twice in a row fires no change event.
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
     }
   };
 
-  const download = async (doc: ProjectDocument, label: string) => {
-    if (!doc.file_url) return;
-    setBusyId(doc.id);
+  const onFileChosen = async (file: File | undefined) => {
+    const spec = pendingSpec.current;
+    pendingSpec.current = null;
+    if (!file || !spec || !user) return;
+
+    setBusyType(spec.type);
     try {
-      await downloadDocument(doc.file_url, label);
+      await uploadProjectDocument(projectId, user.id, spec.type, file, { label: spec.label });
+      toast({ title: 'Document uploaded', description: spec.label });
+      documentsQuery.refetch();
     } catch (err) {
       toast({
-        title: 'Could not download the document',
+        title: 'Upload failed',
         description: err instanceof Error ? err.message : String(err),
         variant: 'destructive',
       });
     } finally {
-      setBusyId(null);
+      setBusyType(null);
+    }
+  };
+
+  const saveText = async (spec: DocumentSpec) => {
+    if (!user) return;
+    setBusyType(spec.type);
+    try {
+      await saveProjectDocumentText(projectId, user.id, spec.type, textDrafts[spec.type] ?? '');
+      toast({ title: 'Saved', description: spec.label });
+      setTextDrafts((drafts) => ({ ...drafts, [spec.type]: '' }));
+      documentsQuery.refetch();
+    } catch (err) {
+      toast({
+        title: 'Could not save',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setBusyType(null);
     }
   };
 
@@ -165,7 +187,7 @@ const ProjectDocumentsTab = ({ projectId }: Props) => {
                 return (
                   <li
                     key={spec.type}
-                    className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                   >
                     <div className="flex min-w-0 items-start gap-3">
                       <span
@@ -236,34 +258,65 @@ const ProjectDocumentsTab = ({ projectId }: Props) => {
                       </div>
                     </div>
 
-                    {doc?.file_url && (
-                      <div className="flex shrink-0 items-center gap-1.5 sm:ml-4">
+                    <div className="flex shrink-0 items-center gap-1.5 sm:ml-4">
+                      {doc?.file_url && (
+                        <DocumentActions
+                          handle={handleFor(doc)}
+                          label={spec.label}
+                          canDelete={canDelete}
+                          onDeleted={() => documentsQuery.refetch()}
+                        />
+                      )}
+
+                      {spec.isText ? (
+                        <div className="flex w-full items-center gap-1.5 sm:w-56">
+                          <Input
+                            value={textDrafts[spec.type] ?? doc?.text_value ?? ''}
+                            onChange={(event) =>
+                              setTextDrafts((drafts) => ({
+                                ...drafts,
+                                [spec.type]: event.target.value,
+                              }))
+                            }
+                            placeholder={
+                              spec.type === 'customer_email' ? 'customer@email.com' : '10-digit mobile'
+                            }
+                            type={spec.type === 'customer_email' ? 'email' : 'tel'}
+                            className="h-11 sm:h-9"
+                            disabled={busyType === spec.type}
+                          />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+                            onClick={() => void saveText(spec)}
+                            disabled={busyType === spec.type}
+                            aria-label={`Save ${spec.label}`}
+                          >
+                            {busyType === spec.type ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Check className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      ) : (
                         <Button
-                          variant="ghost"
+                          variant={doc ? 'ghost' : 'outline'}
                           size="sm"
-                          className="h-9 gap-1.5 text-xs"
-                          onClick={() => view(doc)}
-                          disabled={busyId === doc.id}
+                          className="h-11 gap-1.5 text-xs sm:h-9"
+                          onClick={() => chooseFile(spec)}
+                          disabled={busyType === spec.type}
                         >
-                          {busyId === doc.id ? (
+                          {busyType === spec.type ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
-                            <Eye className="h-3.5 w-3.5" />
+                            <Upload className="h-3.5 w-3.5" />
                           )}
-                          View
+                          {doc ? 'Replace' : 'Upload'}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-9 gap-1.5 text-xs"
-                          onClick={() => download(doc, spec.label)}
-                          disabled={busyId === doc.id}
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                          <span className="sr-only sm:not-sr-only">Download</span>
-                        </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -272,9 +325,18 @@ const ProjectDocumentsTab = ({ projectId }: Props) => {
         );
       })}
 
+      {/* One input for the whole tab; `chooseFile` records which row opened it. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.pdf"
+        className="hidden"
+        onChange={(event) => void onFileChosen(event.target.files?.[0])}
+      />
+
       <p className="px-1 text-xs text-muted-foreground">
-        {DOCUMENT_SPECS.length} document types are tracked. Uploading is done from the
-        document upload screen; this view is for review and verification.
+        {DOCUMENT_SPECS.length} document types are tracked. Upload or replace any of them here;
+        an operator still has to verify each one.
       </p>
     </div>
   );

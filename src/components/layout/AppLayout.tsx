@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react';
 import AppSidebar from './AppSidebar';
 import NotificationPanel from '@/components/notifications/NotificationPanel';
+import UploadQueuePanel from '@/components/common/UploadQueuePanel';
 import RoleViewSwitcher, { RoleViewBanner } from '@/components/layout/RoleViewSwitcher';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -58,6 +59,8 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </main>
+        {/* Outside <main> so it stays put while the page scrolls. */}
+        <UploadQueuePanel />
       </div>
     </div>
   );

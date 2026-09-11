@@ -1,5 +1,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import JSZip from 'jszip';
+import DocumentPreviewDialog from '@/components/common/DocumentPreviewDialog';
+import {
+  createShareLink,
+  downloadFile,
+  extensionForMime,
+  resolveFile,
+  revokeFileUrl,
+  type FileHandle,
+} from '@/lib/fileStore';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -122,7 +131,8 @@ const OperatorProjectDetail = () => {
   // WhatsApp phone prompt state
   const [isPhonePromptOpen, setIsPhonePromptOpen] = useState(false);
   const [targetPhone, setTargetPhone] = useState('');
-  const [pendingDocUrl, setPendingDocUrl] = useState('');
+  const [pendingDoc, setPendingDoc] = useState<DocRecord | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<DocRecord | null>(null);
   const [pendingDocLabel, setPendingDocLabel] = useState('');
 
   const fetchData = useCallback(async () => {
@@ -176,39 +186,44 @@ const OperatorProjectDetail = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const getSignedUrl = async (fileUrl: string, download = false): Promise<string | null> => {
-    let path = fileUrl;
-    const marker = '/project-documents/';
-    if (path.includes(marker)) path = path.split(marker)[1];
-    const { data, error } = await supabase.storage
-      .from('project-documents')
-      .createSignedUrl(path, 60 * 10, download ? { download: true } : undefined);
-    if (error || !data?.signedUrl) {
-      toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
-      return null;
+  // Documents are addressed by their row: a Drive file is private and the
+  // proxy re-checks the caller's access before streaming it.
+  const handleFor = (doc: DocRecord): FileHandle => ({
+    ref: doc.file_url,
+    table: 'documents',
+    rowId: doc.id,
+  });
+
+  const handleDownloadDoc = async (doc: DocRecord, label: string) => {
+    try {
+      await downloadFile(handleFor(doc), label);
+    } catch (err) {
+      toast({
+        title: 'Cannot download file',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
     }
-    return data.signedUrl;
   };
 
-  const handleViewDoc = async (fileUrl: string) => {
-    const url = await getSignedUrl(fileUrl);
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-  };
+  /**
+   * Share and WhatsApp both need a URL the *customer* can open, which a
+   * private Drive file behind the proxy does not have — so these mint a
+   * short-lived signed copy rather than exposing the original.
+   */
+  const handleShareDoc = async (doc: DocRecord, label: string) => {
+    let url: string;
+    try {
+      url = await createShareLink(handleFor(doc), label);
+    } catch (err) {
+      toast({
+        title: 'Cannot share this document',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+      return;
+    }
 
-  const handleDownloadDoc = async (fileUrl: string, label: string) => {
-    const url = await getSignedUrl(fileUrl, true);
-    if (!url) return;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${label}.${fileUrl.split('.').pop()}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
-
-  const handleShareDoc = async (fileUrl: string, label: string) => {
-    const url = await getSignedUrl(fileUrl);
-    if (!url) return;
     if (navigator.share) {
       try {
         await navigator.share({ title: label, url });
@@ -223,22 +238,32 @@ const OperatorProjectDetail = () => {
     }
   };
 
-  const handleSendDocWhatsApp = async (fileUrl: string, label: string, phoneOverride?: string) => {
+  const handleSendDocWhatsApp = async (doc: DocRecord | null, label: string, phoneOverride?: string) => {
+    if (!doc) return;
     if (!project?.leads?.customer_name) {
       toast({ title: 'Cannot send WhatsApp', description: 'Customer name is missing.', variant: 'destructive' });
       return;
     }
 
     if (!phoneOverride) {
-      setPendingDocUrl(fileUrl);
+      setPendingDoc(doc);
       setPendingDocLabel(label);
       setTargetPhone(project?.leads?.mobile || '');
       setIsPhonePromptOpen(true);
       return;
     }
 
-    const url = await getSignedUrl(fileUrl);
-    if (!url) return;
+    let url: string;
+    try {
+      url = await createShareLink(handleFor(doc), label);
+    } catch (err) {
+      toast({
+        title: 'Cannot send WhatsApp',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const { success, error } = await sendBillNotification(
       project.leads.customer_name,
@@ -263,15 +288,16 @@ const OperatorProjectDetail = () => {
       const zip = new JSZip();
       let added = 0;
       for (const d of fileDocs) {
-        const url = await getSignedUrl(d.file_url!);
-        if (!url) continue;
         try {
-          const res = await fetch(url);
+          const file = await resolveFile(handleFor(d));
+          const res = await fetch(file.url);
           if (!res.ok) continue;
           const blob = await res.blob();
-          const ext = (d.file_url!.split('.').pop() || 'bin').split('?')[0];
-          zip.file(`${docLabels[d.document_type]}.${ext}`, blob);
+          // A Drive ref carries no extension, so the name comes from the
+          // resolved content type rather than the stored value.
+          zip.file(`${docLabels[d.document_type]}.${extensionForMime(file.mimeType)}`, blob);
           added++;
+          revokeFileUrl(file.url);
         } catch (e) {
           console.warn('skip doc', d.document_type, e);
         }
@@ -764,7 +790,7 @@ const OperatorProjectDetail = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleViewDoc(doc.file_url!)}
+                      onClick={() => setPreviewDoc(doc)}
                       aria-label={`View ${docLabels[doc.document_type]}`}
                     >
                       <Eye className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">View</span>
@@ -772,7 +798,7 @@ const OperatorProjectDetail = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}
+                      onClick={() => handleDownloadDoc(doc, `${docLabels[doc.document_type]}-${project.project_code}`)}
                       aria-label={`Download ${docLabels[doc.document_type]}`}
                     >
                       <Download className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Download</span>
@@ -780,7 +806,7 @@ const OperatorProjectDetail = () => {
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      onClick={() => handleSendDocWhatsApp(doc.file_url!, docLabels[doc.document_type])}
+                      onClick={() => handleSendDocWhatsApp(doc, docLabels[doc.document_type])}
                       className="border-emerald-100 text-emerald-800 bg-white hover:bg-emerald-50 gap-1 font-semibold"
                       aria-label={`Send ${docLabels[doc.document_type]} on WhatsApp`}
                     >
@@ -790,7 +816,7 @@ const OperatorProjectDetail = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleShareDoc(doc.file_url!, docLabels[doc.document_type])}
+                      onClick={() => handleShareDoc(doc, docLabels[doc.document_type])}
                       aria-label={`Share ${docLabels[doc.document_type]}`}
                     >
                       <Share2 className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Share</span>
@@ -847,10 +873,10 @@ const OperatorProjectDetail = () => {
                   {/* Value / preview */}
                   {doc.file_url && (
                     <div className="flex gap-2 flex-wrap">
-                      <Button variant="outline" size="sm" onClick={() => handleViewDoc(doc.file_url!)}>
+                      <Button variant="outline" size="sm" onClick={() => setPreviewDoc(doc)}>
                         <Eye className="h-4 w-4 mr-1" /> View File
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDownloadDoc(doc.file_url!, `${docLabels[doc.document_type]}-${project.project_code}`)}>
+                      <Button variant="outline" size="sm" onClick={() => handleDownloadDoc(doc, `${docLabels[doc.document_type]}-${project.project_code}`)}>
                         <Download className="h-4 w-4 mr-1" /> Download
                       </Button>
                     </div>
@@ -1233,7 +1259,7 @@ const OperatorProjectDetail = () => {
                 type="button"
                 onClick={() => {
                   setIsPhonePromptOpen(false);
-                  handleSendDocWhatsApp(pendingDocUrl, pendingDocLabel, project?.leads?.mobile);
+                  handleSendDocWhatsApp(pendingDoc, pendingDocLabel, project?.leads?.mobile);
                 }}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center justify-center gap-2 h-11"
               >
@@ -1260,7 +1286,7 @@ const OperatorProjectDetail = () => {
                 <Button 
                   onClick={() => {
                     setIsPhonePromptOpen(false);
-                    handleSendDocWhatsApp(pendingDocUrl, pendingDocLabel, targetPhone);
+                    handleSendDocWhatsApp(pendingDoc, pendingDocLabel, targetPhone);
                   }} 
                   disabled={!targetPhone.trim()}
                   size="sm" 
@@ -1278,6 +1304,13 @@ const OperatorProjectDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DocumentPreviewDialog
+        handle={previewDoc ? handleFor(previewDoc) : null}
+        label={previewDoc ? docLabels[previewDoc.document_type] : ''}
+        open={Boolean(previewDoc)}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+      />
     </div>
   );
 };

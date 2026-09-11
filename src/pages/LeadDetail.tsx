@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { uploadFile } from '@/lib/fileStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -502,18 +503,27 @@ const LeadDetail = () => {
       // 1. Generate PDF Blob client-side
       const pdfBlob = await renderQuotationPdfBlob(element, q.quotation_number);
 
-      // 2. Upload PDF to Supabase Storage
-      const filePath = `quotations/${lead.id}/Quotation_${q.quotation_number}.pdf`;
+      // 2. File it in the lead's Google Drive quotations folder, so the sent
+      //    quotation is on record alongside the customer's other documents.
+      await uploadFile({
+        scope: 'quotation',
+        ownerId: lead.id,
+        file: pdfBlob,
+        filename: `Quotation_${q.quotation_number}.pdf`,
+        label: `Quotation ${q.quotation_number}`,
+      });
+
+      // 3. WhatsApp needs a URL the *customer* can open, which a private Drive
+      //    file does not have. Send a short-lived signed copy instead.
+      const shareBucketPath = `shared/${lead.id}/Quotation_${q.quotation_number}.pdf`;
       const { error: uploadError } = await supabase.storage
         .from('project-documents')
-        .upload(filePath, pdfBlob, { contentType: 'application/pdf', upsert: true });
-
+        .upload(shareBucketPath, pdfBlob, { contentType: 'application/pdf', upsert: true });
       if (uploadError) throw uploadError;
 
-      // 3. Create signed URL
       const { data: signedData, error: signedError } = await supabase.storage
         .from('project-documents')
-        .createSignedUrl(filePath, 60 * 60 * 24 * 7);
+        .createSignedUrl(shareBucketPath, 60 * 60 * 24 * 7);
 
       if (signedError) throw signedError;
       const quotePdfUrl = signedData?.signedUrl;

@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
-import type { DocumentType } from '@/lib/documents';
-import { compressImage } from '@/lib/capture';
+import { documentLabels, type DocumentType } from '@/lib/documents';
+import { uploadFile } from '@/lib/fileStore';
 import { applyPaging, toTablePage } from '@/lib/tableQuery';
 import type { TableQueryParams, TablePage } from '@/hooks/useServerTable';
 
@@ -271,8 +271,12 @@ export const bookVisit = async (
 };
 
 /**
- * Uploads a document collected during a visit. Stored under
- * `leads/{lead_id}/...` — the storage policy keys on that prefix.
+ * Uploads a document collected during a visit, into the lead's Google Drive
+ * folder.
+ *
+ * The row is still written here under the caller's RLS, exactly as it was when
+ * this uploaded to Supabase Storage — the edge function only creates the Drive
+ * file and hands back a `gdrive:` ref.
  */
 export const uploadVisitDocument = async (
   leadId: string,
@@ -280,22 +284,27 @@ export const uploadVisitDocument = async (
   documentType: DocumentType,
   file: File
 ): Promise<void> => {
+  // Compression lives in `uploadFile` now, so every upload path gets it.
   const isImage = file.type.startsWith('image/');
-  const payload = isImage ? await compressImage(file) : file;
   const extension = isImage ? 'jpg' : (file.name.split('.').pop() || 'pdf').toLowerCase();
-  const path = `leads/${leadId}/${documentType}.${extension}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from('project-documents')
-    .upload(path, payload, { upsert: true });
-  if (uploadError) throw new Error(uploadError.message);
 
   const { data: existing } = await supabase
     .from('documents')
-    .select('id')
+    .select('id, file_url')
     .eq('lead_id', leadId)
     .eq('document_type', documentType)
     .maybeSingle();
+
+  // Re-uploading over a rejected document replaces the file in Drive; the old
+  // one is trashed only once the new one is stored.
+  const path = await uploadFile({
+    scope: 'lead',
+    ownerId: leadId,
+    file,
+    filename: `${documentType}.${extension}`,
+    label: documentLabels[documentType],
+    replaceRef: existing?.file_url ?? null,
+  });
 
   if (existing) {
     const { error } = await supabase

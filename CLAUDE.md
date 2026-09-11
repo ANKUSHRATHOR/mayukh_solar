@@ -46,9 +46,59 @@ Preview the app through the `dev` config in `.claude/launch.json` rather than ru
 - Client: `src/integrations/supabase/client.ts`, configured from `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`. The publishable (anon) key is committed on purpose — it ships in the bundle and is constrained by RLS. The service_role key must never appear in `.env` or client code; privileged work belongs in an Edge Function.
 - Types: `src/integrations/supabase/types.ts` is generated from the live schema. Do not hand-edit. When a table or RPC postdates the last generation, existing code works around it with `(supabase as any)` / `supabase.rpc('name' as any)` — follow that pattern, or regenerate types.
 - Migrations: `supabase/migrations/*.sql`, applied in filename order. There is no local Docker stack here, so migrations are validated against the remote project.
-- Edge Functions (`supabase/functions/`, Deno): `create-staff`, `update-staff`, `update-staff-email` (service_role admin ops, each re-verifies the caller is an admin), `generate-quotation`, `send-push` (web-push/VAPID), `whatsapp-webhook` (parses CONFIRM/REJECT replies), `consumer-lookup` (DISCOM K-Number proxy; the only function with `verify_jwt = false`).
-- Storage buckets in use: `project-documents`, `attendance-media`, `material-dispatch` — all private.
+- Edge Functions (`supabase/functions/`, Deno): `create-staff`, `update-staff`, `update-staff-email` (service_role admin ops, each re-verifies the caller is an admin), `generate-quotation`, `send-push` (web-push/VAPID), `whatsapp-webhook` (parses CONFIRM/REJECT replies), `consumer-lookup` (DISCOM K-Number proxy; the only function with `verify_jwt = false`), `drive-storage` (the only thing that talks to Google Drive — see below).
+- Storage buckets in use: `project-documents`, `attendance-media`, `material-dispatch` — all private — plus the deliberately public `branding`. These now hold **legacy files only**: everything uploaded since the Drive switch goes to Google Drive. See below.
 - A lot of business logic lives in Postgres functions, not TypeScript: `complete_site_visit`, `mark_trade_work_done`, `project_stage_requirements`, `punch_attendance`, `compute_salary`, `bulk_assign_leads`, `leads_stage_counts`, `generate_project_code`, `get_user_role`. Before implementing a rule client-side, check whether an RPC already owns it.
+
+### File storage — Google Drive, with Supabase Storage still readable
+
+Documents (project and lead files, quotation PDFs, attendance and task photos,
+material-dispatch photos) live in **Google Drive**, under one company Google
+account. Setup is in [`SETUP_GOOGLE_DRIVE.md`](SETUP_GOOGLE_DRIVE.md).
+
+**Everything goes through [`src/lib/fileStore.ts`](src/lib/fileStore.ts).** Never
+call `supabase.storage` for a document again. The provider is encoded in the
+value already stored in the DB, so there was no schema migration and no bulk
+file migration:
+
+```
+"a1b2c3/aadhaar_front.jpg"   -> legacy Supabase Storage path, still read from the bucket
+"gdrive:1AbCdEf..."          -> Google Drive file id
+```
+
+Four tables reference a file, and `FILE_COLUMN` maps each to its column:
+`documents.file_url`, `material_dispatches.image_url`, `tasks.proof_image_path`,
+`attendance_events.bike_meter_image_path`.
+
+`supabase/functions/drive-storage/` is the only code that talks to Google.
+Drive files are **private and never link-shared**; every read is proxied through
+that function. **Authorization is delegated to RLS, not reimplemented**: a
+request names a *row*, never a Drive id, and the row is read or written through
+a client carrying the caller's own JWT — if RLS returns nothing, the function
+answers 403 without ever touching Drive. A new document surface inherits its
+permissions for free. Deletes trash rather than purge, so a mis-click is
+recoverable from the Drive bin for 30 days.
+
+Two consequences worth knowing before changing this:
+
+- **A Drive ref carries no file extension.** Anything that decided "is this an
+  image" or named a download from the path must use the resolved content type
+  (`resolveFile` returns `{ url, mimeType }`) — otherwise every document saves
+  as `.bin` and every PDF renders as a broken `<img>`.
+- **A Drive URL is an object URL**, because the fetch needs an Authorization
+  header. It must be released with `revokeFileUrl` when the view goes away, or
+  each preview leaks the file for the life of the tab.
+
+Sending a document to a *customer* (WhatsApp, Share) cannot use a private Drive
+file, and a personal Google account cannot put an expiry on a link-shared one.
+`createShareLink` therefore copies the bytes to a `shared/` prefix in
+`project-documents` and signs that for 7 days; the Drive original stays private.
+
+UI: [`DocumentActions`](src/components/common/DocumentActions.tsx) (Preview ·
+Download · Delete) and
+[`DocumentPreviewDialog`](src/components/common/DocumentPreviewDialog.tsx) are
+the shared components — reach for those rather than hand-rolling a "View" button
+that opens a new tab.
 
 ## Architecture
 
