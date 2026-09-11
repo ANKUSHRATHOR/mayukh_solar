@@ -39,6 +39,7 @@ import StatusBadge from '@/components/common/StatusBadge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { ServerTable, SortState } from '@/hooks/useServerTable';
 import { leadStatusMeta, type StatusTone } from '@/lib/statusMeta';
+import { retryQuery } from '@/lib/retry';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 type PaymentType = Database['public']['Enums']['payment_type'];
@@ -189,6 +190,11 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   // Raw `leads_list` rows, mapped to LeadRow at render time. The view is not in
   // the generated types, hence the loose row shape.
   const [rawLeads, setRawLeads] = useState<Record<string, unknown>[]>([]);
+  // Read inside fetchData to decide whether a failure has anything to fall back
+  // on. A ref rather than the state itself so fetchData does not re-create — and
+  // re-fire its effect — every time rows arrive.
+  const rawLeadsRef = useRef<Record<string, unknown>[]>([]);
+  rawLeadsRef.current = rawLeads;
   const [syncingKno, setSyncingKno] = useState<string | null>(null);
   const [salesTab, setSalesTab] = useState<'my_visits' | 'unassigned_visits'>('my_visits');
   const { user, role } = useAuth();
@@ -196,6 +202,9 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
   const [operatorStaff, setOperatorStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
+  // Non-null once a foreground fetch fails; DataTable turns it into an ErrorState
+  // with a Try again button instead of an empty table.
+  const [loadError, setLoadError] = useState<Error | null>(null);
   const [search, setSearch] = useStickyState<string>('admin-leads:search', '');
   // The query keys off the debounced value, not the raw one: `search` changes on
   // every keystroke, and buildLeadsQuery's identity drives both the fetch effect
@@ -387,14 +396,18 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     try {
       // Two queries per render: the page itself, and one grouped count for the
       // whole stage bar. They are independent, so they go out together.
+      //
+      // Both are rebuilt per attempt rather than awaited twice: a PostgrestBuilder
+      // executes once, so `retryQuery` needs a factory to retry from.
       const [leadsRes, stageRes] = await Promise.all([
-        buildLeadsQuery().range(page * pageSize, page * pageSize + pageSize - 1),
-        supabase.rpc('leads_stage_counts' as any, buildStageCountArgs()),
+        retryQuery(() => buildLeadsQuery().range(page * pageSize, page * pageSize + pageSize - 1)),
+        retryQuery(() => supabase.rpc('leads_stage_counts' as any, buildStageCountArgs())),
       ]);
 
       if (leadsRes.error) throw leadsRes.error;
       if (requestId !== requestIdRef.current) return;
 
+      setLoadError(null);
       setTotal(leadsRes.count ?? 0);
       setRawLeads((leadsRes.data as unknown as Record<string, unknown>[]) || []);
 
@@ -403,7 +416,24 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       if (stageRes.error) setStageCounts({});
       else setStageCounts((stageRes.data as Record<string, number>) || {});
     } catch (error: any) {
-      toast({ title: 'Unable to load leads', description: error.message || 'Please try again.', variant: 'destructive' });
+      if (requestId !== requestIdRef.current) return;
+
+      // A failed *background* refresh keeps the rows already on screen — they are
+      // stale, not wrong, and blanking a populated table is worse than showing
+      // last-known data behind a toast. With nothing to fall back on, the failure
+      // becomes the page: an empty table and a toast that fades reads as "you
+      // have no leads", which is the bug this replaces.
+      if (background && rawLeadsRef.current.length > 0) {
+        toast({ title: 'Unable to refresh leads', description: error.message || 'Showing the last loaded results.', variant: 'destructive' });
+      } else {
+        // Supabase returns a plain object, not an Error; ErrorState reads
+        // `.message` and ServerTable is typed to react-query's `Error | null`.
+        setLoadError(
+          error instanceof Error
+            ? error
+            : Object.assign(new Error(error?.message || 'Unable to load leads.'), { code: error?.code }),
+        );
+      }
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -749,10 +779,14 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         ),
       isLoading: loading,
       isFetching: loading,
-      error: null,
-      refetch: (() => fetchData(true)) as unknown as ServerTable<LeadRow>['refetch'],
+      error: loadError,
+      // Background while rows are on screen, so a refresh does not flash the
+      // table away. Foreground when there is nothing showing — that call is the
+      // Try again on the ErrorState, and it needs to look like it did something.
+      refetch: (() =>
+        fetchData(rawLeadsRef.current.length > 0)) as unknown as ServerTable<LeadRow>['refetch'],
     }),
-    [debouncedSearch, fetchData, leadRows, loading, page, pageCount, pageSize, search, setPageSize, setSearch, setSort, sort, total]
+    [debouncedSearch, fetchData, leadRows, loadError, loading, page, pageCount, pageSize, search, setPageSize, setSearch, setSort, sort, total]
   );
 
   const columns: DataTableColumn<LeadRow>[] = [
