@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import DocumentPreviewDialog from '@/components/common/DocumentPreviewDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -81,10 +82,9 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     qc.invalidateQueries({ queryKey: ['admin-events'] });
   };
 
-  const openImage = async (path: string) => {
-    const { data } = await supabase.storage.from('attendance-media').createSignedUrl(path, 300);
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
-  };
+  // Previewed in place rather than opened in a new tab: an admin reviewing a
+  // day's punches would otherwise lose the list on every photo.
+  const [previewEvent, setPreviewEvent] = useState<any | null>(null);
 
   // Punch-out requests panel
   const { data: punchReqs } = useQuery({
@@ -234,7 +234,7 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                         </div>
                       )}
                       {e.bike_meter_image_path && (
-                        <Button size="sm" variant="outline" onClick={() => openImage(e.bike_meter_image_path)}><Eye className="h-3 w-3 mr-1" /> Image</Button>
+                        <Button size="sm" variant="outline" onClick={() => setPreviewEvent(e)}><Eye className="h-3 w-3 mr-1" /> Image</Button>
                       )}
                       {e.bike_meter_reading != null && <span className="text-xs">{e.bike_meter_reading} km</span>}
                       {!e.is_rejected && (
@@ -326,6 +326,21 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DocumentPreviewDialog
+        handle={
+          previewEvent
+            ? {
+                ref: previewEvent.bike_meter_image_path,
+                table: 'attendance_events',
+                rowId: previewEvent.id,
+              }
+            : null
+        }
+        label="Attendance photo"
+        open={Boolean(previewEvent)}
+        onOpenChange={(open) => !open && setPreviewEvent(null)}
+      />
     </div>
   );
 };

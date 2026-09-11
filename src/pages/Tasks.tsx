@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/capture';
+import { uploadFile } from '@/lib/fileStore';
+import DocumentPreviewDialog from '@/components/common/DocumentPreviewDialog';
 import { Plus, Camera, CheckCircle2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -33,6 +35,7 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [t, setT] = useState<any>({ title: '', description: '', priority: 'medium', due_date: '', assigned_to_user_id: '' });
 
   const [proofOpen, setProofOpen] = useState<any | null>(null);
+  const [previewTask, setPreviewTask] = useState<any | null>(null);
   const [proofNotes, setProofNotes] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -95,11 +98,16 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       let path: string | null = proofOpen.proof_image_path || null;
       if (proofFile) {
         const compressed = await compressImage(proofFile);
-        const newPath = `tasks/${staff.user_id}/${Date.now()}-${crypto.randomUUID()}.jpg`;
-        const { error: upErr } = await supabase.storage.from('attendance-media')
-          .upload(newPath, compressed, { contentType: 'image/jpeg' });
-        if (upErr) throw upErr;
-        path = newPath;
+        // Filed under the staff member's own Drive folder, alongside their
+        // attendance photos — a task proof is the same kind of evidence.
+        path = await uploadFile({
+          scope: 'attendance',
+          ownerId: staff.user_id,
+          file: compressed,
+          filename: `task-${proofOpen.id}-${Date.now()}.jpg`,
+          label: `Proof - ${proofOpen.title}`,
+          replaceRef: proofOpen.proof_image_path || null,
+        });
       }
       const { error } = await supabase.from('tasks' as any).update({
         proof_image_path: path,
@@ -136,14 +144,16 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       
       {task.proof_image_path && (
         <div className="pt-1">
-          <a
-            href={supabase.storage.from('attendance-media').getPublicUrl(task.proof_image_path).data.publicUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[10px] text-primary hover:underline inline-flex items-center gap-1 font-semibold"
+          {/* This used to be a `getPublicUrl` link against a private bucket,
+              which every viewer got a 400 from. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-11 gap-1 px-2 text-[10px] font-semibold text-primary sm:h-7"
+            onClick={() => setPreviewTask(task)}
           >
             <Camera className="h-3 w-3" /> View Proof Photo
-          </a>
+          </Button>
         </div>
       )}
 
@@ -165,7 +175,7 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       {!isEmbedded && (
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-display">Tasks</h1>
+            <h1 className="text-2xl font-bold">Tasks</h1>
             <p className="text-sm text-muted-foreground mt-1">
               {isAdminOrOp ? 'Assign and track extra work for sales persons.' : 'Your assigned tasks.'}
             </p>
@@ -309,6 +319,17 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DocumentPreviewDialog
+        handle={
+          previewTask
+            ? { ref: previewTask.proof_image_path, table: 'tasks', rowId: previewTask.id }
+            : null
+        }
+        label={previewTask ? `Proof - ${previewTask.title}` : ''}
+        open={Boolean(previewTask)}
+        onOpenChange={(open) => !open && setPreviewTask(null)}
+      />
     </div>
   );
 };

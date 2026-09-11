@@ -326,7 +326,7 @@ const Login = () => {
                 <img src={logo} alt="Mayukh Solar" width={84} height={84} className="relative drop-shadow-[0_8px_24px_hsl(22_96%_55%/0.45)]" />
               </div>
             </div>
-            <h1 className="text-2xl font-bold text-display tracking-tight">Mayukh Solar — Staff Portal</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Mayukh Solar — Staff Portal</h1>
             <p className="text-xs text-muted-foreground mt-1.5 tracking-[0.18em] uppercase">V R Enterprises CRM</p>
           </div>
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import DocumentActions from '@/components/common/DocumentActions';
+import { uploadFile } from '@/lib/fileStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,15 +90,18 @@ export default function MaterialDispatch() {
     if (items.length === 0) { toast({ title: 'Add at least one item', variant: 'destructive' }); return; }
     setSaving(true);
     try {
+      // A reference, never a URL. This used to persist a one-year signed URL
+      // into the row, so every dispatch photo silently stopped loading 365
+      // days after it was taken; the link is resolved on read instead.
       let image_url: string | null = null;
       if (imageFile) {
-        const path = `${projectId}/${Date.now()}-${imageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-        const { error: upErr } = await supabase.storage.from('material-dispatch').upload(path, imageFile);
-        if (upErr) throw upErr;
-        const { data: pub } = supabase.storage.from('material-dispatch').createSignedUrl
-          ? await supabase.storage.from('material-dispatch').createSignedUrl(path, 60 * 60 * 24 * 365)
-          : { data: null } as any;
-        image_url = (pub as any)?.signedUrl || path;
+        image_url = await uploadFile({
+          scope: 'dispatch',
+          ownerId: projectId,
+          file: imageFile,
+          filename: `${Date.now()}-${imageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
+          label: 'Dispatch photo',
+        });
       }
       const { error } = await (supabase as any).from('material_dispatches').insert({
         project_id: projectId,
@@ -217,7 +222,14 @@ export default function MaterialDispatch() {
               </div>
               {d.notes && <p className="text-xs text-muted-foreground">{d.notes}</p>}
               {d.image_url && (
-                <a href={d.image_url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">View photo</a>
+                <DocumentActions
+                  handle={{ ref: d.image_url, table: 'material_dispatches', rowId: d.id }}
+                  label="Dispatch photo"
+                  keepRowOnDelete
+                  onDeleted={() =>
+                    setDispatches(dispatches.map((x) => (x.id === d.id ? { ...x, image_url: null } : x)))
+                  }
+                />
               )}
             </div>
           ))}

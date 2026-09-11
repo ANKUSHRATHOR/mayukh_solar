@@ -31,7 +31,7 @@ import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import PaymentFormDialog from '@/components/payments/PaymentFormDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { allocationLabels, formatMoney, paymentModeLabels } from '@/lib/payments';
+import { allocationLabels, formatMoney, paymentModeLabels, paymentTypeLabel } from '@/lib/payments';
 import {
   deletePayment,
   fetchPayment,
@@ -184,6 +184,7 @@ const PaymentDetailPage = () => {
                 size="sm"
                 className="h-11 gap-2 text-destructive hover:text-destructive sm:h-9"
                 onClick={() => setConfirmOpen(true)}
+                aria-label="Delete this payment"
               >
                 <Trash2 className="h-4 w-4" />
                 <span className="hidden sm:inline">Delete</span>
@@ -305,7 +306,7 @@ const PaymentDetailPage = () => {
                 />
                 <DetailField
                   label="Payment type"
-                  value={payment.payment_type === 'loan' ? 'Loan' : 'Cash'}
+                  value={paymentTypeLabel(payment.payment_type)}
                 />
               </DetailGrid>
             ) : payment.no_project_needed ? (

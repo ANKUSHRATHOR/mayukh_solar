@@ -32,7 +32,7 @@ import PlantDetailsDialog from '@/components/projects/PlantDetailsDialog';
 import { fromProject, structureTypeLabel } from '@/lib/plantDetails';
 import { allProjectStageMeta, pipelineFor, stageIndex, stageProgress } from '@/lib/projectStages';
 import { fetchProject, fetchStageRequirements, projectIdentity } from '@/lib/projects';
-import { formatMoney } from '@/lib/payments';
+import { formatMoney, involvesLoan, paymentTypeMeta } from '@/lib/payments';
 
 const ProjectDetailPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -81,7 +81,7 @@ const ProjectDetailPage = () => {
   // A loan project cannot start fabrication until the bank's first installment
   // lands. Surfaced persistently here rather than as a toast on a failed save.
   const fabricationBlocked =
-    project?.payment_type === 'loan' &&
+    involvesLoan(project?.payment_type) &&
     requirements?.loan_first_installment_received === false;
 
   return (
@@ -103,13 +103,7 @@ const ProjectDetailPage = () => {
         project && (
           <>
             <StatusBadge value={project.status} map={allProjectStageMeta} />
-            <StatusBadge
-              value={project.payment_type}
-              map={{
-                cash: { label: 'Cash', tone: 'success' },
-                loan: { label: 'Loan', tone: 'info' },
-              }}
-            />
+            <StatusBadge value={project.payment_type} map={paymentTypeMeta} />
           </>
         )
       }
@@ -275,7 +269,7 @@ const ProjectDetailPage = () => {
                   />
                 )}
                 <DetailField label="Discount" value={project.discount ? formatMoney(project.discount) : null} />
-                {project.payment_type === 'loan' && (
+                {involvesLoan(project.payment_type) && (
                   <DetailField
                     label="Bank"
                     value={
@@ -393,6 +387,7 @@ const ProjectDetailPage = () => {
                   size="sm"
                   className="h-8 gap-1.5 text-xs font-semibold"
                   onClick={() => setPlantOpen(true)}
+                  aria-label="Edit system specification"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Edit</span>

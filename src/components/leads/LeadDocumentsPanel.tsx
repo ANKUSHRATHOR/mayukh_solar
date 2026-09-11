@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
@@ -51,11 +51,15 @@ import {
   DOCUMENT_SPECS,
   GROUP_LABELS,
   GROUP_ORDER,
+  deleteDocument,
   documentLabels,
   downloadDocument,
+  handleFor,
   specsInGroup,
   type DocumentType,
 } from '@/lib/documents';
+
+import { getFileUrls, revokeFileUrl, type ResolvedFile } from '@/lib/fileStore';
 import { uploadVisitDocument } from '@/lib/visits';
 
 interface Props {
@@ -71,8 +75,10 @@ interface LeadDocumentRow {
   uploaded_at: string;
 }
 
-const isImagePath = (path: string) => /\.(jpe?g|png|webp|gif)$/i.test(path);
-const isPdfPath = (path: string) => /\.pdf$/i.test(path);
+// A Drive ref carries no file extension, so what kind of file this is comes
+// from the resolved content type rather than the stored value.
+const isImage = (file?: ResolvedFile) => file?.mimeType.startsWith('image/') === true;
+const isPdf = (file?: ResolvedFile) => file?.mimeType === 'application/pdf';
 
 /**
  * Lead document manager: upload by type, browse as a table or a thumbnail
@@ -115,28 +121,33 @@ const LeadDocumentsPanel = ({ leadId, userId }: Props) => {
     [docsQuery.data]
   );
 
-  // One batch of signed URLs for every stored file — used by thumbnails and
-  // the preview dialog. Signed on read; paths are what the DB stores.
-  const paths = useMemo(
-    () => documents.map((d) => d.file_url).filter((p): p is string => Boolean(p)),
+  // One batch of URLs for every stored file — used by thumbnails and the
+  // preview dialog. Resolved on read rather than persisted: Drive files come
+  // back as object URLs and legacy Supabase paths as signed URLs, both
+  // short-lived.
+  const handles = useMemo(
+    () => documents.filter((d) => d.file_url).map((d) => handleFor(d)),
     [documents]
+  );
+  const paths = useMemo(
+    () => handles.map((h) => h.ref).filter((p): p is string => Boolean(p)),
+    [handles]
   );
   const urlsQuery = useQuery({
     queryKey: ['lead-document-urls', leadId, paths],
-    enabled: paths.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase.storage
-        .from('project-documents')
-        .createSignedUrls(paths, 3600);
-      if (error) throw new Error(error.message);
-      const map: Record<string, string> = {};
-      data?.forEach((entry) => {
-        if (entry.signedUrl && entry.path) map[entry.path] = entry.signedUrl;
-      });
-      return map;
-    },
+    enabled: handles.length > 0,
+    queryFn: () => getFileUrls(handles),
   });
   const urlFor = (path: string | null) => (path ? urlsQuery.data?.[path] : undefined);
+
+  // Object URLs pin the file's bytes in memory until revoked. This grid can
+  // hold a dozen at once, so release the previous batch whenever it changes or
+  // the panel unmounts.
+  const urlMap = urlsQuery.data;
+  useEffect(
+    () => () => Object.values(urlMap ?? {}).forEach((file) => revokeFileUrl(file.url)),
+    [urlMap]
+  );
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['lead-documents', leadId] });
@@ -161,15 +172,7 @@ const LeadDocumentsPanel = ({ leadId, userId }: Props) => {
   };
 
   const deleteMutation = useMutation({
-    mutationFn: async (doc: LeadDocumentRow) => {
-      if (doc.file_url) {
-        // Best effort — a stale storage object without a DB row is harmless,
-        // the reverse (row without file) shows a broken document.
-        await supabase.storage.from('project-documents').remove([doc.file_url]);
-      }
-      const { error } = await supabase.from('documents').delete().eq('id', doc.id);
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: (doc: LeadDocumentRow) => deleteDocument(doc),
     onSuccess: (_data, doc) => {
       toast({ title: 'Document deleted', description: documentLabels[doc.document_type] });
       refresh();
@@ -187,7 +190,7 @@ const LeadDocumentsPanel = ({ leadId, userId }: Props) => {
   const handleDownload = async (doc: LeadDocumentRow) => {
     if (!doc.file_url) return;
     try {
-      await downloadDocument(doc.file_url, documentLabels[doc.document_type]);
+      await downloadDocument(doc, documentLabels[doc.document_type]);
     } catch (err) {
       toast({
         title: 'Download failed',
@@ -202,12 +205,12 @@ const LeadDocumentsPanel = ({ leadId, userId }: Props) => {
   const uploadableSpecs = DOCUMENT_SPECS.filter((s) => !s.isText);
 
   const thumb = (doc: LeadDocumentRow, size: 'sm' | 'lg') => {
-    const url = urlFor(doc.file_url);
+    const file = urlFor(doc.file_url);
     const box = size === 'sm' ? 'h-11 w-11 rounded-lg' : 'h-32 w-full rounded-t-xl';
-    if (doc.file_url && url && isImagePath(doc.file_url)) {
+    if (isImage(file)) {
       return (
         <img
-          src={url}
+          src={file!.url}
           alt={documentLabels[doc.document_type]}
           className={cn(box, 'shrink-0 border border-border/60 bg-muted object-cover')}
           loading="lazy"
@@ -477,15 +480,15 @@ const LeadDocumentsPanel = ({ leadId, userId }: Props) => {
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-muted/30 p-4">
             {previewDoc?.file_url && previewUrl ? (
-              isImagePath(previewDoc.file_url) ? (
+              isImage(previewUrl) ? (
                 <img
-                  src={previewUrl}
+                  src={previewUrl.url}
                   alt={documentLabels[previewDoc.document_type]}
                   className="mx-auto max-h-full rounded-lg border border-border/60 object-contain"
                 />
-              ) : isPdfPath(previewDoc.file_url) ? (
+              ) : isPdf(previewUrl) ? (
                 <iframe
-                  src={previewUrl}
+                  src={previewUrl.url}
                   title={documentLabels[previewDoc.document_type]}
                   className="h-full w-full rounded-lg border border-border/60 bg-white"
                 />

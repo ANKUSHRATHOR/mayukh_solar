@@ -10,8 +10,10 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft, Upload, CheckCircle2, AlertCircle, FileText,
-  Image as ImageIcon, Send, RefreshCw, Eye, Download, Share2
+  Image as ImageIcon, Send, RefreshCw
 } from 'lucide-react';
+import DocumentActions from '@/components/common/DocumentActions';
+import { handleFor, saveProjectDocumentText, uploadProjectDocument } from '@/lib/documents';
 import type { Database } from '@/integrations/supabase/types';
 
 type DocumentType = Database['public']['Enums']['document_type'];
@@ -83,20 +85,6 @@ const ProjectDocuments = () => {
 
   const getDoc = (type: DocumentType) => docs.find(d => d.document_type === type);
 
-  const getSignedUrl = async (fileUrl: string, download = false): Promise<string | null> => {
-    let path = fileUrl;
-    const marker = '/project-documents/';
-    if (path.includes(marker)) path = path.split(marker)[1];
-    const { data, error } = await supabase.storage
-      .from('project-documents')
-      .createSignedUrl(path, 60 * 10, download ? { download: true } : undefined);
-    if (error || !data?.signedUrl) {
-      toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
-      return null;
-    }
-    return data.signedUrl;
-  };
-
   const uploadedCount = requiredDocs.filter(req => {
     const doc = getDoc(req.type);
     return doc && (doc.file_url || doc.text_value);
@@ -114,51 +102,9 @@ const ProjectDocuments = () => {
 
     setUploading(docType);
     try {
-      const mimeExtMap: Record<string, string> = {
-        'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
-        'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif',
-        'application/pdf': 'pdf',
-      };
-      const rawExt = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
-      const safeExt = (rawExt && /^[a-z0-9]{1,5}$/.test(rawExt))
-        ? rawExt
-        : (mimeExtMap[file.type] || 'bin');
-      const ext = safeExt;
-      // IMPORTANT: folder MUST be projectId — storage RLS for sales persons checks
-      // foldername[1] == project.id. Using quotation_number here breaks sales uploads.
-      const path = `${projectId}/${docType}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('project-documents')
-        .upload(path, file, { upsert: true });
-      if (uploadError) throw uploadError;
-
-      // Store the storage path (bucket is private; we'll generate signed URLs to view)
-      // Both branches used to discard `error`, and PostgREST reports a refusal
-      // there rather than throwing — so a write RLS rejected still fell through
-      // to the success toast below. An RLS-filtered UPDATE is quieter still: no
-      // error at all, simply zero rows touched, which is why this asks for the
-      // affected row back instead of trusting silence.
-      const existingDoc = getDoc(docType);
-      if (existingDoc) {
-        const { data: updated, error: updateError } = await supabase.from('documents')
-          .update({ file_url: path, uploaded_at: new Date().toISOString(), rejection_reason: null })
-          .eq('id', existingDoc.id)
-          .select('id');
-        if (updateError) throw updateError;
-        if (!updated || updated.length === 0) {
-          throw new Error('You do not have permission to replace this document.');
-        }
-      } else {
-        const { error: insertError } = await supabase.from('documents').insert({
-          project_id: projectId,
-          document_type: docType,
-          file_url: path,
-          uploaded_by_user_id: user.id,
-        });
-        if (insertError) throw insertError;
-      }
-
+      await uploadProjectDocument(projectId, user.id, docType, file, {
+        label: requiredDocs.find((d) => d.type === docType)?.label ?? docType,
+      });
       toast({ title: 'Uploaded!', description: `${docType.replace(/_/g, ' ')} uploaded successfully` });
       fetchData();
     } catch (err: any) {
@@ -169,27 +115,9 @@ const ProjectDocuments = () => {
   };
 
   const handleTextSave = async (docType: DocumentType, value: string) => {
-    if (!projectId || !user || !value.trim()) return;
+    if (!projectId || !user) return;
     try {
-      const existingDoc = getDoc(docType);
-      if (existingDoc) {
-        const { data: updated, error: updateError } = await supabase.from('documents')
-          .update({ text_value: value.trim(), uploaded_at: new Date().toISOString(), rejection_reason: null })
-          .eq('id', existingDoc.id)
-          .select('id');
-        if (updateError) throw updateError;
-        if (!updated || updated.length === 0) {
-          throw new Error('You do not have permission to change this document.');
-        }
-      } else {
-        const { error: insertError } = await supabase.from('documents').insert({
-          project_id: projectId,
-          document_type: docType,
-          text_value: value.trim(),
-          uploaded_by_user_id: user.id,
-        });
-        if (insertError) throw insertError;
-      }
+      await saveProjectDocumentText(projectId, user.id, docType, value);
       toast({ title: 'Saved!' });
       fetchData();
     } catch (err: any) {
@@ -313,55 +241,11 @@ const ProjectDocuments = () => {
                         </div>
                       </label>
                       {isUploaded && doc?.file_url && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="View"
-                            onClick={async () => {
-                              const url = await getSignedUrl(doc.file_url!);
-                              if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Download"
-                            onClick={async () => {
-                              const url = await getSignedUrl(doc.file_url!, true);
-                              if (!url) return;
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = `${req.label}-${quotationNumber || project.project_code}.${doc.file_url!.split('.').pop()}`;
-                              document.body.appendChild(a);
-                              a.click();
-                              a.remove();
-                            }}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Share"
-                            onClick={async () => {
-                              const url = await getSignedUrl(doc.file_url!);
-                              if (!url) return;
-                              if (navigator.share) {
-                                try {
-                                  await navigator.share({ title: req.label, url });
-                                } catch {}
-                              } else {
-                                await navigator.clipboard.writeText(url);
-                                toast({ title: 'Link copied', description: 'Share link copied to clipboard' });
-                              }
-                            }}
-                          >
-                            <Share2 className="h-4 w-4" />
-                          </Button>
-                        </>
+                        <DocumentActions
+                          handle={handleFor(doc)}
+                          label={req.label}
+                          onDeleted={fetchData}
+                        />
                       )}
                     </div>
                   ) : (

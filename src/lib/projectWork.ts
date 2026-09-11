@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
-import { compressImage } from '@/lib/capture';
-import type { DocumentType } from '@/lib/documents';
+import { uploadFile } from '@/lib/fileStore';
+import { documentLabels, type DocumentType } from '@/lib/documents';
 
 /**
  * Trade work completion for welders and electricians.
@@ -19,10 +19,8 @@ export const TRADE_PHOTO: Record<Trade, { documentType: DocumentType; label: str
 };
 
 /**
- * Uploads a photo and records it against the project.
- *
- * The storage path must start with the project id — storage RLS matches
- * `foldername[1]` against it. `upsert` lets a worker replace a bad photo.
+ * Uploads a photo into the project's Google Drive folder and records it
+ * against the project.
  */
 export const uploadWorkPhoto = async (
   projectId: string,
@@ -30,22 +28,23 @@ export const uploadWorkPhoto = async (
   documentType: DocumentType,
   file: File
 ): Promise<string> => {
-  const compressed = await compressImage(file);
-  const path = `${projectId}/${documentType}.jpg`;
-
-  const { error: uploadError } = await supabase.storage
-    .from('project-documents')
-    .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-  if (uploadError) throw new Error(uploadError.message);
-
   // One document row per type per project: update in place if it exists, so a
   // re-upload after rejection doesn't accumulate duplicates.
   const { data: existing } = await supabase
     .from('documents')
-    .select('id')
+    .select('id, file_url')
     .eq('project_id', projectId)
     .eq('document_type', documentType)
     .maybeSingle();
+
+  const path = await uploadFile({
+    scope: 'project',
+    ownerId: projectId,
+    file,
+    filename: `${documentType}.jpg`,
+    label: documentLabels[documentType],
+    replaceRef: existing?.file_url ?? null,
+  });
 
   if (existing) {
     const { error } = await supabase

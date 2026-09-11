@@ -17,6 +17,7 @@ import AdminLeadsList from './AdminLeadsList';
 import ProjectsListPage from './projects/ProjectsListPage';
 import Tasks from './Tasks';
 import AdminAttendance from './AdminAttendance';
+import { involvesLoan } from '@/lib/payments';
 
 interface DashboardStats {
   totalLeads: number;
@@ -95,7 +96,7 @@ const AdminDashboard = () => {
     const running = projects.filter(p => p.status !== 'project_completed').length;
     const pendingDocs = projects.filter(p => p.status === 'pending_documents').length;
     const cashProjects = projects.filter(p => p.payment_type === 'cash' && (period === 'running' ? p.status !== 'project_completed' : inPeriod(p.created_at) || period === 'all_time')).length;
-    const loanProjects = projects.filter(p => p.payment_type === 'loan' && (period === 'running' ? p.status !== 'project_completed' : inPeriod(p.created_at) || period === 'all_time')).length;
+    const loanProjects = projects.filter(p => involvesLoan(p.payment_type) && (period === 'running' ? p.status !== 'project_completed' : inPeriod(p.created_at) || period === 'all_time')).length;
     const revenue = projects.filter(p => p.status === 'project_completed' && inPeriod(p.completed_at))
       .reduce((s, p) => s + Number(p.final_amount || 0), 0);
 

@@ -35,7 +35,7 @@ function TablePagination<T>({
   const onLast = page >= pageCount - 1;
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <p className="text-xs text-muted-foreground">
         Showing <span className="font-semibold text-foreground">{firstRow}</span>–
         <span className="font-semibold text-foreground">{lastRow}</span> of{' '}
@@ -45,7 +45,7 @@ function TablePagination<T>({
 
       <div className="flex items-center gap-2">
         <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-          <SelectTrigger className="h-11 w-[110px] text-xs sm:h-8" aria-label="Rows per page">
+          <SelectTrigger className="h-10 w-[104px] text-xs sm:h-8 sm:w-[110px]" aria-label="Rows per page">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -61,7 +61,7 @@ function TablePagination<T>({
           <Button
             variant="outline"
             size="icon"
-            className="h-11 w-11 sm:h-8 sm:w-8"
+            className="hidden h-10 w-10 sm:inline-flex sm:h-8 sm:w-8"
             disabled={onFirst}
             onClick={() => setPage(0)}
             aria-label="First page"
@@ -71,7 +71,7 @@ function TablePagination<T>({
           <Button
             variant="outline"
             size="icon"
-            className="h-11 w-11 sm:h-8 sm:w-8"
+            className="h-10 w-10 sm:h-8 sm:w-8"
             disabled={onFirst}
             onClick={() => setPage(page - 1)}
             aria-label="Previous page"
@@ -86,7 +86,7 @@ function TablePagination<T>({
           <Button
             variant="outline"
             size="icon"
-            className="h-11 w-11 sm:h-8 sm:w-8"
+            className="h-10 w-10 sm:h-8 sm:w-8"
             disabled={onLast}
             onClick={() => setPage(page + 1)}
             aria-label="Next page"
@@ -96,7 +96,7 @@ function TablePagination<T>({
           <Button
             variant="outline"
             size="icon"
-            className="h-11 w-11 sm:h-8 sm:w-8"
+            className="hidden h-10 w-10 sm:inline-flex sm:h-8 sm:w-8"
             disabled={onLast}
             onClick={() => setPage(pageCount - 1)}
             aria-label="Last page"

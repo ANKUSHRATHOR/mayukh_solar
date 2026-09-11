@@ -2,14 +2,16 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { format, isPast } from 'date-fns';
-import { CalendarClock, CheckCircle2, Clock, MapPin } from 'lucide-react';
+import { CalendarClock, Clock, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
+import { useStickyState } from '@/hooks/useStickyState';
 import TablePagination from '@/components/common/TablePagination';
+import StatusBadge from '@/components/common/StatusBadge';
 import { useServerTable } from '@/hooks/useServerTable';
 import { defaultSort } from '@/lib/tableQuery';
 import {
@@ -30,6 +32,7 @@ import {
 const VisitsListPage = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState<VisitTab>('open');
+  const [view, setView] = useStickyState<TableView>('visits-list:view', defaultTableView());
 
   const filters = useMemo(() => ({ tab }), [tab]);
 
@@ -84,6 +87,7 @@ const VisitsListPage = () => {
     },
     {
       id: 'location',
+      mobile: 'meta',
       header: 'Area',
       hideBelow: 'lg',
       cell: (v) => (
@@ -94,6 +98,7 @@ const VisitsListPage = () => {
     },
     {
       id: 'when',
+      mobile: 'meta',
       header: tab === 'open' ? 'Scheduled' : 'Completed',
       sortKey: tab === 'open' ? 'scheduled_for' : 'completed_at',
       cell: (v) => {
@@ -106,9 +111,11 @@ const VisitsListPage = () => {
               {format(new Date(when), 'dd MMM, h:mm a')}
             </span>
             {overdue && (
-              <Badge className="border-transparent bg-destructive/15 px-1.5 py-0 text-[9px] font-bold uppercase text-destructive">
-                Overdue
-              </Badge>
+              <StatusBadge
+                value="overdue"
+                map={{ overdue: { label: 'Overdue', tone: 'danger' } }}
+                size="sm"
+              />
             )}
           </div>
         );
@@ -117,6 +124,7 @@ const VisitsListPage = () => {
     {
       id: 'outcome',
       header: tab === 'open' ? 'Status' : 'Outcome',
+      mobile: 'badge',
       cell: (v) =>
         tab === 'open' ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-warning">
@@ -140,33 +148,19 @@ const VisitsListPage = () => {
         icon={CalendarClock}
       />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as VisitTab)}>
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-          {tabs.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="gap-2 text-xs sm:text-sm">
-              {t.value === 'open' ? (
-                <Clock className="h-3.5 w-3.5" />
-              ) : (
-                <CheckCircle2 className="h-3.5 w-3.5" />
-              )}
-              {t.label}
-              {typeof t.count === 'number' && (
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                  {t.count}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
       <TableToolbar
         table={table}
         searchPlaceholder="Search by K-Number, customer name or mobile…"
+        views={tabs}
+        activeView={tab}
+        onViewChange={(v) => setTab(v as VisitTab)}
+        viewsLabel="Filter by visit state"
+        layout={view}
+        onLayoutChange={setView}
       />
 
       <DataTable
-        layout="cards"
+        layout={view}
         table={table}
         columns={columns}
         rowKey={(v) => v.id}

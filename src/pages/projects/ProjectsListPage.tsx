@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Briefcase, CheckCircle2, Download, FileText, IndianRupee, Landmark, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -16,6 +15,8 @@ import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
+import { useStickyState } from '@/hooks/useStickyState';
 import TablePagination from '@/components/common/TablePagination';
 import StatusBadge from '@/components/common/StatusBadge';
 import { useServerTable } from '@/hooks/useServerTable';
@@ -30,9 +31,9 @@ import {
   type ProjectRow,
   type ProjectTab,
 } from '@/lib/projects';
-import { formatMoney } from '@/lib/payments';
+import { formatMoney, involvesLoan, paymentTypeLabel } from '@/lib/payments';
 import { useAuth } from '@/contexts/AuthContext';
-import StatCard from '@/components/dashboard/StatCard';
+import StatStrip, { type StatItem } from '@/components/common/StatStrip';
 
 interface Props {
   /**
@@ -51,6 +52,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
   // Both are validated on read: an unvalidated ?stage=foo reaches
   // .eq('status', 'foo') and PostgREST rejects the enum cast with a 400.
   const [searchParams, setSearchParams] = useSearchParams();
+  const [view, setView] = useStickyState<TableView>('projects-list:view', defaultTableView());
   const rawTab = searchParams.get('tab');
   const tab: ProjectTab =
     rawTab === 'cash' || rawTab === 'loan' ? rawTab : 'all';
@@ -135,23 +137,22 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
       id: 'status',
       header: 'Stage',
       sortKey: 'status',
-      cell: (p) => <StatusBadge value={p.status} map={allProjectStageMeta} />,
+      mobile: 'badge',
+      cell: (p) => <StatusBadge value={p.status} map={allProjectStageMeta} size="sm" />,
     },
     {
       id: 'payment_type',
       header: 'Type',
       sortKey: 'payment_type',
+      mobile: 'meta',
       cell: (p) => (
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-          {p.payment_type === 'loan' ? (
-            <>
-              <Landmark className="h-3.5 w-3.5 text-muted-foreground" /> Loan
-            </>
+          {involvesLoan(p.payment_type) ? (
+            <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
-            <>
-              <Wallet className="h-3.5 w-3.5 text-muted-foreground" /> Cash
-            </>
+            <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
           )}
+          {paymentTypeLabel(p.payment_type)}
         </span>
       ),
     },
@@ -161,6 +162,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
       sortKey: 'capacity_kw',
       align: 'right',
       hideBelow: 'lg',
+      mobile: 'meta',
       cell: (p) => <span className="tabular-nums">{p.capacity_kw} kW</span>,
     },
     {
@@ -168,6 +170,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
       header: 'Value',
       sortKey: 'final_amount',
       align: 'right',
+      mobile: 'meta',
       cell: (p) => (
         <span className="font-bold tabular-nums text-foreground">
           {formatMoney(p.final_amount)}
@@ -224,81 +227,56 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
         />
       )}
 
-      {/* Tiles are clickable filters, the pattern OperatorDashboard already uses.
-          They reflect the tab and search but not the stage — they are the stage
-          filter, so they must count across stages. Hidden entirely on error:
-          this is decoration around the list and must not take the page down. */}
+      {/* One compact strip, not six bordered tiles. The grid put 509px of
+          chrome above the first project on a 1400px screen, and because the
+          money tiles are role-dependent it rendered 4, 5 or 6 cards into a
+          4-column grid — a stranded last row whenever the count was odd.
+          Still clickable filters, same as before. */}
       {kpis && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
-          <StatCard
-            title="Active projects"
-            value={kpis.active}
-            icon={Briefcase}
-            accent="primary"
-            onClick={() => setStage('')}
-          />
-          <StatCard
-            title="Awaiting documents"
-            value={kpis.awaiting_documents}
-            icon={FileText}
-            accent="warning"
-            onClick={() => setStage('documents_pending')}
-          />
-          <StatCard
-            title="Completed this month"
-            value={kpis.completed_this_month}
-            icon={CheckCircle2}
-            accent="success"
-            onClick={() => setStage('project_completed')}
-          />
-          {/* Payment-derived: absent, not zero, for roles that cannot read
-              project_payments — a wrong number here is worse than none. */}
-          {kpis.payments_visible && kpis.blocked !== null && (
-            <StatCard
-              title="Blocked on bank"
-              value={kpis.blocked}
-              icon={AlertTriangle}
-              accent="destructive"
-              change={kpis.blocked > 0 ? 'Awaiting first installment' : 'None waiting'}
-              changeType={kpis.blocked > 0 ? 'down' : 'neutral'}
-              onClick={() => setFilters({ tab: 'loan', stage: '' })}
-            />
-          )}
-          <StatCard
-            title="Total value"
-            value={formatMoney(kpis.total_value)}
-            icon={IndianRupee}
-            accent="info"
-          />
-          {kpis.payments_visible && kpis.balance_due !== null && (
-            <StatCard
-              title="Balance due"
-              value={formatMoney(kpis.balance_due)}
-              icon={Wallet}
-              accent="warning"
-            />
-          )}
-        </div>
+        <StatStrip
+          items={[
+            { label: 'Active', value: kpis.active, onClick: () => setStage('') },
+            {
+              label: 'Awaiting docs',
+              value: kpis.awaiting_documents,
+              tone: 'warning',
+              onClick: () => setStage('documents_pending'),
+            },
+            {
+              label: 'Completed',
+              value: kpis.completed_this_month,
+              tone: 'success',
+              hint: 'this month',
+              onClick: () => setStage('project_completed'),
+            },
+            // Payment-derived: absent, not zero, for roles that cannot read
+            // project_payments — a wrong number here is worse than none.
+            ...(kpis.payments_visible && kpis.blocked !== null
+              ? ([{
+                  label: 'Blocked on bank',
+                  value: kpis.blocked,
+                  tone: 'danger',
+                  hint: kpis.blocked > 0 ? 'awaiting first instalment' : 'none waiting',
+                  onClick: () => setFilters({ tab: 'loan', stage: '' }),
+                }] as StatItem[])
+              : []),
+            { label: 'Total value', value: formatMoney(kpis.total_value) },
+            ...(kpis.payments_visible && kpis.balance_due !== null
+              ? ([{ label: 'Balance due', value: formatMoney(kpis.balance_due), tone: 'warning' }] as StatItem[])
+              : []),
+          ]}
+        />
       )}
-
-      <Tabs value={tab} onValueChange={(v) => setTab(v as ProjectTab)}>
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-          {tabs.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="gap-2 text-xs sm:text-sm">
-              {t.label}
-              {typeof t.count === 'number' && (
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                  {t.count}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
 
       <TableToolbar
         table={table}
         searchPlaceholder="Search by K-Number, customer name or mobile…"
+        views={tabs}
+        activeView={tab}
+        onViewChange={(v) => setTab(v as ProjectTab)}
+        viewsLabel="Filter by payment type"
+        layout={view}
+        onLayoutChange={setView}
         activeFilterCount={stage ? 1 : 0}
         onClearFilters={() => setStage('')}
         filters={
@@ -324,7 +302,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
       />
 
       <DataTable
-        layout="cards"
+        layout={view}
         table={table}
         columns={columns}
         rowKey={(p) => p.id}

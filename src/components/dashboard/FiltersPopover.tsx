@@ -18,7 +18,7 @@ const FiltersPopover = ({ activeCount, onClear, children, align = 'end' }: Filte
           variant="outline"
           size="sm"
           aria-label="Filters"
-          className="relative h-11 w-11 shrink-0 gap-0 border-border bg-card p-0 hover:bg-accent/40 sm:h-9 sm:w-auto sm:gap-2 sm:px-3"
+          className="relative h-10 w-10 shrink-0 gap-0 border-border bg-card p-0 hover:bg-accent/40 sm:h-9 sm:w-auto sm:gap-2 sm:px-3"
         >
           <SlidersHorizontal className="h-4 w-4" />
           {/* Icon-only below sm so the toolbar stays one row on a phone. The

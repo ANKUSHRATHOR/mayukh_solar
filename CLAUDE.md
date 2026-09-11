@@ -46,9 +46,59 @@ Preview the app through the `dev` config in `.claude/launch.json` rather than ru
 - Client: `src/integrations/supabase/client.ts`, configured from `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`. The publishable (anon) key is committed on purpose — it ships in the bundle and is constrained by RLS. The service_role key must never appear in `.env` or client code; privileged work belongs in an Edge Function.
 - Types: `src/integrations/supabase/types.ts` is generated from the live schema. Do not hand-edit. When a table or RPC postdates the last generation, existing code works around it with `(supabase as any)` / `supabase.rpc('name' as any)` — follow that pattern, or regenerate types.
 - Migrations: `supabase/migrations/*.sql`, applied in filename order. There is no local Docker stack here, so migrations are validated against the remote project.
-- Edge Functions (`supabase/functions/`, Deno): `create-staff`, `update-staff`, `update-staff-email` (service_role admin ops, each re-verifies the caller is an admin), `generate-quotation`, `send-push` (web-push/VAPID), `whatsapp-webhook` (parses CONFIRM/REJECT replies), `consumer-lookup` (DISCOM K-Number proxy; the only function with `verify_jwt = false`).
-- Storage buckets in use: `project-documents`, `attendance-media`, `material-dispatch` — all private.
+- Edge Functions (`supabase/functions/`, Deno): `create-staff`, `update-staff`, `update-staff-email` (service_role admin ops, each re-verifies the caller is an admin), `generate-quotation`, `send-push` (web-push/VAPID), `whatsapp-webhook` (parses CONFIRM/REJECT replies), `consumer-lookup` (DISCOM K-Number proxy; the only function with `verify_jwt = false`), `drive-storage` (the only thing that talks to Google Drive — see below).
+- Storage buckets in use: `project-documents`, `attendance-media`, `material-dispatch` — all private — plus the deliberately public `branding`. These now hold **legacy files only**: everything uploaded since the Drive switch goes to Google Drive. See below.
 - A lot of business logic lives in Postgres functions, not TypeScript: `complete_site_visit`, `mark_trade_work_done`, `project_stage_requirements`, `punch_attendance`, `compute_salary`, `bulk_assign_leads`, `leads_stage_counts`, `generate_project_code`, `get_user_role`. Before implementing a rule client-side, check whether an RPC already owns it.
+
+### File storage — Google Drive, with Supabase Storage still readable
+
+Documents (project and lead files, quotation PDFs, attendance and task photos,
+material-dispatch photos) live in **Google Drive**, under one company Google
+account. Setup is in [`SETUP_GOOGLE_DRIVE.md`](SETUP_GOOGLE_DRIVE.md).
+
+**Everything goes through [`src/lib/fileStore.ts`](src/lib/fileStore.ts).** Never
+call `supabase.storage` for a document again. The provider is encoded in the
+value already stored in the DB, so there was no schema migration and no bulk
+file migration:
+
+```
+"a1b2c3/aadhaar_front.jpg"   -> legacy Supabase Storage path, still read from the bucket
+"gdrive:1AbCdEf..."          -> Google Drive file id
+```
+
+Four tables reference a file, and `FILE_COLUMN` maps each to its column:
+`documents.file_url`, `material_dispatches.image_url`, `tasks.proof_image_path`,
+`attendance_events.bike_meter_image_path`.
+
+`supabase/functions/drive-storage/` is the only code that talks to Google.
+Drive files are **private and never link-shared**; every read is proxied through
+that function. **Authorization is delegated to RLS, not reimplemented**: a
+request names a *row*, never a Drive id, and the row is read or written through
+a client carrying the caller's own JWT — if RLS returns nothing, the function
+answers 403 without ever touching Drive. A new document surface inherits its
+permissions for free. Deletes trash rather than purge, so a mis-click is
+recoverable from the Drive bin for 30 days.
+
+Two consequences worth knowing before changing this:
+
+- **A Drive ref carries no file extension.** Anything that decided "is this an
+  image" or named a download from the path must use the resolved content type
+  (`resolveFile` returns `{ url, mimeType }`) — otherwise every document saves
+  as `.bin` and every PDF renders as a broken `<img>`.
+- **A Drive URL is an object URL**, because the fetch needs an Authorization
+  header. It must be released with `revokeFileUrl` when the view goes away, or
+  each preview leaks the file for the life of the tab.
+
+Sending a document to a *customer* (WhatsApp, Share) cannot use a private Drive
+file, and a personal Google account cannot put an expiry on a link-shared one.
+`createShareLink` therefore copies the bytes to a `shared/` prefix in
+`project-documents` and signs that for 7 days; the Drive original stays private.
+
+UI: [`DocumentActions`](src/components/common/DocumentActions.tsx) (Preview ·
+Download · Delete) and
+[`DocumentPreviewDialog`](src/components/common/DocumentPreviewDialog.tsx) are
+the shared components — reach for those rather than hand-rolling a "View" button
+that opens a new tab.
 
 ## Architecture
 
@@ -78,6 +128,22 @@ Several `src/lib` files exist specifically because the same concept used to be r
 - `modules.ts`, `subsidy.ts`, `payments.ts`, `projectStages.ts` are the files with unit tests; keep them pure and testable.
 
 ### List views
+
+**Every list page has the same anatomy**, and nothing else belongs on one:
+
+```
+PageContainer → PageHeader → StatStrip (optional) → TableToolbar → DataTable → TablePagination
+```
+
+`StatStrip` (`components/common/StatStrip.tsx`) carries the figures — one hairline-separated row, no boxes or icons. It replaced a grid of `StatCard`s that put 509px of chrome above the first record on Projects, and it copes with a variable item count, which the fixed 4-column grid could not. `StatCard` is unchanged and remains right for dashboards, where a tile *is* the content.
+
+**`DataTable` owns the record shape**, so pages set no sizes. Columns declare a mobile role — `title` (identifier), `badge` (status), `subtitle` (the human label), `meta` (dot-separated values), `hidden` — and the card composes itself into the same three lines everywhere. A column given no role keeps the older labelled treatment rather than vanishing. It also supports `selectable` + `selectedIds` + `onSelectionChange` and a `rowActions` slot; without those, a page needing bulk actions has to fork the component, which is exactly how the leads list ended up with a second copy of it. `src/test/DataTable.test.tsx` pins the roles, selection and row actions.
+
+**`TableToolbar` is the whole control row** — subsets, search, filters and layout, in that order, at every width. The subsets are a `views` dropdown, **not a tab strip**: a strip must show every choice at once, so the leads list's nine stages and their tallies became a sideways-scrolling band that hid its own last options and cost a row above the data, while a dropdown states the current subset and its count in one control and costs the same width whether there are three choices or nine. Pass `views` / `activeView` / `onViewChange` (plus `viewsLabel`, which names it for screen readers) and `layout` / `onLayoutChange`. Anything a page owns itself goes in `actions`.
+
+Whatever the popover's `filters` do not render must not count towards `activeFilterCount` or be cleared by `onClearFilters` — the subset dropdown included. Badging the popover for a control it does not contain is the mirror of the "applied with no visible control" trap the `filters` prop exists to prevent.
+
+`ViewToggle` (`components/common/ViewToggle.tsx`) is the table/cards control, rendered by the toolbar. Persist the choice with `useStickyState` under `<page>:view`. Use `layout` `auto` (the default: table from `md`, cards below) only where no toggle is offered — with one, `auto` would silently ignore "Table" on a narrow window. Forcing `cards` also forces the SORT select, because there are no headers to click.
 
 List pages use `useServerTable` (`src/hooks/useServerTable.ts`) plus the helpers in `src/lib/tableQuery.ts` (`buildSearchFilter`, `applyPaging`, `toTablePage`). Everything — search, filter, sort, paging — runs in Postgres; the client fetches one page. Do not reintroduce fetch-all-then-filter-in-JS. `toTablePage` throws on error deliberately, so react-query surfaces failures instead of rendering an empty table.
 
@@ -128,7 +194,7 @@ Chrome: `AppLayout` + `AppSidebar`. The admin sidebar is a hardcoded six-section
 | `/k-lookup` | admin, telecaller, sales_person, operator | `KNumberLookup.tsx` |
 
 - The leads list reads the **`leads_list` view**, not the `leads` table, and gets stage tallies from a single `leads_stage_counts` RPC. Filtering, sorting and paging all run in Postgres. It also does bulk assign (`bulk_assign_leads`), bulk bin (`bulk_bin_leads`), per-row DISCOM sync, and realtime subscription. The same page serves non-admins as "My Leads" — RLS scopes the rows, the UI is not forked.
-- `AdminLeadsList` hand-rolls its table rather than using `DataTable`, so it carries **two renderings of the same rows**: the seven-column `<table>` (`hidden md:block`, inside the sticky-header scroller) and a stacked card list (`md:hidden`) that mirrors `DataTable`'s mobile cards — the pattern the Site Visits list gets for free. Both read `filteredRows` and share the same handlers (select, DISCOM sync, edit K-Number, call, bin, navigate). Any column change has to be made in both, or the phone view silently drifts from the desktop one.
+- `AdminLeadsList` used to hand-roll its own container, header, toolbar, table and cards; it now uses the shared shells like every other list. It keeps its own query layer (server-side filter/sort/paging over `leads_list`, with a request-id guard and stage counts kept in step) and adapts that state to a `ServerTable` for the shells, rather than being rewritten onto `useServerTable` — the hook would have bought nothing the page did not already do.
 - **A lead becomes a project directly.** "Convert to Project" on the lead sends you to `/projects/new?leadId=…`, which creates the project at `documents_pending` and sets the lead to `final`. There is no deal in between: `/deals` was a second view over `projects` with an approval step that re-collected the payment type and bank the creation form already asks for, then jumped the stage past document verification. It is gone, along with `/field-visit`, which nothing had ever written a row from (`field_visits` was empty).
 - `payment_type` has three values: `cash`, `loan`, and `loan_cash` for part-cash-part-bank. **Never branch on `=== 'loan'`** — use `involvesLoan()` from `lib/payments.ts`, because every gate that asks about financing means "does a bank pay part of this", and the equality silently treats `loan_cash` as cash. That covers the fabrication gate, the payment schedule, the loan-only pipeline stages, the quotation's bank copy and the Loan tab on the projects list. The server-side twins are `project_stage_requirements.is_loan` and `projects_kpis`.
 - `CreateLead` checks `check_duplicate_lead` on mobile and loads assignees via `get_assignable_sales_persons`.
@@ -175,8 +241,8 @@ Chrome: `AppLayout` + `AppSidebar`. The admin sidebar is a hardcoded six-section
 Every inward payment, across every project. Gated by the **`projects` module** — deliberately not a seventh module — with `project_payments` RLS narrowing it further, so a role holding the module but no payment access gets an empty list rather than an error.
 
 - Data access is `lib/paymentsData.ts` over two `security_invoker` views: **`payments_list`** (payments flattened against project + lead, so K-Number/name/mobile search is one query) and **`project_dues`** (what is still owed, and how late). Tiles come from the single `payments_kpis` RPC — one round trip, same reason as `projects_kpis`.
-- The list opens as a **table** — a ledger is read by comparing rows — with a Table/Cards toggle persisted to `payments-list:view`. The toggle renders at every width (labels collapse to icons below `sm`) and maps to `DataTable`'s `table`/`cards` layouts, never `auto`: `auto` swaps to cards below `md`, so on a 758px window picking "Table" did nothing at all. A narrow table scrolls inside its own container. Only the *initial* value is width-aware — under `sm` it starts on cards, per the design system's mobile card fallback — and an explicit choice then wins at every width. A row opens the payment's own page, never the project; edit, assign-to-project and delete all live there, so there is one place that owns them.
-- Four tabs: **All** · **Unallocated** · **Dues** · **General**. `project_payments.project_id` is nullable, so money can be logged the moment it arrives: with no project it lands in the **unallocated inbox** and is matched later, or is flagged `no_project_needed` as general income that will never have one. A check constraint keeps those two states mutually exclusive.
+- The list opens as a **table** — a ledger is read by comparing rows — via the shared `ViewToggle`, persisted to `payments-list:view`. It maps to `DataTable`'s `table`/`cards` layouts, never `auto`: `auto` swaps to cards below `md`, so on a 758px window picking "Table" did nothing at all. A narrow table scrolls inside its own container. A row opens the payment's own page, never the project; edit, assign-to-project and delete all live there, so there is one place that owns them.
+- Four subsets in the toolbar dropdown: **All** · **Unallocated** · **Dues** · **General**. `project_payments.project_id` is nullable, so money can be logged the moment it arrives: with no project it lands in the **unallocated inbox** and is matched later, or is flagged `no_project_needed` as general income that will never have one. A check constraint keeps those two states mutually exclusive.
 - **No milestones here.** Balance is `final_amount − sum(completed receipts)`. `milestone`, `buildSchedule` and `scheduleFor` survive only for the quotation document.
 - Collection window: the balance is due within `payment_due_days` (a `system_configs` key, default 2, editable in Admin Settings → Payments) of the project reaching **`net_meter_installed`**, stamped by the `stamp_project_stage_timestamps` trigger into `projects.net_meter_installed_at`. Not `project_completed` — `can_advance_project` refuses that stage unless the project is already fully paid, so anchoring there would make the dues list empty by construction. `dueStatusFor` in `lib/payments.ts` mirrors the SQL boundary exactly; both are unit-tested.
 - Overdue fires a digest push to **admins only** via the `notify-payment-dues` edge function, which stamps `payment_due_notified_at` so a project is not re-announced for a week. Its daily schedule needs `pg_cron` (available but not yet installed) — the migration self-skips until it is.

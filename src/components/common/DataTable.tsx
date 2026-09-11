@@ -38,10 +38,18 @@ export interface DataTableColumn<T> {
   className?: string;
   headerClassName?: string;
   /**
-   * Mobile card role. `title` and `subtitle` render at the top of the card;
-   * every other column becomes a label/value row. `hidden` omits it entirely.
+   * Where this column goes in the mobile card. The card is three lines and the
+   * same three lines on every list, so a page declares roles rather than
+   * inventing a layout:
+   *
+   *   title   — the identifier, line 1 left
+   *   badge   — the status, line 1 right (at most one)
+   *   subtitle— the human label and contact, line 2
+   *   meta    — a value on line 3, dot-separated with its siblings
+   *   row     — legacy label/value pair, kept for columns not yet assigned
+   *   hidden  — omitted from the card
    */
-  mobile?: 'title' | 'subtitle' | 'row' | 'hidden';
+  mobile?: 'title' | 'badge' | 'subtitle' | 'meta' | 'row' | 'hidden';
 }
 
 interface DataTableProps<T> {
@@ -49,6 +57,20 @@ interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   /** Stable row identity. */
   rowKey: (row: T) => string;
+  /**
+   * Row selection. Without it a page that needs bulk actions has to hand-roll
+   * its own table, which is how the leads list ended up with a second
+   * implementation of this component.
+   */
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (next: Set<string>) => void;
+  /**
+   * Per-row controls — call, sync, edit, delete. A trailing column on desktop,
+   * a footer strip on the card. Must stop propagation itself if the row is
+   * clickable.
+   */
+  rowActions?: (row: T) => ReactNode;
   /** Makes rows clickable — use for "open detail". */
   onRowClick?: (row: T) => void;
   emptyTitle?: string;
@@ -98,6 +120,10 @@ function DataTable<T>({
   table,
   columns,
   rowKey,
+  selectable = false,
+  selectedIds,
+  onSelectionChange,
+  rowActions,
   onRowClick,
   emptyTitle = 'Nothing here yet',
   emptyDescription,
@@ -131,6 +157,24 @@ function DataTable<T>({
     );
   }
 
+  const selected = selectedIds ?? new Set<string>();
+  const pageIds = rows.map(rowKey);
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+
+  const toggleRow = (id: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(id);
+    else next.delete(id);
+    onSelectionChange?.(next);
+  };
+
+  const toggleAllOnPage = (checked: boolean) => {
+    const next = new Set(selected);
+    // Only this page's ids, so a selection made across pages survives paging.
+    pageIds.forEach((id) => (checked ? next.add(id) : next.delete(id)));
+    onSelectionChange?.(next);
+  };
+
   const sortableColumns = columns.filter((c) => c.sortKey);
   // A list can be sorted by a column it doesn't display — Projects defaults to
   // created_at. The table layout hid that harmlessly; a Select would just show
@@ -141,11 +185,22 @@ function DataTable<T>({
       : []),
     ...sortableColumns.map((c) => ({ value: c.sortKey!, label: c.header })),
   ];
+  // The card is the same three lines on every list: identifier + status,
+  // the human label, then the values you scan for. Columns declare a role and
+  // the card composes itself, so no page can invent a shape of its own.
   const visibleOnMobile = columns.filter((c) => c.mobile !== 'hidden');
   const titleColumn = visibleOnMobile.find((c) => c.mobile === 'title') ?? visibleOnMobile[0];
+  const badgeColumn = visibleOnMobile.find((c) => c.mobile === 'badge');
   const subtitleColumn = visibleOnMobile.find((c) => c.mobile === 'subtitle');
+  const metaColumns = visibleOnMobile.filter((c) => c.mobile === 'meta');
+  // Anything not given a role keeps the old labelled treatment rather than
+  // vanishing — a column is never silently dropped from the card.
   const detailColumns = visibleOnMobile.filter(
-    (c) => c !== titleColumn && c !== subtitleColumn
+    (c) =>
+      c !== titleColumn &&
+      c !== badgeColumn &&
+      c !== subtitleColumn &&
+      !metaColumns.includes(c)
   );
 
   return (
@@ -164,6 +219,17 @@ function DataTable<T>({
           <Table>
             <TableHeader>
               <TableRow className="border-border/60 bg-muted/50 hover:bg-muted/50">
+                {selectable && (
+                  <TableHead className="h-11 w-10 pl-4 pr-0">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all on this page"
+                      className="h-4 w-4 cursor-pointer rounded border-border align-middle"
+                      checked={allOnPageSelected}
+                      onChange={(e) => toggleAllOnPage(e.target.checked)}
+                    />
+                  </TableHead>
+                )}
                 {columns.map((col) => {
                   const sortable = Boolean(col.sortKey);
                   const active = sortable && sort.column === col.sortKey;
@@ -204,6 +270,11 @@ function DataTable<T>({
                     </TableHead>
                   );
                 })}
+                {rowActions && (
+                  <TableHead className="h-11 w-px whitespace-nowrap pr-4 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Actions
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -213,9 +284,22 @@ function DataTable<T>({
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cn(
                     'border-border/50 transition-colors',
-                    onRowClick && 'cursor-pointer hover:bg-accent/40'
+                    onRowClick && 'cursor-pointer hover:bg-accent/40',
+                    selected.has(rowKey(row)) && 'bg-primary/5'
                   )}
                 >
+                  {selectable && (
+                    <TableCell className="w-10 py-3 pl-4 pr-0">
+                      <input
+                        type="checkbox"
+                        aria-label="Select row"
+                        className="h-4 w-4 cursor-pointer rounded border-border align-middle"
+                        checked={selected.has(rowKey(row))}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => toggleRow(rowKey(row), e.target.checked)}
+                      />
+                    </TableCell>
+                  )}
                   {columns.map((col) => (
                     <TableCell
                       key={col.id}
@@ -229,6 +313,11 @@ function DataTable<T>({
                       {col.cell(row)}
                     </TableCell>
                   ))}
+                  {rowActions && (
+                    <TableCell className="py-3 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">{rowActions(row)}</div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -304,40 +393,78 @@ function DataTable<T>({
                   : undefined
               }
               className={cn(
-                'rounded-2xl border border-border/70 bg-card p-4 shadow-card',
+                'rounded-2xl border border-border/70 bg-card p-3 shadow-card',
                 onRowClick &&
                   'cursor-pointer transition-colors hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
               )}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                {selectable && (
+                  <input
+                    type="checkbox"
+                    aria-label="Select row"
+                    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border"
+                    checked={selected.has(rowKey(row))}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => toggleRow(rowKey(row), e.target.checked)}
+                  />
+                )}
+
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-foreground">
-                    {titleColumn?.cell(row)}
+                  {/* Line 1 — identifier, status, affordance */}
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1 text-sm font-semibold text-foreground">
+                      {titleColumn?.cell(row)}
+                    </div>
+                    {badgeColumn && <div className="shrink-0">{badgeColumn.cell(row)}</div>}
+                    {onRowClick && (
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
                   </div>
+
+                  {/* Line 2 — the human label */}
                   {subtitleColumn && (
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-0.5 min-w-0 text-xs text-muted-foreground">
                       {subtitleColumn.cell(row)}
                     </div>
                   )}
+
+                  {/* Line 3 — the values, dot-separated */}
+                  {metaColumns.length > 0 && (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
+                      {metaColumns.map((col, i) => (
+                        <span key={col.id} className="inline-flex items-center gap-1.5">
+                          {i > 0 && <span aria-hidden className="text-muted-foreground/40">·</span>}
+                          {col.cell(row)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {detailColumns.length > 0 && (
+                    <dl className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border/50 pt-2.5">
+                      {detailColumns.map((col) => (
+                        <div key={col.id} className="min-w-0">
+                          <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {col.header}
+                          </dt>
+                          <dd className="mt-0.5 break-words text-xs text-foreground">
+                            {col.cell(row)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
                 </div>
-                {onRowClick && (
-                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                )}
               </div>
 
-              {detailColumns.length > 0 && (
-                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-border/50 pt-3">
-                  {detailColumns.map((col) => (
-                    <div key={col.id} className="min-w-0">
-                      <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {col.header}
-                      </dt>
-                      <dd className="mt-0.5 break-words text-xs text-foreground">
-                        {col.cell(row)}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
+              {rowActions && (
+                <div
+                  className="mt-2 flex items-center gap-1 border-t border-border/50 pt-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {rowActions(row)}
+                </div>
               )}
             </div>
           ))}

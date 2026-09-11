@@ -4,11 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { canBulkAssignLeads, canBinLeads } from '@/lib/capabilities';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowUpDown, Calendar as CalIcon, Download, Filter, PhoneCall, Search, Users, ChevronRight, Upload, Phone, RefreshCw, Trash2, Pencil, MoreVertical } from 'lucide-react';
+import { Calendar as CalIcon, Download, Filter, PhoneCall, Search, Upload, Phone, RefreshCw, Trash2, Pencil, MoreVertical } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -29,9 +29,16 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { Database } from '@/integrations/supabase/types';
 import LeadImportWizard from '@/components/leads/LeadImportWizard';
 import { fetchConsumerDetails } from '@/lib/discom';
-import StageBar from '@/components/common/StageBar';
 import TablePagination from '@/components/common/TablePagination';
-import type { StatusTone } from '@/lib/statusMeta';
+import PageContainer from '@/components/common/PageContainer';
+import PageHeader from '@/components/common/PageHeader';
+import TableToolbar, { type ToolbarView } from '@/components/common/TableToolbar';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
+import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
+import StatusBadge from '@/components/common/StatusBadge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { ServerTable, SortState } from '@/hooks/useServerTable';
+import { leadStatusMeta, type StatusTone } from '@/lib/statusMeta';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 type PaymentType = Database['public']['Enums']['payment_type'];
@@ -77,17 +84,6 @@ type LeadRow = {
 
 type StatusFilter = 'all' | LeadStatus | 'documents_pending' | 'quotation_sent' | 'site_visit';
 type DateFilter = 'all' | 'today' | 'this_week' | 'this_month' | 'custom';
-type SortKey = 'latest_activity_desc' | 'created_desc' | 'follow_up_asc' | 'consumer_asc' | 'status_asc';
-
-const statusColor: Record<string, string> = {
-  new: 'bg-info text-info-foreground',
-  visited: 'bg-accent text-accent-foreground',
-  follow_up: 'bg-warning text-warning-foreground',
-  interested: 'bg-success text-success-foreground',
-  not_interested: 'bg-destructive text-destructive-foreground',
-  cancelled: 'bg-muted text-muted-foreground',
-  final: 'bg-primary text-primary-foreground',
-};
 
 const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -122,7 +118,7 @@ const startOfMonth = () => {
 
 /**
  * Whether a lead matches a stage filter. Shared by the table filter and the
- * StageBar counts so a count can never disagree with what clicking it shows.
+ * the stage tabs so a count can never disagree with what clicking it shows.
  */
 const matchesStatusFilter = (lead: LeadRow, filter: StatusFilter): boolean =>
   filter === 'all'
@@ -213,7 +209,12 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [filterDate, setFilterDate] = useStickyState<DateFilter>('admin-leads:date', 'all');
   const [customFrom, setCustomFrom] = useStickyState<string>('admin-leads:customFrom', '');
   const [customTo, setCustomTo] = useStickyState<string>('admin-leads:customTo', '');
-  const [sortBy, setSortBy] = useStickyState<SortKey>('admin-leads:sort', 'latest_activity_desc');
+  // A column + direction rather than a named enum, so the shared table's
+  // sortable headers drive it directly. Every value is a real leads_list column.
+  const [sort, setSort] = useStickyState<SortState>('admin-leads:sort2', {
+    column: 'last_activity_at',
+    direction: 'desc',
+  });
   const [editingCreatorId, setEditingCreatorId] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -221,6 +222,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useStickyState<number>('admin-leads:pageSize', 50);
+  const [view, setView] = useStickyState<TableView>('admin-leads:view', defaultTableView());
   const [total, setTotal] = useState(0);
   const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
   const [deleting, setDeleting] = useState(false);
@@ -289,14 +291,8 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       }
     }
 
-    switch (sortBy) {
-      case 'created_desc': return query.order('created_at', { ascending: false });
-      case 'follow_up_asc': return query.order('follow_up_date', { ascending: true, nullsFirst: false });
-      case 'consumer_asc': return query.order('customer_name', { ascending: true });
-      case 'status_asc': return query.order('status', { ascending: true });
-      default: return query.order('last_activity_at', { ascending: false });
-    }
-  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, role, salesTab, sortBy, user]);
+    return query.order(sort.column, { ascending: sort.direction === 'asc', nullsFirst: false });
+  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, role, salesTab, sort, user]);
 
   /**
    * The staff directory changes on its own schedule, not with the filters, so it
@@ -599,8 +595,10 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     })).sort((a, b) => (b.created + b.assigned) - (a.created + a.assigned)).slice(0, 8);
   }, [filteredRows]);
 
+  // Stage is deliberately absent: it has its own dropdown in the toolbar row, so
+  // counting it here would badge the popover for a filter it does not contain —
+  // the mirror of the "applied with no visible control" trap the popover guards.
   const activeFilterCount = [
-    filterStatus !== 'all',
     filterCreator !== 'all',
     filterAssigned !== 'all',
     filterOperator !== 'all',
@@ -673,7 +671,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   };
 
   const resetFilters = () => {
-    setFilterStatus('all');
+    // Not the stage — Clear empties the popover, and the stage lives outside it.
     setFilterCreator('all');
     setFilterAssigned('all');
     setFilterOperator('all');
@@ -681,7 +679,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     setFilterDate('all');
     setCustomFrom('');
     setCustomTo('');
-    setSortBy('latest_activity_desc');
+    setSort({ column: 'last_activity_at', direction: 'desc' });
   };
 
   const exportRows = () => {
@@ -702,79 +700,137 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     ], filteredRows);
   };
 
-  return (
-    <div className={isEmbedded ? 'space-y-6' : 'p-4 lg:p-8 max-w-7xl mx-auto space-y-6 animate-in-up'}>
-      {!isEmbedded && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-display text-foreground tracking-tight">Leads</h1>
+  /**
+   * The shared shells take a `ServerTable`. This page already does everything
+   * that hook does — server-side filter, sort and paging over `leads_list`,
+   * with a request-id guard and stage counts kept in step — so it adapts its
+   * own state to that shape rather than being rewritten onto the hook. The
+   * previous `as any` cast into TablePagination is what this replaces.
+   */
+  // "All" carries the unfiltered total; each stage carries its own tally, so the
+  // dropdown says as much as the tab strip did without spending a row on it.
+  const stageViews: ToolbarView[] = useMemo(
+    () => [
+      { value: 'all', label: 'All', count: total },
+      ...STAGE_BAR_STAGES.map((stage) => ({
+        value: stage.value,
+        label: stage.label,
+        count: stageCounts[stage.value] ?? 0,
+      })),
+    ],
+    [total, stageCounts]
+  );
+
+  const leadsTable: ServerTable<LeadRow> = useMemo(
+    () => ({
+      rows: leadRows,
+      total,
+      page,
+      pageCount,
+      pageSize,
+      setPage,
+      setPageSize: (size: number) => {
+        setPageSize(size);
+        setPage(0);
+      },
+      search,
+      setSearch: (value: string) => {
+        setSearch(value);
+        setPage(0);
+      },
+      isSearching: debouncedSearch.length > 0,
+      sort,
+      setSort,
+      toggleSort: (column: string) =>
+        setSort((current) =>
+          current.column === column
+            ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+            : { column, direction: 'asc' }
+        ),
+      isLoading: loading,
+      isFetching: loading,
+      error: null,
+      refetch: (() => fetchData(true)) as unknown as ServerTable<LeadRow>['refetch'],
+    }),
+    [debouncedSearch, fetchData, leadRows, loading, page, pageCount, pageSize, search, setPageSize, setSearch, setSort, sort, total]
+  );
+
+  const columns: DataTableColumn<LeadRow>[] = [
+    {
+      id: 'k_number',
+      header: 'K Number',
+      sortKey: 'k_number',
+      mobile: 'title',
+      cell: (lead) =>
+        lead.kNumber ? (
+          <span className="font-mono text-xs font-bold text-foreground">{lead.kNumber}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground/60">Not linked</span>
+        ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      sortKey: 'status',
+      mobile: 'badge',
+      // StatusBadge, not the page-local solid-fill `statusColor` map this file
+      // used to carry — that was a second visual language for lead status.
+      cell: (lead) => <StatusBadge value={lead.status} map={leadStatusMeta} size="sm" />,
+    },
+    {
+      id: 'consumer',
+      header: 'Consumer',
+      sortKey: 'customer_name',
+      mobile: 'subtitle',
+      cell: (lead) => (
+        <div className="min-w-0">
+          <div className="truncate font-semibold text-foreground" title={lead.consumerName}>
+            {lead.consumerName}
           </div>
-          {/* Create Lead is the one action people come here to take, so it is the
-              only accented control. Import and Export are occasional bulk-data
-              chores — they go behind the overflow menu rather than wrapping to a
-              second row on phones and competing with the primary on desktop. */}
-          <div className="flex shrink-0 items-center gap-2">
-            <Button onClick={() => navigate('/leads/new')} size="sm" className="h-9 flex-1 bg-primary text-primary-foreground shadow-sm hover:bg-primary/95 sm:flex-none">
-              <PhoneCall className="mr-1.5 h-4 w-4" /> Create Lead
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 w-9 shrink-0 p-0" aria-label="More lead actions">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canManageLeads && (
-                  <DropdownMenuItem onClick={() => setIsImportOpen(true)}>
-                    <Upload className="mr-2 h-4 w-4" /> Import Leads
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={exportRows} disabled={!filteredRows.length}>
-                  <Download className="mr-2 h-4 w-4" /> Export CSV
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {lead.mobile && (
+            <a
+              href={`tel:${lead.mobile}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              {lead.mobile}
+            </a>
+          )}
         </div>
-      )}
+      ),
+    },
+    {
+      id: 'assigned',
+      header: 'Assigned',
+      mobile: 'meta',
+      hideBelow: 'lg',
+      cell: (lead) => (
+        <span className={lead.assignedToName === 'Not assigned' ? 'italic text-muted-foreground' : ''}>
+          {lead.assignedToName}
+        </span>
+      ),
+    },
+    {
+      id: 'last_activity',
+      header: 'Last Updated',
+      sortKey: 'last_activity_at',
+      mobile: 'meta',
+      cell: (lead) => (
+        <span className="whitespace-nowrap">{formatDateTime(lead.lastActivityAt)}</span>
+      ),
+    },
+    {
+      id: 'follow_up',
+      header: 'Follow-up',
+      sortKey: 'follow_up_date',
+      hideBelow: 'xl',
+      mobile: 'hidden',
+      cell: (lead) => <span className="whitespace-nowrap">{formatDate(lead.nextFollowUpDate)}</span>,
+    },
+  ];
 
-      {/* Filter and Table Section */}
-      <div className="space-y-4">
-        {/* Sales Person Queues Toggle */}
-        {role === 'sales_person' && (
-          <div className="flex bg-muted/40 p-1 rounded-lg border max-w-sm shadow-inner">
-            <button
-              type="button"
-              onClick={() => {
-                setSalesTab('my_visits');
-                setFilterStatus('all');
-              }}
-              className={`flex-1 text-center py-1.5 text-xs font-semibold rounded-md transition-all ${
-                salesTab === 'my_visits'
-                  ? 'bg-background text-foreground shadow'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              My Visits
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSalesTab('unassigned_visits');
-                setFilterStatus('all');
-              }}
-              className={`flex-1 text-center py-1.5 text-xs font-semibold rounded-md transition-all ${
-                salesTab === 'unassigned_visits'
-                  ? 'bg-background text-foreground shadow'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Unassigned Visits
-            </button>
-          </div>
-        )}
-
-        {canManageLeads && selectedIds.size > 0 && (
+  /** The bulk action bar, unchanged — it appears above the table when rows are picked. */
+  const bulkBar = canManageLeads ? (
           <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
             {/* Selection state: the count is the thing to read first, so it carries
                 the emphasis. Clear sits with it — both concern the selection, not the leads. */}
@@ -844,48 +900,15 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
               )}
             </div>
           </div>
-        )}
+  ) : null;
 
-        {/* Horizontal Status Quick Filter Bar + Search */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-muted/30 border p-3 rounded-xl">
-          {/* Chevron pipeline. Counts come from the loaded rows and the shape
-              conveys stage order, which the previous flat chips did not. */}
-          <StageBar
-            className="flex-1"
-            allLabel="All Statuses"
-            allCount={total}
-            value={filterStatus === 'all' ? null : filterStatus}
-            onChange={(v) => setFilterStatus((v ?? 'all') as StatusFilter)}
-            items={STAGE_BAR_STAGES.map((stage) => ({
-              value: stage.value,
-              label: stage.label,
-              tone: stage.tone,
-              count: stageCounts[stage.value] ?? 0,
-            }))}
-          />
-
-          <div className="flex items-center gap-2">
-            <div className="relative w-64">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search leads..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 h-8.5 text-xs rounded-lg"
-              />
-            </div>
-            
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8.5 text-xs gap-1">
-                  <Filter className="h-3.5 w-3.5" /> Filters {activeFilterCount ? `(${activeFilterCount})` : ''}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-[300px] space-y-3 p-4">
+  /** Filter controls, now inside the shared FiltersPopover instead of a bespoke one. */
+  const filterControls = (
+    <div className="space-y-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">Created By</Label>
                   <Select value={filterCreator} onValueChange={setFilterCreator}>
-                    <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Staff</SelectItem>
                       {allStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
@@ -895,7 +918,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">Assigned To</Label>
                   <Select value={filterAssigned} onValueChange={setFilterAssigned}>
-                    <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Anyone</SelectItem>
                       <SelectItem value="unassigned">Not assigned</SelectItem>
@@ -910,405 +933,151 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">Operator</Label>
                   <Select value={filterOperator} onValueChange={setFilterOperator}>
-                    <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Operators</SelectItem>
                       {operatorStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">Sort By</Label>
-                  <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortKey)}>
-                    <SelectTrigger className="h-8.5 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="latest_activity_desc">Latest Activity</SelectItem>
-                      <SelectItem value="created_desc">Newest Created</SelectItem>
-                      <SelectItem value="follow_up_asc">Next Follow-up</SelectItem>
-                      <SelectItem value="consumer_asc">Consumer Name</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button className="w-full text-xs h-8.5 mt-2" variant="ghost" onClick={resetFilters}>Reset Filters</Button>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
+    </div>
+  );
 
-        {/* Table of Leads */}
-        {loading ? (
-          <div className="border rounded-xl p-12 text-center text-muted-foreground bg-card">
-            <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-primary" />
-            Loading leads directory...
-          </div>
-        ) : filteredRows.length === 0 ? (
-          <div className="border rounded-xl p-12 text-center text-muted-foreground bg-card">
-            No leads found matching current filters.
-          </div>
-        ) : (
-          <>
-          {/* Desktop: the full column table. Hidden on phones, where seven
-              columns inside a horizontal scroller pushed Actions off-screen. */}
-          <div className="hidden md:block rounded-xl border overflow-hidden bg-card shadow-sm">
-            {/* The body scrolls inside a viewport-height box instead of growing
-                the page, so the toolbar above and the pager below stay put and
-                the column headers remain visible while scrolling. */}
-            <div className="overflow-auto max-h-[calc(100vh-22rem)] min-h-[16rem]">
-              <table className="w-full text-sm text-left border-collapse text-muted-foreground">
-                <thead className="sticky top-0 z-10 text-xs font-mono uppercase bg-muted border-b text-foreground shadow-sm">
-                  <tr>
-                    {/* K-Number is the primary identifier for a connection, so
-                        it leads. The internal lead id is not shown at all. */}
-                    {canManageLeads && (
-                      <th className="px-3 py-3.5 w-10">
-                        <input
-                          type="checkbox"
-                          aria-label="Select all leads on this page"
-                          className="h-4 w-4 cursor-pointer rounded border-border"
-                          checked={filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id))}
-                          onChange={(e) =>
-                            setSelectedIds(
-                              e.target.checked ? new Set(filteredRows.map((r) => r.id)) : new Set()
-                            )
-                          }
-                        />
-                      </th>
-                    )}
-                    <th className="px-4 py-3.5 font-semibold">K Number</th>
-                    <th className="px-4 py-3.5 font-semibold">Consumer Details</th>
-                    <th className="px-4 py-3.5 font-semibold">Assigned Staff</th>
-                    <th className="px-4 py-3.5 font-semibold">Status</th>
-                    <th className="px-4 py-3.5 font-semibold">Last Updated</th>
-                    <th className="px-4 py-3.5 font-semibold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y border-b">
-                  {filteredRows.map((lead) => (
-                    <tr
-                      key={lead.id}
-                      className="hover:bg-muted/10 transition-colors cursor-pointer group"
-                      onClick={() => navigate(`/leads/${lead.id}`)}
-                    >
-                      {canManageLeads && (
-                        <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${lead.consumerName}`}
-                            className="h-4 w-4 cursor-pointer rounded border-border"
-                            checked={selectedIds.has(lead.id)}
-                            onChange={(e) => {
-                              setSelectedIds((prev) => {
-                                const next = new Set(prev);
-                                if (e.target.checked) next.add(lead.id);
-                                else next.delete(lead.id);
-                                return next;
-                              });
-                            }}
-                          />
-                        </td>
-                      )}
-                      <td className="px-4 py-3 text-xs font-mono text-foreground">
-                        <div className="flex items-center gap-1">
-                          <span className="font-bold">
-                            {lead.kNumber || <span className="font-normal text-muted-foreground/60">Not linked</span>}
-                          </span>
-                          {lead.kNumber && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6 rounded-md hover:bg-muted shrink-0"
-                              title="Sync with Discom"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSyncKno(lead.id, lead.kNumber);
-                              }}
-                              disabled={syncingKno === lead.id}
-                            >
-                              <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground ${syncingKno === lead.id ? 'animate-spin text-primary' : ''}`} />
-                            </Button>
-                          )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 rounded-md hover:bg-muted shrink-0"
-                            title={lead.kNumber ? 'Edit K Number' : 'Add K Number'}
-                            aria-label={`Edit K Number for ${lead.consumerName}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setKnoTarget(lead);
-                              setKnoDraft(lead.kNumber ?? '');
-                            }}
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-foreground truncate max-w-[200px]" title={lead.consumerName}>
-                          {lead.consumerName}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-2 text-xs mt-0.5">
-                          <a
-                            href={`tel:${lead.mobile}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-primary hover:underline inline-flex items-center gap-1 font-semibold"
-                          >
-                            <Phone className="h-3 w-3 shrink-0" /> {lead.mobile}
-                          </a>
-                          {lead.email && (
-                            <span className="text-muted-foreground/80 truncate max-w-[150px]" title={lead.email}>
-                              • {lead.email}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-foreground text-xs font-medium">{lead.assignedToName}</div>
-                        {lead.assignedToRole && (
-                          <div className="text-[10px] text-muted-foreground mt-0.5">{statusLabel(lead.assignedToRole)}</div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge className={`${statusColor[lead.status] || statusColor.new} font-medium border-0 px-2 py-0.5 text-[11px]`}>
-                          {statusLabel(lead.status)}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        <div className="text-foreground">{formatDateTime(lead.lastActivityAt)}</div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[180px]" title={lead.lastNote}>
-                          Note: {lead.lastNote}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          {lead.mobile && (
-                            <Button
-                              asChild
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8 text-primary border-primary/20 bg-primary/5 hover:bg-primary hover:text-primary-foreground"
-                            >
-                              <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.consumerName}`}>
-                                <Phone className="h-3.5 w-3.5" />
-                              </a>
-                            </Button>
-                          )}
-                          {canBin && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                              title="Move to Cancelled Bin"
-                              aria-label={`Delete ${lead.consumerName}`}
-                              onClick={(e) => { e.stopPropagation(); setDeleteTarget(lead); }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
-                            onClick={() => navigate(`/leads/${lead.id}`)}
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+  const Shell = isEmbedded
+    ? ({ children }: { children: React.ReactNode }) => <div className="space-y-5">{children}</div>
+    : PageContainer;
 
-          {/* Mobile: the same rows as stacked cards, matching the Site Visits
-              list. Same data, same handlers — only the layout differs. */}
-          <div className="space-y-2.5 md:hidden">
-            {canManageLeads && (
-              <label className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
-                <input
-                  type="checkbox"
-                  aria-label="Select all leads on this page"
-                  className="h-4 w-4 cursor-pointer rounded border-border"
-                  checked={filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id))}
-                  onChange={(e) =>
-                    setSelectedIds(
-                      e.target.checked ? new Set(filteredRows.map((r) => r.id)) : new Set()
-                    )
-                  }
-                />
-                Select all on this page
-              </label>
-            )}
-
-            {filteredRows.map((lead) => (
-              <div
-                key={lead.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/leads/${lead.id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    navigate(`/leads/${lead.id}`);
-                  }
-                }}
-                className="cursor-pointer rounded-2xl border border-border/70 bg-card p-3 shadow-sm transition-colors hover:bg-muted/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+  return (
+    <>
+    <Shell>
+      {!isEmbedded && (
+        <PageHeader
+          title="Leads"
+          actions={
+            // Create Lead is the one action people come here for, so it is the
+            // only accented control; the bulk-data chores sit behind overflow.
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => navigate('/leads/new')}
+                size="sm"
+                className="h-10 gap-2 sm:h-9"
               >
-                {/* One header line and one meta line. This was four stacked
-                    blocks — K-Number/name/phone, then a labelled grid of Status
-                    and Assigned Staff, then a full-width Last Updated — each
-                    with its own uppercase label and its own divider, which made
-                    a card of eight short values nearly a screen tall on a phone.
-                    The labels were carrying almost no meaning a badge and a
-                    muted line do not. */}
-                <div className="flex items-start gap-2.5">
-                  {canManageLeads && (
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${lead.consumerName}`}
-                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border"
-                      checked={selectedIds.has(lead.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        setSelectedIds((prev) => {
-                          const next = new Set(prev);
-                          if (e.target.checked) next.add(lead.id);
-                          else next.delete(lead.id);
-                          return next;
-                        });
-                      }}
-                    />
-                  )}
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-mono text-xs font-bold text-foreground">
-                        {lead.kNumber || (
-                          <span className="font-sans font-normal text-muted-foreground/60">Not linked</span>
-                        )}
-                      </span>
-                      {/* Status reads as an attribute of the lead, so it sits
-                          with the identity rather than under a label of its own. */}
-                      <Badge className={`${statusColor[lead.status] || statusColor.new} ml-auto shrink-0 border-0 px-2 py-0 text-[10px] font-medium`}>
-                        {statusLabel(lead.status)}
-                      </Badge>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    </div>
-
-                    <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
-                      <span className="truncate text-sm font-semibold text-foreground" title={lead.consumerName}>
-                        {lead.consumerName}
-                      </span>
-                      <a
-                        href={`tel:${lead.mobile}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                      >
-                        <Phone className="h-3 w-3 shrink-0" /> {lead.mobile}
-                      </a>
-                    </div>
-
-                    {/* Assignee, when it was last touched, and the note — the
-                        three things you scan a list for — on one muted line. */}
-                    <p className="mt-1 truncate text-[11px] text-muted-foreground">
-                      <span className={lead.assignedToName === 'Not assigned' ? 'italic' : 'font-medium text-foreground/80'}>
-                        {lead.assignedToName}
-                      </span>
-                      {lead.assignedToRole && ` (${statusLabel(lead.assignedToRole)})`}
-                      {' · '}
-                      {formatDateTime(lead.lastActivityAt)}
-                    </p>
-                    {lead.lastNote && (
-                      <p className="truncate text-[11px] text-muted-foreground/70" title={lead.lastNote}>
-                        {lead.lastNote}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  className="mt-2.5 flex items-center gap-1.5 border-t border-border/50 pt-2.5"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {lead.mobile && (
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="icon"
-                      className="h-9 w-9 border-primary/20 bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground"
-                    >
-                      <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.consumerName}`}>
-                        <Phone className="h-4 w-4" />
-                      </a>
-                    </Button>
-                  )}
-                  {lead.kNumber && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-9 w-9 rounded-md hover:bg-muted"
-                      title="Sync with Discom"
-                      aria-label={`Sync ${lead.consumerName} with Discom`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSyncKno(lead.id, lead.kNumber);
-                      }}
-                      disabled={syncingKno === lead.id}
-                    >
-                      <RefreshCw className={`h-4 w-4 text-muted-foreground ${syncingKno === lead.id ? 'animate-spin text-primary' : ''}`} />
-                    </Button>
-                  )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 rounded-md hover:bg-muted"
-                    title={lead.kNumber ? 'Edit K Number' : 'Add K Number'}
-                    aria-label={`Edit K Number for ${lead.consumerName}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setKnoTarget(lead);
-                      setKnoDraft(lead.kNumber ?? '');
-                    }}
-                  >
-                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                <PhoneCall className="h-4 w-4" /> Create Lead
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 w-10 shrink-0 p-0 sm:h-9 sm:w-9" aria-label="More lead actions">
+                    <MoreVertical className="h-4 w-4" />
                   </Button>
-                  {canBin && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="ml-auto h-9 w-9 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      title="Move to Cancelled Bin"
-                      aria-label={`Delete ${lead.consumerName}`}
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(lead); }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canManageLeads && (
+                    <DropdownMenuItem onClick={() => setIsImportOpen(true)}>
+                      <Upload className="mr-2 h-4 w-4" /> Import Leads
+                    </DropdownMenuItem>
                   )}
-                </div>
-              </div>
-            ))}
-          </div>
+                  <DropdownMenuItem onClick={exportRows} disabled={!leadRows.length}>
+                    <Download className="mr-2 h-4 w-4" /> Export CSV
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          }
+        />
+      )}
+
+      {/* The sales rep's own queues. Still a role-specific control, but the
+          shared Tabs rather than two hand-built buttons. */}
+      {role === 'sales_person' && (
+        <Tabs value={salesTab} onValueChange={(v) => { setSalesTab(v as typeof salesTab); setPage(0); }}>
+          <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+            <TabsTrigger value="my_visits" className="h-11 text-xs sm:h-8 sm:text-sm">My Visits</TabsTrigger>
+            <TabsTrigger value="unassigned_visits" className="h-11 text-xs sm:h-8 sm:text-sm">Unassigned</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {selectedIds.size > 0 && bulkBar}
+
+      {/* Nine stages plus All. As a tab strip that was a sideways-scrolling band
+          hiding its own last options; as a dropdown it is one control in the
+          same row as search, filters and the layout toggle. */}
+      <TableToolbar
+        table={leadsTable}
+        searchPlaceholder="Search by K-Number, name or mobile…"
+        views={stageViews}
+        activeView={filterStatus}
+        onViewChange={(v) => { setFilterStatus(v as StatusFilter); setPage(0); }}
+        viewsLabel="Filter by stage"
+        layout={view}
+        onLayoutChange={setView}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={resetFilters}
+        filters={filterControls}
+      />
+
+      <DataTable
+        layout={view}
+        table={leadsTable}
+        columns={columns}
+        rowKey={(lead) => lead.id}
+        selectable={canManageLeads}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        onRowClick={(lead) => navigate(`/leads/${lead.id}`)}
+        rowActions={(lead) => (
+          <>
+            {lead.mobile && (
+              <Button asChild variant="ghost" size="icon" className="h-9 w-9 text-primary">
+                <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.consumerName}`}>
+                  <Phone className="h-4 w-4" />
+                </a>
+              </Button>
+            )}
+            {lead.kNumber && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-9 w-9"
+                title="Sync with Discom"
+                aria-label={`Sync ${lead.consumerName} with Discom`}
+                onClick={() => handleSyncKno(lead.id, lead.kNumber)}
+                disabled={syncingKno === lead.id}
+              >
+                <RefreshCw className={`h-4 w-4 text-muted-foreground ${syncingKno === lead.id ? 'animate-spin text-primary' : ''}`} />
+              </Button>
+            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9"
+              title={lead.kNumber ? 'Edit K Number' : 'Add K Number'}
+              aria-label={`Edit K Number for ${lead.consumerName}`}
+              onClick={() => { setKnoTarget(lead); setKnoDraft(lead.kNumber ?? ''); }}
+            >
+              <Pencil className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            {canBin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                title="Move to Cancelled Bin"
+                aria-label={`Delete ${lead.consumerName}`}
+                onClick={() => setDeleteTarget(lead)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </>
         )}
+        emptyTitle="No leads yet"
+        emptyDescription="Create a lead, or import a list, to get started."
+        emptyIcon={PhoneCall}
+      />
 
-        {!loading && total > 0 && (
-          <TablePagination
-            entityLabel="leads"
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
-            table={{
-              page,
-              pageCount,
-              pageSize,
-              setPage,
-              setPageSize: (size: number) => { setPageSize(size); setPage(0); },
-              total,
-              rows: filteredRows,
-            } as any}
-          />
-        )}
-      </div>
+      <TablePagination table={leadsTable} entityLabel="leads" pageSizeOptions={PAGE_SIZE_OPTIONS} />
+    </Shell>
 
       <LeadImportWizard
         open={isImportOpen}
@@ -1400,7 +1169,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 };
 

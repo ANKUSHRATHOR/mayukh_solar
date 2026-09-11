@@ -1,5 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import {
+  deleteFile,
+  downloadFile,
+  getFileUrl,
+  uploadFile,
+  type FileHandle,
+} from '@/lib/fileStore';
 
 export type DocumentType = Database['public']['Enums']['document_type'];
 
@@ -119,40 +126,166 @@ export const fetchProjectDocuments = async (projectId: string): Promise<ProjectD
 };
 
 /**
- * Signed URL for a stored document.
+ * A `FileHandle` for a document row.
  *
- * Signed on read rather than persisted — `material_dispatches` stores a
- * one-year signed URL as if permanent, so every link there breaks after 365
- * days. Storing the path and signing on demand avoids repeating that.
+ * Documents live in Google Drive now, and Drive files are private: a read is
+ * authorised by the row it hangs off, not by the file id. Everything that
+ * wants to show or save a document goes through here so it never has to know
+ * whether the file is in Drive or in the pre-migration Supabase bucket.
  */
-export const getDocumentUrl = async (path: string, expiresInSeconds = 3600): Promise<string> => {
-  const { data, error } = await supabase.storage
-    .from('project-documents')
-    .createSignedUrl(path, expiresInSeconds);
+export const handleFor = (doc: Pick<ProjectDocument, 'id' | 'file_url'>): FileHandle => ({
+  ref: doc.file_url,
+  table: 'documents',
+  rowId: doc.id,
+});
 
-  if (error) throw new Error(error.message);
-  if (!data?.signedUrl) throw new Error('Could not create a link to this document.');
-  return data.signedUrl;
+/**
+ * A URL the browser can render for a document.
+ *
+ * Drive files come back as object URLs, which must be released — pass the
+ * result to `revokeFileUrl` when the view goes away.
+ */
+export const getDocumentUrl = (doc: Pick<ProjectDocument, 'id' | 'file_url'>): Promise<string> =>
+  getFileUrl(handleFor(doc));
+
+/** Saves a document, preserving a readable name and the real extension. */
+export const downloadDocument = (
+  doc: Pick<ProjectDocument, 'id' | 'file_url'>,
+  label: string
+): Promise<void> => downloadFile(handleFor(doc), label);
+
+/**
+ * Removes a document: the file, then the row. Drive files are trashed rather
+ * than purged, so a mis-click is recoverable from the Drive bin.
+ */
+export const deleteDocument = (doc: Pick<ProjectDocument, 'id' | 'file_url'>): Promise<void> =>
+  deleteFile(handleFor(doc));
+
+/** Extension for a stored file, preferring the real one over a guessed one. */
+const MIME_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'application/pdf': 'pdf',
 };
 
-/** Preserves the real file extension — the download helper used to force `.bin`. */
-export const downloadDocument = async (path: string, label: string): Promise<void> => {
-  const url = await getDocumentUrl(path, 120);
-  const extension = path.split('.').pop() ?? 'pdf';
-  const safeLabel = label.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+const extensionFor = (file: File): string => {
+  const raw = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
+  if (raw && /^[a-z0-9]{1,5}$/.test(raw)) return raw;
+  return MIME_EXTENSIONS[file.type] || 'bin';
+};
 
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('Could not download this document.');
-  const blob = await response.blob();
+/**
+ * Uploads a document against a project and records it.
+ *
+ * The one place that knows how a project document is stored: the Drive upload,
+ * the extension, and the insert-or-update of the row. Three screens used to
+ * carry their own copy of this and had already drifted -- one capped uploads
+ * at 10 MB and another at 15 MB, and only one of them checked that the write
+ * was actually permitted.
+ *
+ * That last part matters: PostgREST reports an RLS refusal in `error`, but an
+ * RLS-filtered UPDATE is quieter still -- no error at all, simply zero rows
+ * touched. So the update asks for the affected row back rather than trusting
+ * silence, and a row that never existed for this caller is reported as a
+ * permission problem instead of a silent no-op.
+ */
+export const uploadProjectDocument = async (
+  projectId: string,
+  userId: string,
+  documentType: DocumentType,
+  file: File,
+  options: { label?: string; customName?: string; leadId?: string | null } = {}
+): Promise<void> => {
+  const customName = options.customName?.trim() || null;
 
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = `${safeLabel}.${extension}`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  let query = supabase
+    .from('documents')
+    .select('id, file_url')
+    .eq('project_id', projectId)
+    .eq('document_type', documentType);
+  // `other` is the one type that can repeat, told apart by its custom name.
+  if (customName) query = query.eq('custom_name', customName);
+  const { data: existing } = await query.maybeSingle();
+
+  const slug = customName ? `custom_${Date.now()}` : documentType;
+  const ref = await uploadFile({
+    scope: 'project',
+    ownerId: projectId,
+    file,
+    filename: `${slug}.${extensionFor(file)}`,
+    label: options.label ?? customName ?? documentLabels[documentType] ?? documentType,
+    replaceRef: existing?.file_url ?? null,
+  });
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('documents')
+      .update({
+        file_url: ref,
+        uploaded_at: new Date().toISOString(),
+        rejection_reason: null,
+        is_verified: false,
+        uploaded_by_user_id: userId,
+      })
+      .eq('id', existing.id)
+      .select('id');
+    if (error) throw new Error(error.message);
+    if (!data?.length) throw new Error('You do not have permission to replace this document.');
+    return;
+  }
+
+  const { error } = await supabase.from('documents').insert({
+    project_id: projectId,
+    lead_id: options.leadId ?? null,
+    document_type: documentType,
+    file_url: ref,
+    custom_name: customName,
+    uploaded_by_user_id: userId,
+    is_verified: false,
+  });
+  if (error) throw new Error(error.message);
+};
+
+/** The text-valued documents (customer email, mobile), saved the same way. */
+export const saveProjectDocumentText = async (
+  projectId: string,
+  userId: string,
+  documentType: DocumentType,
+  value: string
+): Promise<void> => {
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error('Enter a value first.');
+
+  const { data: existing } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('document_type', documentType)
+    .maybeSingle();
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('documents')
+      .update({ text_value: trimmed, uploaded_at: new Date().toISOString(), rejection_reason: null })
+      .eq('id', existing.id)
+      .select('id');
+    if (error) throw new Error(error.message);
+    if (!data?.length) throw new Error('You do not have permission to change this.');
+    return;
+  }
+
+  const { error } = await supabase.from('documents').insert({
+    project_id: projectId,
+    document_type: documentType,
+    text_value: trimmed,
+    uploaded_by_user_id: userId,
+    is_verified: false,
+  });
+  if (error) throw new Error(error.message);
 };
 
 export interface DocumentProgress {

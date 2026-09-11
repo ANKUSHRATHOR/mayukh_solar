@@ -250,17 +250,27 @@ const UsersPanel = () => {
         </Card>
       );
     }
+    // Cards carry min-w-0: a grid item defaults to min-width:auto, so a card grew
+    // to the min-content width of the longest unbroken value inside it — a
+    // placeholder email like `pending_<uuid>` — pushing 135px of itself off a
+    // 375px screen and stopping its own `truncate` from ever applying. Same
+    // failure mode as DialogContent's `[&>*]:min-w-0`.
     return (
       <div className="grid gap-3">
         {visible.map((s) => (
-          <Card key={s.id} className="shadow-card border-border hover:shadow-elevated transition-shadow">
+          <Card
+            key={s.id}
+            className="min-w-0 shadow-card border-border hover:shadow-elevated transition-shadow"
+          >
             <CardContent className="p-4 flex items-center gap-4">
               <div className="h-10 w-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0">
                 {s.full_name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-sm text-foreground">{s.full_name}</p>
+                <div className="flex min-w-0 items-center gap-2 flex-wrap">
+                  <p className="min-w-0 truncate font-semibold text-sm text-foreground">
+                    {s.full_name}
+                  </p>
                   {s.role ? (
                     <Badge className={`text-xs ${roleColors[s.role]}`}>
                       {roleLabel(s.role)}
@@ -278,8 +288,17 @@ const UsersPanel = () => {
                   {s.mobile} {s.last_login ? `• Last login: ${new Date(s.last_login).toLocaleDateString()}` : '• Never logged in'}
                 </p>
               </div>
+              {/* Hidden below sm: this button does not shrink, and on a 375px row it
+                  took enough width to squeeze the name column to a few characters.
+                  The dropdown beside it already offers "Assign role" as its first
+                  item for a roleless user, so nothing is lost on a phone. */}
               {!s.role && (
-                <Button size="sm" variant="outline" className="shrink-0 gap-1" onClick={() => openEdit(s)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="hidden shrink-0 gap-1 sm:inline-flex"
+                  onClick={() => openEdit(s)}
+                >
                   <UserCheck className="h-4 w-4" /> Assign role
                 </Button>
               )}

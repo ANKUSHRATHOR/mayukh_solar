@@ -7,16 +7,13 @@ import {
   Download,
   IndianRupee,
   Inbox,
-  LayoutGrid,
   Landmark,
   Plus,
-  Rows3,
   Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -28,8 +25,10 @@ import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
 import TablePagination from '@/components/common/TablePagination';
-import StatCard from '@/components/dashboard/StatCard';
+import StatusBadge from '@/components/common/StatusBadge';
+import StatStrip from '@/components/common/StatStrip';
 import PaymentFormDialog from '@/components/payments/PaymentFormDialog';
 import { useServerTable } from '@/hooks/useServerTable';
 import { useStickyState } from '@/hooks/useStickyState';
@@ -108,10 +107,7 @@ const PaymentsListPage = () => {
   // sales person opening this on a phone should get the card fallback the design
   // system asks for, not a table to drag sideways. Once they pick, the choice
   // sticks at every width.
-  const [view, setView] = useStickyState<'table' | 'cards'>(
-    'payments-list:view',
-    typeof window !== 'undefined' && window.innerWidth < 640 ? 'cards' : 'table'
-  );
+  const [view, setView] = useStickyState<TableView>('payments-list:view', defaultTableView());
   const layout = view === 'cards' ? 'cards' : 'table';
 
   const showDues = tab === 'dues';
@@ -187,6 +183,7 @@ const PaymentsListPage = () => {
       id: 'payment_date',
       header: 'Received',
       sortKey: 'payment_date',
+      mobile: 'meta',
       cell: (p) => (
         <span className="whitespace-nowrap text-xs">
           {format(new Date(p.payment_date), 'dd MMM yyyy')}
@@ -197,6 +194,7 @@ const PaymentsListPage = () => {
       id: 'payment_mode',
       header: 'Mode',
       sortKey: 'payment_mode',
+      mobile: 'meta',
       cell: (p) => (
         <span className="text-xs font-medium">
           {paymentModeLabels[p.payment_mode] ?? p.payment_mode}
@@ -208,6 +206,7 @@ const PaymentsListPage = () => {
       header: 'Paid by',
       sortKey: 'source',
       hideBelow: 'lg',
+      mobile: 'meta',
       cell: (p) => (
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
           {p.source === 'bank' ? (
@@ -226,6 +225,7 @@ const PaymentsListPage = () => {
       id: 'reference_number',
       header: 'Reference',
       hideBelow: 'xl',
+      mobile: 'hidden',
       cell: (p) => (
         <span className="break-all text-xs text-muted-foreground">{p.reference_number || '—'}</span>
       ),
@@ -245,7 +245,7 @@ const PaymentsListPage = () => {
       header: 'Outstanding',
       sortKey: 'balance',
       align: 'right',
-      mobile: 'subtitle',
+      mobile: 'meta',
       cell: (d) => (
         <span className="font-bold tabular-nums text-warning">{formatMoney(d.balance)}</span>
       ),
@@ -280,17 +280,21 @@ const PaymentsListPage = () => {
       id: 'is_overdue',
       header: 'Status',
       sortKey: 'is_overdue',
+      mobile: 'badge',
       cell: (d) =>
-        d.is_overdue ? (
-          <Badge variant="outline" className="gap-1 border-destructive/40 bg-destructive/10 text-destructive">
-            <AlertTriangle className="h-3 w-3" />
-            {d.days_overdue} day{d.days_overdue === 1 ? '' : 's'} late
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            In window
-          </Badge>
-        ),
+        // StatusBadge, not a hand-rolled Badge: these were text-xs sentence
+        // case while every other status chip in the app is text-[10px] upper.
+        <StatusBadge
+          value={d.is_overdue ? 'overdue' : 'in_window'}
+          map={{
+            overdue: {
+              label: `${d.days_overdue} day${d.days_overdue === 1 ? '' : 's'} late`,
+              tone: 'danger',
+            },
+            in_window: { label: 'In window', tone: 'neutral' },
+          }}
+          size="sm"
+        />,
     },
   ];
 
@@ -342,21 +346,23 @@ const PaymentsListPage = () => {
         title="Payments"
         icon={IndianRupee}
         actions={
-          // Full width and evenly split on a phone: an icon-only square next to
-          // a wide primary button reads as something half-finished rather than
-          // a pair of actions.
-          <div className="flex w-full gap-2 sm:w-auto">
+          // The label on the secondary action goes below sm rather than the whole
+          // pair going full-width: the primary keeps its words, and the header
+          // stays one row beside the title.
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none"
+              className="h-10 gap-2 px-2.5 sm:h-9 sm:px-3"
               onClick={exportCurrentPage}
               disabled={activeTable.rows.length === 0}
+              aria-label="Export this page"
             >
-              <Download className="h-4 w-4" /> Export
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export</span>
             </Button>
             {canAdd && (
-              <Button size="sm" className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none" onClick={openNew}>
+              <Button size="sm" className="h-10 gap-2 sm:h-9" onClick={openNew}>
                 <Plus className="h-4 w-4" /> Add payment
               </Button>
             )}
@@ -364,71 +370,54 @@ const PaymentsListPage = () => {
         }
       />
 
+      {/* The same compact strip every list uses. Absent, not zeroed, for a role
+          that cannot read project_payments — "Outstanding ₹0" would read as
+          "nothing is owed" rather than "you cannot see this". */}
       {kpis?.payments_visible && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 sm:gap-4">
-          <StatCard
-            title="This month"
-            value={formatMoney(kpis.received_this_month)}
-            icon={IndianRupee}
-            accent="success"
-          />
-          <StatCard
-            title="Outstanding"
-            value={formatMoney(kpis.outstanding)}
-            icon={Wallet}
-            accent="warning"
-            onClick={() => setTab('dues')}
-          />
-          <StatCard
-            title="Overdue"
-            value={formatMoney(kpis.overdue_amount)}
-            icon={AlertTriangle}
-            accent="destructive"
-            change={
-              kpis.overdue_count > 0
-                ? `${kpis.overdue_count} project${kpis.overdue_count === 1 ? '' : 's'} past ${kpis.due_days} day${kpis.due_days === 1 ? '' : 's'}`
-                : 'Nothing late'
-            }
-            changeType={kpis.overdue_count > 0 ? 'down' : 'neutral'}
-            onClick={() => setTab('dues')}
-          />
-          <StatCard
-            title="Unallocated"
-            value={kpis.unallocated_count}
-            icon={Inbox}
-            accent="info"
-            change={
-              kpis.unallocated_count > 0
-                ? `${formatMoney(kpis.unallocated_amount)} to match`
-                : 'Inbox clear'
-            }
-            changeType={kpis.unallocated_count > 0 ? 'down' : 'neutral'}
-            onClick={() => setTab('unallocated')}
-          />
-        </div>
+        <StatStrip
+          items={[
+            { label: 'This month', value: formatMoney(kpis.received_this_month), tone: 'success' },
+            {
+              label: 'Outstanding',
+              value: formatMoney(kpis.outstanding),
+              tone: 'warning',
+              onClick: () => setTab('dues'),
+            },
+            {
+              label: 'Overdue',
+              value: formatMoney(kpis.overdue_amount),
+              tone: 'danger',
+              hint:
+                kpis.overdue_count > 0
+                  ? `${kpis.overdue_count} past ${kpis.due_days}d`
+                  : 'nothing late',
+              onClick: () => setTab('dues'),
+            },
+            {
+              label: 'Unallocated',
+              value: kpis.unallocated_count,
+              tone: kpis.unallocated_count > 0 ? 'info' : 'neutral',
+              hint:
+                kpis.unallocated_count > 0
+                  ? `${formatMoney(kpis.unallocated_amount)} to match`
+                  : 'inbox clear',
+              onClick: () => setTab('unallocated'),
+            },
+          ]}
+        />
       )}
-
-      <Tabs value={tab} onValueChange={(v) => setTab(v as PaymentTab)}>
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
-          {tabs.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="h-11 gap-2 text-xs sm:h-8 sm:text-sm">
-              {t.label}
-              {typeof t.count === 'number' && t.count > 0 && (
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                  {t.count}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
 
       {showDues ? (
         <>
           <TableToolbar
             table={dues}
             searchPlaceholder="Search by K-Number, customer name or mobile…"
-            actions={<ViewToggle view={view} onChange={setView} />}
+            views={tabs}
+            activeView={tab}
+            onViewChange={(v) => setTab(v as PaymentTab)}
+            viewsLabel="Filter payments"
+            layout={view}
+            onLayoutChange={setView}
           />
           <DataTable
             layout={layout}
@@ -449,7 +438,12 @@ const PaymentsListPage = () => {
             searchPlaceholder="Search by K-Number, name, mobile or reference…"
             activeFilterCount={mode ? 1 : 0}
             onClearFilters={() => setMode('')}
-            actions={<ViewToggle view={view} onChange={setView} />}
+            views={tabs}
+            activeView={tab}
+            onViewChange={(v) => setTab(v as PaymentTab)}
+            viewsLabel="Filter payments"
+            layout={view}
+            onLayoutChange={setView}
             filters={
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Mode</Label>
@@ -504,42 +498,5 @@ const PaymentsListPage = () => {
     </PageContainer>
   );
 };
-
-/**
- * Table or cards, the reader's choice.
- *
- * Shown at every width. It was `hidden md:flex`, which meant a window even a
- * few pixels under 768px got the card layout and no way to leave it — the
- * control disappeared exactly when it was needed. On a phone the label still
- * hides, but the icons stay tappable.
- */
-const ViewToggle = ({
-  view,
-  onChange,
-}: {
-  view: 'table' | 'cards';
-  onChange: (value: 'table' | 'cards') => void;
-}) => (
-  <div className="flex h-11 items-center rounded-lg border border-border/70 p-0.5 sm:h-9">
-    {([
-      { value: 'table', label: 'Table', icon: Rows3 },
-      { value: 'cards', label: 'Cards', icon: LayoutGrid },
-    ] as const).map(({ value, label, icon: Icon }) => (
-      <Button
-        key={value}
-        type="button"
-        variant={view === value ? 'secondary' : 'ghost'}
-        size="sm"
-        className="h-full gap-1.5 px-3 text-xs font-semibold sm:px-2"
-        onClick={() => onChange(value)}
-        aria-pressed={view === value}
-        aria-label={`Show as ${label.toLowerCase()}`}
-      >
-        <Icon className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">{label}</span>
-      </Button>
-    ))}
-  </div>
-);
 
 export default PaymentsListPage;

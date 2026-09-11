@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import DocumentActions from '@/components/common/DocumentActions';
+import { uploadProjectDocument } from '@/lib/documents';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,37 +76,6 @@ export default function DocumentPoolDialog({
     }
   }, [open, projectId, fetchDocs]);
 
-  const getSignedUrl = async (fileUrl: string, download = false): Promise<string | null> => {
-    let path = fileUrl;
-    const marker = '/project-documents/';
-    if (path.includes(marker)) path = path.split(marker)[1];
-    const { data, error } = await supabase.storage
-      .from('project-documents')
-      .createSignedUrl(path, 600, download ? { download: true } : undefined);
-    if (error || !data?.signedUrl) {
-      toast({ title: 'Cannot open file', description: error?.message || 'Try again', variant: 'destructive' });
-      return null;
-    }
-    return data.signedUrl;
-  };
-
-  const handleOpenDoc = async (fileUrl: string) => {
-    const url = await getSignedUrl(fileUrl, false);
-    if (url) window.open(url, '_blank');
-  };
-
-  const handleDownloadDoc = async (fileUrl: string, filename: string) => {
-    const url = await getSignedUrl(fileUrl, true);
-    if (url) {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
-  };
-
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !projectId || !user) return;
@@ -121,38 +92,10 @@ export default function DocumentPoolDialog({
 
     setUploading(selectedType);
     try {
-      const rawExt = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : 'bin';
-      const cleanType = selectedType === 'other' ? `custom_${Date.now()}` : selectedType;
-      const path = `${projectId}/${cleanType}.${rawExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('project-documents')
-        .upload(path, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Check if document entry already exists
-      const existing = docs.find((d) => d.document_type === selectedType && (selectedType !== 'other' || d.custom_name === customName.trim()));
-
-      if (existing) {
-        await supabase.from('documents')
-          .update({
-            file_url: path,
-            uploaded_at: new Date().toISOString(),
-            rejection_reason: null,
-            uploaded_by_user_id: user.id,
-          })
-          .eq('id', existing.id);
-      } else {
-        await supabase.from('documents').insert({
-          project_id: projectId,
-          lead_id: leadId || null,
-          document_type: selectedType,
-          file_url: path,
-          custom_name: selectedType === 'other' ? customName.trim() : null,
-          uploaded_by_user_id: user.id,
-        });
-      }
+      await uploadProjectDocument(projectId, user.id, selectedType, file, {
+        customName: selectedType === 'other' ? customName : undefined,
+        leadId: leadId || null,
+      });
 
       toast({ title: 'Uploaded!', description: `Document saved successfully.` });
       setCustomName('');
@@ -163,24 +106,6 @@ export default function DocumentPoolDialog({
       setUploading(null);
       // Reset input element
       e.target.value = '';
-    }
-  };
-
-  const handleDelete = async (docId: string, fileUrl: string | null) => {
-    if (!confirm('Are you sure you want to delete this document?')) return;
-    try {
-      if (fileUrl) {
-        let path = fileUrl;
-        const marker = '/project-documents/';
-        if (path.includes(marker)) path = path.split(marker)[1];
-        await supabase.storage.from('project-documents').remove([path]);
-      }
-      const { error } = await supabase.from('documents').delete().eq('id', docId);
-      if (error) throw error;
-      toast({ title: 'Deleted!' });
-      fetchDocs();
-    } catch (err: any) {
-      toast({ title: 'Delete failed', description: err.message, variant: 'destructive' });
     }
   };
 
@@ -275,19 +200,11 @@ export default function DocumentPoolDialog({
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        {doc.file_url && (
-                          <>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => handleOpenDoc(doc.file_url)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => handleDownloadDoc(doc.file_url, `${doc.document_type}.bin`)}>
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(doc.id, doc.file_url)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <DocumentActions
+                          handle={{ ref: doc.file_url, table: 'documents', rowId: doc.id }}
+                          label={typeLabel}
+                          onDeleted={fetchDocs}
+                        />
                       </div>
                     </div>
                   );

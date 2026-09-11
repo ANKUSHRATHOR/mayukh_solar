@@ -221,6 +221,7 @@ const ProjectWorkPanel = ({ project, requirements }: Props) => {
                 size="sm"
                 className="h-8 gap-1.5 text-xs font-semibold"
                 onClick={startEditing}
+                aria-label={bothAssigned ? 'Reassign trade staff' : 'Assign trade staff'}
               >
                 <Pencil className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">

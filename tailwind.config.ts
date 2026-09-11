@@ -16,6 +16,16 @@ export default {
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
       },
+      // Real tokens, so `hover:shadow-elevated` and `dark:shadow-card` compile.
+      // These were plain classes in index.css, which meant every modifier on
+      // them silently did nothing — StatCard's `hover:shadow-elevated` has never
+      // rendered. The CSS variables still carry the per-theme values.
+      boxShadow: {
+        card: 'var(--shadow-card)',
+        elevated: 'var(--shadow-elevated)',
+        glow: 'var(--shadow-glow)',
+        bento: 'var(--shadow-bento)',
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

@@ -6,6 +6,7 @@ import {
   scheduleFor,
   involvesLoan,
   paymentTypeLabel,
+  paymentTypeMeta,
   dueStatusFor,
   allocationOf,
   CASH_SCHEDULE,
@@ -298,5 +299,34 @@ describe('loan_cash', () => {
     expect(paymentTypeLabel('loan')).toBe('Loan');
     expect(paymentTypeLabel('cash')).toBe('Cash');
     expect(paymentTypeLabel(null)).toBe('Cash');
+  });
+});
+
+describe('loan_cash is treated as a loan everywhere', () => {
+  it('involvesLoan covers both loan shapes and nothing else', () => {
+    expect(involvesLoan('loan')).toBe(true);
+    expect(involvesLoan('loan_cash')).toBe(true);
+    expect(involvesLoan('cash')).toBe(false);
+    expect(involvesLoan(null)).toBe(false);
+    expect(involvesLoan(undefined)).toBe(false);
+  });
+
+  it('every payment_type has a badge label, so none falls back to the raw enum', () => {
+    for (const type of ['cash', 'loan', 'loan_cash']) {
+      expect(paymentTypeMeta[type]).toBeDefined();
+      expect(paymentTypeMeta[type].label).not.toMatch(/_/);
+    }
+    expect(paymentTypeMeta.loan_cash.label).toBe('Loan + Cash');
+  });
+
+  it('no page compares payment_type to the bare string "loan"', async () => {
+    // The equality silently treats loan_cash as cash — which hid the operator's
+    // "Disburse Loan" action on a part-financed project. Ask involvesLoan instead.
+    const { execSync } = await import('node:child_process');
+    const hits = execSync(
+      `grep -rn "payment_type === '\\''loan'\\''" src --include='*.tsx' --include='*.ts' || true`,
+      { encoding: 'utf8' }
+    ).trim();
+    expect(hits).toBe('');
   });
 });

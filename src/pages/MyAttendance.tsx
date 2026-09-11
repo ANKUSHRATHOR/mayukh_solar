@@ -60,7 +60,7 @@ const MyAttendance = () => {
   return (
     <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6 animate-in-up">
       <div>
-        <h1 className="text-2xl font-bold text-display">My monthly attendance</h1>
+        <h1 className="text-2xl font-bold">My monthly attendance</h1>
         <p className="text-sm text-muted-foreground mt-1">Calendar view of your punches</p>
       </div>
 
