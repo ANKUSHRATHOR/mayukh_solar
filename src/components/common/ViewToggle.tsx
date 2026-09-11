@@ -4,6 +4,17 @@ import { Button } from '@/components/ui/button';
 export type TableView = 'table' | 'cards';
 
 /**
+ * The initial layout for a list, before the reader has expressed a preference.
+ *
+ * Only the *initial* value is width-aware: a phone starts on cards, per the
+ * design system's mobile fallback, because a seven-column table on a 375px
+ * screen is a sideways-scrolling ledger. An explicit choice then wins at every
+ * width and persists — which is the whole point of offering the toggle.
+ */
+export const defaultTableView = (): TableView =>
+  typeof window !== 'undefined' && window.innerWidth < 640 ? 'cards' : 'table';
+
+/**
  * Table or cards, the reader's choice.
  *
  * Shown at every width. It was `hidden md:flex`, which meant a window even a
@@ -20,7 +31,7 @@ const ViewToggle = ({
   view: TableView;
   onChange: (value: TableView) => void;
 }) => (
-  <div className="flex h-11 shrink-0 items-center rounded-lg border border-border/70 p-0.5 sm:h-9">
+  <div className="flex h-10 shrink-0 items-center rounded-lg border border-border/70 p-0.5 sm:h-9">
     {([
       { value: 'table', label: 'Table', icon: Rows3 },
       { value: 'cards', label: 'Cards', icon: LayoutGrid },

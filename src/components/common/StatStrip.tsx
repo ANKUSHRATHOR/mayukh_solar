@@ -71,7 +71,7 @@ const StatStrip = ({ items, className }: { items: StatItem[]; className?: string
                 : undefined
             }
             className={cn(
-              'min-w-[6.5rem] flex-1 shrink-0 px-3 py-2.5 sm:min-w-[7.5rem] sm:px-4',
+              'min-w-[6.25rem] flex-1 shrink-0 px-3 py-2 sm:min-w-[7.5rem] sm:px-4 sm:py-2.5',
               // Hairlines between items instead of a border per tile: one
               // surface reads as a summary, six surfaces read as six things.
               'border-l border-border/60 first:border-l-0',
@@ -79,22 +79,30 @@ const StatStrip = ({ items, className }: { items: StatItem[]; className?: string
                 'cursor-pointer transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
             )}
           >
-            {/* Wraps rather than truncates. `items-stretch` on the row keeps
-                every column the same height, so a two-line label costs a few
-                pixels once rather than costing the reader the word. */}
+            {/* Wraps rather than truncates — "THIS MON…" costs the reader the
+                word. `items-stretch` keeps every column as tall as the tallest,
+                so a wrapping label plus a hint made this strip 94px on a phone,
+                taller than the page header and toolbar combined for the least
+                important band on the page. Dropping the hint below `sm` is what
+                buys the wrap back. */}
             <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.12em] text-muted-foreground">
               {item.label}
             </p>
             <p
               className={cn(
-                'mt-0.5 text-lg font-extrabold leading-none tabular-nums',
+                'mt-0.5 text-base font-extrabold leading-none tabular-nums sm:text-lg',
                 toneClasses[item.tone ?? 'neutral']
               )}
             >
               {item.value}
             </p>
             {item.hint && (
-              <p className="mt-1 truncate text-[10px] text-muted-foreground">{item.hint}</p>
+              // Below sm the hint is the first thing to go: it qualifies a figure
+              // the reader can already see, on a strip that is itself secondary
+              // to the records underneath it.
+              <p className="mt-1 hidden truncate text-[10px] text-muted-foreground sm:block">
+                {item.hint}
+              </p>
             )}
           </div>
         );

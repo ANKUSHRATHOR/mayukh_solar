@@ -15,7 +15,7 @@ import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
-import { type TableView } from '@/components/common/ViewToggle';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
 import { useStickyState } from '@/hooks/useStickyState';
 import TablePagination from '@/components/common/TablePagination';
 import StatusBadge from '@/components/common/StatusBadge';
@@ -52,7 +52,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
   // Both are validated on read: an unvalidated ?stage=foo reaches
   // .eq('status', 'foo') and PostgREST rejects the enum cast with a 400.
   const [searchParams, setSearchParams] = useSearchParams();
-  const [view, setView] = useStickyState<TableView>('projects-list:view', 'table');
+  const [view, setView] = useStickyState<TableView>('projects-list:view', defaultTableView());
   const rawTab = searchParams.get('tab');
   const tab: ProjectTab =
     rawTab === 'cash' || rawTab === 'loan' ? rawTab : 'all';

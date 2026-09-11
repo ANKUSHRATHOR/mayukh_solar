@@ -110,7 +110,7 @@ function TableToolbar<T>({
           <SelectTrigger
             aria-label={viewsLabel}
             className={cn(
-              'h-11 w-auto min-w-[9.5rem] max-w-[13rem] shrink-0 gap-2 text-sm font-semibold sm:h-9',
+              'h-10 w-auto min-w-[9.5rem] max-w-[13rem] shrink-0 gap-2 text-sm font-semibold sm:h-9',
               expanded && 'hidden sm:flex'
             )}
           >
@@ -140,7 +140,7 @@ function TableToolbar<T>({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={searchPlaceholder}
-          className="h-11 pl-9 pr-9 text-base sm:h-9 sm:text-sm"
+          className="h-10 pl-9 pr-9 text-base sm:h-9 sm:text-sm"
           aria-label={searchPlaceholder}
         />
         {isSearching && isFetching ? (
@@ -173,7 +173,7 @@ function TableToolbar<T>({
           size="sm"
           onClick={openSearch}
           aria-label={searchPlaceholder}
-          className="h-11 w-11 shrink-0 border-border bg-card p-0 hover:bg-accent/40 sm:hidden"
+          className="h-10 w-10 shrink-0 border-border bg-card p-0 hover:bg-accent/40 sm:hidden"
         >
           <Search className="h-4 w-4" />
         </Button>
@@ -193,7 +193,7 @@ function TableToolbar<T>({
           variant="ghost"
           size="sm"
           onClick={cancelSearch}
-          className="h-11 shrink-0 px-2 text-xs font-semibold sm:hidden"
+          className="h-10 shrink-0 px-2 text-xs font-semibold sm:hidden"
         >
           Cancel
         </Button>

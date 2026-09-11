@@ -8,7 +8,7 @@ import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
-import { type TableView } from '@/components/common/ViewToggle';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
 import { useStickyState } from '@/hooks/useStickyState';
 import TablePagination from '@/components/common/TablePagination';
 import StatusBadge from '@/components/common/StatusBadge';
@@ -32,7 +32,7 @@ import {
 const VisitsListPage = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState<VisitTab>('open');
-  const [view, setView] = useStickyState<TableView>('visits-list:view', 'table');
+  const [view, setView] = useStickyState<TableView>('visits-list:view', defaultTableView());
 
   const filters = useMemo(() => ({ tab }), [tab]);
 

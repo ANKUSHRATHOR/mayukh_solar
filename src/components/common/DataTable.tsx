@@ -460,7 +460,7 @@ function DataTable<T>({
 
               {rowActions && (
                 <div
-                  className="mt-2.5 flex items-center gap-1.5 border-t border-border/50 pt-2.5"
+                  className="mt-2 flex items-center gap-1 border-t border-border/50 pt-2"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {rowActions(row)}

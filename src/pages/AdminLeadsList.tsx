@@ -33,7 +33,7 @@ import TablePagination from '@/components/common/TablePagination';
 import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import TableToolbar, { type ToolbarView } from '@/components/common/TableToolbar';
-import { type TableView } from '@/components/common/ViewToggle';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -222,7 +222,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useStickyState<number>('admin-leads:pageSize', 50);
-  const [view, setView] = useStickyState<TableView>('admin-leads:view', 'table');
+  const [view, setView] = useStickyState<TableView>('admin-leads:view', defaultTableView());
   const [total, setTotal] = useState(0);
   const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
   const [deleting, setDeleting] = useState(false);
@@ -956,17 +956,17 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           actions={
             // Create Lead is the one action people come here for, so it is the
             // only accented control; the bulk-data chores sit behind overflow.
-            <div className="flex w-full gap-2 sm:w-auto">
+            <div className="flex items-center gap-2">
               <Button
                 onClick={() => navigate('/leads/new')}
                 size="sm"
-                className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none"
+                className="h-10 gap-2 sm:h-9"
               >
                 <PhoneCall className="h-4 w-4" /> Create Lead
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-11 w-11 shrink-0 p-0 sm:h-9 sm:w-9" aria-label="More lead actions">
+                  <Button variant="outline" size="sm" className="h-10 w-10 shrink-0 p-0 sm:h-9 sm:w-9" aria-label="More lead actions">
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>

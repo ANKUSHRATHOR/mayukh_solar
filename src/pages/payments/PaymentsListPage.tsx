@@ -25,6 +25,7 @@ import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
 import TablePagination from '@/components/common/TablePagination';
 import StatusBadge from '@/components/common/StatusBadge';
 import StatStrip from '@/components/common/StatStrip';
@@ -106,10 +107,7 @@ const PaymentsListPage = () => {
   // sales person opening this on a phone should get the card fallback the design
   // system asks for, not a table to drag sideways. Once they pick, the choice
   // sticks at every width.
-  const [view, setView] = useStickyState<'table' | 'cards'>(
-    'payments-list:view',
-    typeof window !== 'undefined' && window.innerWidth < 640 ? 'cards' : 'table'
-  );
+  const [view, setView] = useStickyState<TableView>('payments-list:view', defaultTableView());
   const layout = view === 'cards' ? 'cards' : 'table';
 
   const showDues = tab === 'dues';
@@ -348,21 +346,23 @@ const PaymentsListPage = () => {
         title="Payments"
         icon={IndianRupee}
         actions={
-          // Full width and evenly split on a phone: an icon-only square next to
-          // a wide primary button reads as something half-finished rather than
-          // a pair of actions.
-          <div className="flex w-full gap-2 sm:w-auto">
+          // The label on the secondary action goes below sm rather than the whole
+          // pair going full-width: the primary keeps its words, and the header
+          // stays one row beside the title.
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none"
+              className="h-10 gap-2 px-2.5 sm:h-9 sm:px-3"
               onClick={exportCurrentPage}
               disabled={activeTable.rows.length === 0}
+              aria-label="Export this page"
             >
-              <Download className="h-4 w-4" /> Export
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export</span>
             </Button>
             {canAdd && (
-              <Button size="sm" className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none" onClick={openNew}>
+              <Button size="sm" className="h-10 gap-2 sm:h-9" onClick={openNew}>
                 <Plus className="h-4 w-4" /> Add payment
               </Button>
             )}

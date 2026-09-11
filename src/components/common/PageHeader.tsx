@@ -21,6 +21,11 @@ interface PageHeaderProps {
 /**
  * Standard page heading. Every list, form and detail page uses this so titles,
  * back affordances and action placement stay in the same spot across modules.
+ *
+ * Title and actions share one row at every width. They used to stack below `sm`
+ * with the actions `w-full`, which turned the primary button into a full-width
+ * slab on its own line — 56px of a phone screen spent on one button, and the
+ * single loudest thing on the page.
  */
 const PageHeader = ({
   title,
@@ -34,15 +39,15 @@ const PageHeader = ({
   const navigate = useNavigate();
 
   return (
-    <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
-      <div className="flex min-w-0 items-start gap-3">
+    <div className={cn('flex items-start justify-between gap-2 sm:gap-3', className)}>
+      <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
         {back && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
             aria-label="Go back"
-            className="mt-0.5 h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+            className="mt-0.5 h-10 w-10 shrink-0 sm:h-9 sm:w-9"
             onClick={() => (typeof back === 'string' ? navigate(back) : navigate(-1))}
           >
             <ArrowLeft className="h-5 w-5" />
@@ -66,7 +71,7 @@ const PageHeader = ({
         </div>
       </div>
 
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
 };
