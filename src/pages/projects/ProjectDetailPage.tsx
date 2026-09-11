@@ -30,7 +30,6 @@ import { fromProject, structureTypeLabel } from '@/lib/plantDetails';
 import {
   allProjectStageMeta,
   pipelineFor,
-  stageBlockers,
   stageIndex,
   stageNumber,
   stageProgress,
@@ -81,9 +80,6 @@ const ProjectDetailPage = () => {
   const progress = project ? stageProgress(project.status, project.payment_type) : 0;
   const currentStage = currentIndex >= 0 ? pipeline[currentIndex] : undefined;
   const nextStageDef = currentIndex >= 0 ? pipeline[currentIndex + 1] : undefined;
-  // Computed here as well as inside the control: both read the same pure
-  // function, and the bar shows the reasons while the control owns the button.
-  const nextBlockers = nextStageDef ? stageBlockers(nextStageDef.stage, requirements) : [];
 
   return (
     <DetailShell
@@ -128,33 +124,41 @@ const ProjectDetailPage = () => {
           // you want to change it. On the sidebar's dark scale so it reads as
           // chrome belonging to the page rather than another content card, and
           // because that scale stays dark in both themes.
-          <div className="rounded-2xl bg-sidebar px-4 py-3 text-sidebar-foreground shadow-card">
+          // One dense rail rather than twelve markers and their labels: the
+          // question this answers is "where is it, and what is next", and the
+          // full stage list belongs in the picker, which is where you go when
+          // you want to change it.
+          //
+          // Painted from the app tokens, not the sidebar's fixed dark scale, so
+          // it follows the theme the way every other surface on the page does.
+          <div className="rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-card">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-sidebar-foreground/55">
+                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
                   {currentIndex >= 0 ? `${stageNumber(currentIndex)} / ${pipeline.length}` : '—'}
                 </span>
-                <span aria-hidden className="h-4 w-px shrink-0 bg-sidebar-foreground/20" />
-                <span className="truncate text-sm font-bold">
+                <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
+                <span className="truncate text-sm font-bold text-foreground">
                   {currentStage?.label ?? allProjectStageMeta[project.status]?.label ?? project.status}
                 </span>
               </div>
 
-              {/* Not the `Progress` primitive: that paints on the app's light
-                  track, which disappears on this ground. */}
               <div
-                className="h-1 w-full overflow-hidden rounded-full bg-sidebar-foreground/15 lg:flex-1"
+                className="h-1 w-full overflow-hidden rounded-full bg-muted lg:flex-1"
                 role="progressbar"
                 aria-valuenow={progress}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-label="Pipeline progress"
               >
-                <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${progress}%` }} />
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-300"
+                  style={{ width: `${progress}%` }}
+                />
               </div>
 
               <div className="flex items-center justify-between gap-3 lg:justify-end">
-                <span className="truncate text-xs text-sidebar-foreground/60">
+                <span className="truncate text-xs text-muted-foreground">
                   {nextStageDef
                     ? `Next · ${nextStageDef.label}`
                     : currentIndex >= 0
@@ -176,20 +180,6 @@ const ProjectDetailPage = () => {
                 />
               </div>
             </div>
-
-            {/* Why the button will refuse, on the bar rather than behind a
-                click. Amber on navy, so it reads as a caveat to the action
-                beside it and not an error state for the whole page. */}
-            {nextBlockers.length > 0 && canEditProject && (
-              <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-sidebar-foreground/10 pt-2.5">
-                {nextBlockers.map((reason) => (
-                  <li key={reason} className="flex items-baseline gap-1.5 text-[11px] leading-snug text-amber-300/90">
-                    <span aria-hidden className="h-1 w-1 shrink-0 translate-y-[-2px] rounded-full bg-current" />
-                    {reason}
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         )
       }

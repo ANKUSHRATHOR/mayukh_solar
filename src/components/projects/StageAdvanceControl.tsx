@@ -69,7 +69,8 @@ export default function StageAdvanceControl({
   if (!canEdit) return null;
 
   const next = currentIndex >= 0 ? pipeline[currentIndex + 1] : undefined;
-  const blocked = next ? stageBlockers(next.stage, facts).length > 0 : false;
+  const nextBlockers = next ? stageBlockers(next.stage, facts) : [];
+  const blocked = nextBlockers.length > 0;
 
   const move = async (stage: StageDefinition) => {
     setSaving(stage.stage);
@@ -117,7 +118,14 @@ export default function StageAdvanceControl({
             )}
             disabled={blocked && !isAdmin ? true : busy}
             onClick={() => (isAdmin && blocked ? setConfirming(next) : move(next))}
-            title={`Move to ${next.label}`}
+            // The bar no longer prints the blockers, so a control that refuses
+            // still has to be able to say why — on hover here, and in full in
+            // the confirmation an admin gets.
+            title={
+              blocked
+                ? `Blocked: ${nextBlockers.join(' ')}`
+                : `Move to ${next.label}`
+            }
           >
             {saving === next.stage ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
