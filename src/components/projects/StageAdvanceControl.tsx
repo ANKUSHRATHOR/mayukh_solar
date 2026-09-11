@@ -37,6 +37,11 @@ interface Props {
   /** Admins bypass the server's stage gate, so the UI must not hard-stop them. */
   isAdmin: boolean;
   onChanged: () => void;
+  /**
+   * `inline` lays the action out along a row, for the horizontal pipeline band.
+   * `stacked` fills its column, for a narrow aside.
+   */
+  layout?: 'inline' | 'stacked';
 }
 
 /**
@@ -61,6 +66,7 @@ export default function StageAdvanceControl({
   canEdit,
   isAdmin,
   onChanged,
+  layout = 'stacked',
 }: Props) {
   const { toast } = useToast();
   const [saving, setSaving] = useState<string | null>(null);
@@ -106,11 +112,22 @@ export default function StageAdvanceControl({
 
   return (
     <>
-      <div className="space-y-2 border-t border-border/70 pt-3">
+      <div
+        className={cn(
+          'flex flex-col gap-2',
+          layout === 'inline' ? 'w-full lg:w-auto' : 'border-t border-border/70 pt-3',
+        )}
+      >
+        <div
+          className={cn(
+            'flex gap-2',
+            layout === 'inline' ? 'flex-col sm:flex-row sm:items-center' : 'flex-col',
+          )}
+        >
         {showAdvance && next && (
           <Button
             size="sm"
-            className="h-9 w-full gap-2"
+            className={cn('h-9 gap-2', layout === 'inline' ? 'w-full sm:w-auto' : 'w-full')}
             disabled={blocked && !isAdmin ? true : saving !== null}
             onClick={() => (isAdmin && blocked ? setConfirming(next) : move(next))}
           >
@@ -125,38 +142,16 @@ export default function StageAdvanceControl({
           </Button>
         )}
 
-        {showAdvance && blocked && (
-          // Named, not merely disabled: "why can't I press this" is the whole
-          // question a greyed-out button raises.
-          <ul className="space-y-1">
-            {blockers.map((reason) => (
-              <li
-                key={reason}
-                className={cn(
-                  'flex gap-1.5 text-[11px] leading-snug',
-                  isAdmin ? 'text-warning' : 'text-muted-foreground',
-                )}
-              >
-                <span aria-hidden className="mt-[3px] h-1 w-1 shrink-0 rounded-full bg-current" />
-                {reason}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {!showAdvance && currentIndex >= 0 && (
-          <p className="text-[11px] text-muted-foreground">
-            This is the final stage of the pipeline.
-          </p>
-        )}
-
         {isAdmin && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-full gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                className={cn(
+                  'h-8 gap-1.5 text-[11px] text-muted-foreground hover:text-foreground',
+                  layout === 'inline' ? 'w-full sm:w-auto sm:shrink-0' : 'w-full',
+                )}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
                 Set a different stage
@@ -190,6 +185,34 @@ export default function StageAdvanceControl({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+        </div>
+
+        {showAdvance && blocked && (
+          // Named, not merely disabled: "why can't I press this" is the whole
+          // question a greyed-out button raises. Below the buttons rather than
+          // beside them — at this width four reasons wrapped into a ragged
+          // column squeezed against the action.
+          <ul className="space-y-1">
+            {blockers.map((reason) => (
+              <li
+                key={reason}
+                className={cn(
+                  'flex gap-1.5 text-[11px] leading-snug',
+                  isAdmin ? 'text-warning' : 'text-muted-foreground',
+                )}
+              >
+                <span aria-hidden className="mt-[3px] h-1 w-1 shrink-0 rounded-full bg-current" />
+                {reason}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {!showAdvance && currentIndex >= 0 && (
+          <p className="text-[11px] text-muted-foreground">
+            This is the final stage of the pipeline.
+          </p>
         )}
       </div>
 

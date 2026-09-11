@@ -18,6 +18,12 @@ interface DetailShellProps {
   actions?: ReactNode;
   /** Main column content — usually a stack of `SectionCard`s. */
   children: ReactNode;
+  /**
+   * Full-width band between the header and the two-column body. For the one
+   * thing a detail page is *about* — a pipeline, a status rail — which belongs
+   * across the top rather than squeezed into the 340px aside.
+   */
+  banner?: ReactNode;
   /** Optional right rail on desktop; stacks under the main column on mobile. */
   aside?: ReactNode;
   isLoading?: boolean;
@@ -44,6 +50,7 @@ const DetailShell = ({
   meta,
   actions,
   children,
+  banner,
   aside,
   isLoading,
   error,
@@ -101,6 +108,8 @@ const DetailShell = ({
         meta={meta}
         actions={actions}
       />
+
+      {banner}
 
       <div
         className={cn(

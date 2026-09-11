@@ -1,12 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
-  AlertTriangle,
   Briefcase,
   CheckCircle2,
-  ChevronDown,
   ExternalLink,
   FileText,
   Landmark,
@@ -44,10 +42,8 @@ const ProjectDetailPage = () => {
 
   // Tab lives in the URL so a link can point at a specific tab and the browser
   // back button steps between them.
-  // Stages already behind the project are hidden by default — they are history,
-  // and twelve rows of it pushed the current stage and Commercials off-screen.
-  const [showDoneStages, setShowDoneStages] = useState(false);
   const [plantOpen, setPlantOpen] = useState(false);
+  const currentStepRef = useRef<HTMLLIElement>(null);
 
   const tab = searchParams.get('tab') ?? 'customer';
   const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true });
@@ -80,11 +76,12 @@ const ProjectDetailPage = () => {
   const currentIndex = project ? stageIndex(project.status, project.payment_type) : -1;
   const progress = project ? stageProgress(project.status, project.payment_type) : 0;
 
-  // A loan project cannot start fabrication until the bank's first installment
-  // lands. Surfaced persistently here rather than as a toast on a failed save.
-  const fabricationBlocked =
-    involvesLoan(project?.payment_type) &&
-    requirements?.loan_first_installment_received === false;
+  // The rail scrolls sideways when it does not fit, so a project halfway down
+  // the pipeline would otherwise open showing stage one. `block: 'nearest'`
+  // keeps this from yanking the page vertically as well.
+  useEffect(() => {
+    currentStepRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [currentIndex]);
 
   return (
     <DetailShell
@@ -121,94 +118,63 @@ const ProjectDetailPage = () => {
           </Button>
         )
       }
-      aside={
+      banner={
         project && (
-          <>
-            {/* A pipeline is a path, not a checklist: the markers are joined by a
-                rail, the current stage is the thing the eye lands on, and the
-                stages already behind you collapse so the card leads with where
-                the project actually is. Completed stages were struck through,
-                which reads as cancelled rather than done. */}
-            <SectionCard
-              title="Pipeline"
-              actions={
-                currentIndex >= 0 && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold tabular-nums text-muted-foreground">
-                    {currentIndex + 1}/{pipeline.length}
-                  </span>
-                )
-              }
-            >
-              <div className="space-y-4">
-                {/* The stage name is already the page header's status badge and the
-                    bold row below, so this line carries only the progress. The
-                    percentage is distance travelled between the first and last
-                    stage, which is why it does not equal 4/12. */}
-                <div className="space-y-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[11px] text-muted-foreground">
-                      {currentIndex >= 0 ? 'Progress' : 'Off-pipeline (legacy stage)'}
-                    </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                      {progress}% through
-                    </span>
-                  </div>
-                  <Progress value={progress} className="h-1.5" />
-                </div>
-
-                {currentIndex > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowDoneStages((v) => !v)}
-                    className="-my-1.5 flex w-full items-center gap-1.5 rounded py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:my-0"
-                    aria-expanded={showDoneStages}
-                  >
-                    <ChevronDown
-                      className={cn('h-3.5 w-3.5 transition-transform', showDoneStages && 'rotate-180')}
-                    />
-                    {currentIndex} completed
-                  </button>
-                )}
-
-                <ol className="relative space-y-2.5">
+          // The pipeline is what this page is *about*, so it runs across the top
+          // rather than down the 340px aside. Twelve stages read as a path when
+          // they are laid along one; stacked in a narrow column they were a list
+          // to scroll, which is why the completed ones had to be collapsed out of
+          // the way. Laid out horizontally they all fit, so nothing is hidden.
+          <SectionCard
+            title="Pipeline"
+            actions={
+              currentIndex >= 0 && (
+                <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-bold tabular-nums text-foreground">
+                  {currentIndex + 1}/{pipeline.length}
+                </span>
+              )
+            }
+          >
+            <div className="space-y-3">
+              {/* Scrolls sideways rather than wrapping: a rail that wraps onto a
+                  second line stops reading as one sequence. */}
+              <div className="-mx-1 overflow-x-auto px-1 pb-1">
+                <ol className="flex min-w-max items-start sm:min-w-full">
                   {pipeline.map((stage, index) => {
                     const done = currentIndex >= 0 && index < currentIndex;
                     const current = index === currentIndex;
-                    if (done && !showDoneStages) return null;
-
                     const last = index === pipeline.length - 1;
                     return (
-                      <li key={stage.stage} className="relative flex gap-2.5">
-                        {/* The rail joins one marker to the next, so the list
-                            reads as a sequence rather than twelve loose rows. */}
+                      <li
+                        key={stage.stage}
+                        ref={current ? currentStepRef : undefined}
+                        className="relative flex w-[104px] shrink-0 flex-col items-center gap-1.5 sm:w-auto sm:flex-1"
+                      >
                         {!last && (
                           <span
                             aria-hidden
                             className={cn(
-                              'absolute left-[6px] top-[14px] h-[calc(100%+0.625rem)] w-px',
-                              // bg-border is only a hair lighter than the card, so
-                              // a 1px rail on it was invisible.
-                              done ? 'bg-success/50' : 'bg-muted-foreground/25'
+                              'absolute left-1/2 top-[7px] h-px w-full',
+                              done ? 'bg-success/60' : 'bg-muted-foreground/25'
                             )}
                           />
                         )}
-                        <span className="relative z-10 mt-[3px] flex h-3 w-3 shrink-0 items-center justify-center">
+                        {/* bg-card so the rail passes behind the marker, not through it. */}
+                        <span className="relative z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-card">
                           {done ? (
                             <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                           ) : (
                             <span
                               className={cn(
                                 'h-2 w-2 rounded-full',
-                                current
-                                  ? 'bg-primary ring-4 ring-primary/20'
-                                  : 'bg-muted-foreground/30'
+                                current ? 'bg-primary ring-4 ring-primary/20' : 'bg-muted-foreground/30'
                               )}
                             />
                           )}
                         </span>
                         <span
                           className={cn(
-                            'text-xs leading-tight',
+                            'px-1 text-center text-[10px] leading-tight',
                             current
                               ? 'font-bold text-foreground'
                               : done
@@ -222,9 +188,18 @@ const ProjectDetailPage = () => {
                     );
                   })}
                 </ol>
+              </div>
 
-                {/* The pipeline card already says where the project is; moving it
-                    on belongs to the same card rather than a panel of its own. */}
+              {/* lg, not sm: the action carries a stage name and the progress a
+                  label, and side by side below ~1024px they clipped each other. */}
+              <div className="flex flex-col gap-3 border-t border-border/70 pt-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-center gap-3 lg:max-w-[18rem] lg:flex-1">
+                  <Progress value={progress} className="h-1.5 flex-1" />
+                  <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">
+                    {currentIndex >= 0 ? `${progress}% through` : 'Off-pipeline'}
+                  </span>
+                </div>
+
                 <StageAdvanceControl
                   projectId={project.id}
                   pipeline={pipeline}
@@ -232,31 +207,20 @@ const ProjectDetailPage = () => {
                   facts={requirements}
                   canEdit={canEditProject}
                   isAdmin={role === 'admin'}
+                  layout="inline"
                   onChanged={() => {
                     void queryClient.invalidateQueries({ queryKey: ['project', projectId] });
                     void queryClient.invalidateQueries({ queryKey: ['project-requirements', projectId] });
                   }}
                 />
               </div>
-            </SectionCard>
-
-            {fabricationBlocked && (
-              <SectionCard title="Blocked" icon={AlertTriangle}>
-                <p className="text-sm leading-relaxed text-foreground">
-                  Fabrication cannot start until the bank&rsquo;s first installment is
-                  received and marked completed.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 w-full gap-2"
-                  onClick={() => setTab('payments')}
-                >
-                  <Wallet className="h-4 w-4" /> Review payments
-                </Button>
-              </SectionCard>
-            )}
-
+            </div>
+          </SectionCard>
+        )
+      }
+      aside={
+        project && (
+          <>
             <SectionCard title="Commercials" icon={Wallet}>
               <div className="space-y-4">
                 <DetailField
