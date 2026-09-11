@@ -71,7 +71,7 @@ describe('retryQuery', () => {
   it('gives up after the attempt limit and returns the last error', async () => {
     const run = vi.fn().mockResolvedValue({ data: null, error: pgError('25P02') });
 
-    const result = await retryQuery(run, { attempts: 3, baseDelayMs: 0 });
+    const result = await retryQuery<{ data: null; error: unknown }>(run, { attempts: 3, baseDelayMs: 0 });
 
     expect((result.error as any).code).toBe('25P02');
     expect(run).toHaveBeenCalledTimes(3);
@@ -81,7 +81,7 @@ describe('retryQuery', () => {
     // Retrying a permission error only delays the message the user needs.
     const run = vi.fn().mockResolvedValue({ data: null, error: pgError('42501') });
 
-    const result = await retryQuery(run, { baseDelayMs: 0 });
+    const result = await retryQuery<{ data: null; error: unknown }>(run, { baseDelayMs: 0 });
 
     expect((result.error as any).code).toBe('42501');
     expect(run).toHaveBeenCalledTimes(1);

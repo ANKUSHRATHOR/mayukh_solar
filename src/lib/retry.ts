@@ -67,6 +67,10 @@ interface RetryOptions {
  * The `{ data, error }` result is returned as-is once it settles, so callers
  * keep their existing error handling.
  */
+// The constraint is what lets this read `.error` without a cast. Where `run`
+// returns `any` — the `(supabase as any)` casts this codebase uses for tables
+// that postdate the last types.ts generation — TS collapses T to the constraint
+// and `.data` disappears, so those few call sites name T explicitly.
 export async function retryQuery<T extends { error: unknown }>(
   run: () => PromiseLike<T>,
   { attempts = 3, baseDelayMs = 250 }: RetryOptions = {},

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { retryQuery } from '@/lib/retry';
 import { DEFAULT_ROLE_MODULES, type ModuleKey } from '@/lib/modules';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -49,10 +50,12 @@ const loadPermissions = async (role: AppRole): Promise<Set<ModuleKey>> => {
   const fallback = () => new Set<ModuleKey>(DEFAULT_ROLE_MODULES[role] ?? []);
   try {
     // Cast: role_permissions postdates the last types.ts generation.
-    const { data, error } = await (supabase as any)
-      .from('role_permissions')
-      .select('module, allowed')
-      .eq('role', role);
+    // Retried before the fallback: dropping to DEFAULT_ROLE_MODULES on a
+    // transient failure silently changes which modules a user can see.
+    const { data, error } = await retryQuery<{
+      data: { module: ModuleKey; allowed: boolean }[] | null;
+      error: unknown;
+    }>(() => (supabase as any).from('role_permissions').select('module, allowed').eq('role', role));
     if (error || !data || data.length === 0) return fallback();
     return new Set<ModuleKey>(
       (data as { module: ModuleKey; allowed: boolean }[])
@@ -123,16 +126,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // only `data` turned a timeout into `undefined` — indistinguishable from
       // "this user has no role". Under load that told an active admin their
       // account was pending approval.
-      const { data: roleData, error: roleError } = await supabase.rpc('get_user_role', {
-        _user_id: userId,
-      });
+      //
+      // Retried, because this gate stands in front of the whole app: a single
+      // transient 5xx here drops the user on "Couldn't load your profile" and
+      // latches there until they press Try again, so every page behind it looks
+      // broken for a failure that a second attempt would have absorbed.
+      const { data: roleData, error: roleError } = await retryQuery(() =>
+        supabase.rpc('get_user_role', { _user_id: userId }),
+      );
       if (roleError) throw roleError;
 
-      const { data: staffData, error: staffError } = await supabase
-        .from('staff')
-        .select('id, user_id, full_name, mobile, email, is_active, must_change_password, last_login')
-        .eq('user_id', userId)
-        .maybeSingle();
+      const { data: staffData, error: staffError } = await retryQuery(() =>
+        supabase
+          .from('staff')
+          .select('id, user_id, full_name, mobile, email, is_active, must_change_password, last_login')
+          .eq('user_id', userId)
+          .maybeSingle(),
+      );
       if (staffError) throw staffError;
 
       const resolvedRole = (roleData as AppRole) ?? null;
