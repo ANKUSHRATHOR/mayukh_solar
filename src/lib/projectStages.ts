@@ -299,3 +299,6 @@ export const stageBlockers = (
 
   return blockers;
 };
+
+/** Two-digit stage number, so a stage list reads as a numbered sequence. */
+export const stageNumber = (index: number) => String(index + 1).padStart(2, '0');

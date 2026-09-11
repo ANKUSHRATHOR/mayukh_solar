@@ -20,9 +20,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowRight, Check, Loader2, Lock, MoreHorizontal, ShieldAlert } from 'lucide-react';
+import { ArrowRight, ChevronDown, Loader2, Lock, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { stageBlockers, type StageDefinition, type StageGateFacts } from '@/lib/projectStages';
+import { stageBlockers, stageNumber, type StageDefinition, type StageGateFacts } from '@/lib/projectStages';
 import { retryQuery } from '@/lib/retry';
 
 interface Props {
@@ -37,26 +37,21 @@ interface Props {
   /** Admins bypass the server's stage gate, so the UI must not hard-stop them. */
   isAdmin: boolean;
   onChanged: () => void;
-  /**
-   * `inline` lays the action out along a row, for the horizontal pipeline band.
-   * `stacked` fills its column, for a narrow aside.
-   */
-  layout?: 'inline' | 'stacked';
 }
 
 /**
- * Moving a project along its pipeline.
+ * Moving a project along its pipeline: a split button — advance one step, or
+ * open the picker and set any stage.
  *
- * Lives at the foot of the Pipeline card rather than in a card of its own: that
- * card already answers "where is this project", and "move it on" is the same
- * question's other half. A separate "Update stage" panel would restate the
- * stage list a second time to hang one button off it.
+ * Sits in the pipeline bar, on the sidebar's dark ground, so it is styled from
+ * the `sidebar-*` tokens rather than the app ones; `bg-primary` is the same
+ * solar accent in both scales, so the action still reads as the page's primary.
  *
  * The database decides. `enforce_project_stage_gate` refuses the UPDATE if a
  * requirement is outstanding, so this never grants anything — `stageBlockers`
- * only lets the button explain itself before it is pressed instead of turning a
- * refusal into a toast. An admin bypasses the trigger, so for them the blockers
- * are shown as a warning on a live button rather than as a disabled one.
+ * only lets the control explain itself before it is pressed instead of turning
+ * a refusal into a toast. An admin bypasses the trigger, so for them an unmet
+ * checklist is a confirmation naming what is missing, not a dead button.
  */
 export default function StageAdvanceControl({
   projectId,
@@ -66,7 +61,6 @@ export default function StageAdvanceControl({
   canEdit,
   isAdmin,
   onChanged,
-  layout = 'stacked',
 }: Props) {
   const { toast } = useToast();
   const [saving, setSaving] = useState<string | null>(null);
@@ -75,8 +69,7 @@ export default function StageAdvanceControl({
   if (!canEdit) return null;
 
   const next = currentIndex >= 0 ? pipeline[currentIndex + 1] : undefined;
-  const blockers = next ? stageBlockers(next.stage, facts) : [];
-  const blocked = blockers.length > 0;
+  const blocked = next ? stageBlockers(next.stage, facts).length > 0 : false;
 
   const move = async (stage: StageDefinition) => {
     setSaving(stage.stage);
@@ -95,10 +88,10 @@ export default function StageAdvanceControl({
 
       toast({ title: `Moved to ${stage.label}` });
       onChanged();
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: 'Could not move this project',
-        description: error?.message || 'Please try again.',
+        description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -107,113 +100,88 @@ export default function StageAdvanceControl({
     }
   };
 
-  // Off-pipeline legacy rows get the picker only: there is no meaningful "next".
-  const showAdvance = Boolean(next);
+  const busy = saving !== null;
+  // A legacy row sitting off-pipeline has no meaningful "next", so it gets the
+  // picker alone — which is also the only way back onto the pipeline.
+  const canAdvance = Boolean(next);
 
   return (
     <>
-      <div
-        className={cn(
-          'flex flex-col gap-2',
-          layout === 'inline' ? 'w-full lg:w-auto' : 'border-t border-border/70 pt-3',
-        )}
-      >
-        <div
-          className={cn(
-            'flex gap-2',
-            layout === 'inline' ? 'flex-col sm:flex-row sm:items-center' : 'flex-col',
-          )}
-        >
-        {showAdvance && next && (
+      <div className="flex shrink-0 items-stretch">
+        {canAdvance && next && (
           <Button
             size="sm"
-            className={cn('h-9 gap-2', layout === 'inline' ? 'w-full sm:w-auto' : 'w-full')}
-            disabled={blocked && !isAdmin ? true : saving !== null}
+            className={cn(
+              'h-8 gap-1.5 rounded-r-none px-3 text-xs font-bold',
+              blocked && !isAdmin && 'opacity-60',
+            )}
+            disabled={blocked && !isAdmin ? true : busy}
             onClick={() => (isAdmin && blocked ? setConfirming(next) : move(next))}
+            title={`Move to ${next.label}`}
           >
             {saving === next.stage ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : blocked && !isAdmin ? (
-              <Lock className="h-4 w-4" />
-            ) : (
-              <ArrowRight className="h-4 w-4" />
-            )}
-            Move to {next.label}
+              <Lock className="h-3.5 w-3.5" />
+            ) : null}
+            Advance
+            {!busy && !(blocked && !isAdmin) && <ArrowRight className="h-3.5 w-3.5" />}
           </Button>
         )}
 
-        {isAdmin && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  'h-8 gap-1.5 text-[11px] text-muted-foreground hover:text-foreground',
-                  layout === 'inline' ? 'w-full sm:w-auto sm:shrink-0' : 'w-full',
-                )}
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-                Set a different stage
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-80 w-60 overflow-y-auto">
-              <DropdownMenuLabel className="text-[11px]">
-                Corrects a mistake — skips the checklist
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {pipeline.map((stage, index) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              disabled={busy}
+              aria-label="Set a different stage"
+              className={cn(
+                'h-8 w-8 p-0',
+                canAdvance
+                  ? 'rounded-l-none border-l border-primary-foreground/25'
+                  : 'rounded-md px-3',
+              )}
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-h-[22rem] w-64 overflow-y-auto">
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              Set a different stage
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {pipeline.map((stage, index) => {
+              const isCurrent = index === currentIndex;
+              const done = currentIndex >= 0 && index < currentIndex;
+              return (
                 <DropdownMenuItem
                   key={stage.stage}
-                  disabled={index === currentIndex || saving !== null}
+                  disabled={isCurrent || busy}
                   // No preventDefault: the menu should close as the dialog opens,
                   // rather than sitting behind it.
                   onSelect={() => {
-                    if (index === currentIndex) return;
+                    if (isCurrent) return;
                     setConfirming(stage);
                   }}
-                  className="gap-2 text-xs"
+                  className={cn(
+                    'gap-2 text-sm',
+                    isCurrent && 'bg-accent font-bold text-foreground opacity-100',
+                  )}
                 >
-                  <span className="w-4 shrink-0 text-muted-foreground">
-                    {index === currentIndex ? <Check className="h-3.5 w-3.5" /> : null}
+                  <span
+                    className={cn(
+                      'shrink-0 tabular-nums',
+                      isCurrent ? 'text-foreground' : done ? 'text-primary' : 'text-muted-foreground',
+                    )}
+                  >
+                    {stageNumber(index)}
                   </span>
                   <span className="flex-1 truncate">{stage.label}</span>
-                  <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
-                    {index + 1}
-                  </span>
                 </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        </div>
-
-        {showAdvance && blocked && (
-          // Named, not merely disabled: "why can't I press this" is the whole
-          // question a greyed-out button raises. Below the buttons rather than
-          // beside them — at this width four reasons wrapped into a ragged
-          // column squeezed against the action.
-          <ul className="space-y-1">
-            {blockers.map((reason) => (
-              <li
-                key={reason}
-                className={cn(
-                  'flex gap-1.5 text-[11px] leading-snug',
-                  isAdmin ? 'text-warning' : 'text-muted-foreground',
-                )}
-              >
-                <span aria-hidden className="mt-[3px] h-1 w-1 shrink-0 rounded-full bg-current" />
-                {reason}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {!showAdvance && currentIndex >= 0 && (
-          <p className="text-[11px] text-muted-foreground">
-            This is the final stage of the pipeline.
-          </p>
-        )}
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
@@ -241,15 +209,15 @@ export default function StageAdvanceControl({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={saving !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={saving !== null}
+              disabled={busy}
               onClick={(event) => {
                 event.preventDefault();
                 if (confirming) void move(confirming);
               }}
             >
-              {saving ? 'Moving…' : 'Move anyway'}
+              {busy ? 'Moving…' : 'Move anyway'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

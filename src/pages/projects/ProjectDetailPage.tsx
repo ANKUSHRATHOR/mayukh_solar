@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   Briefcase,
-  CheckCircle2,
   ExternalLink,
   FileText,
   Landmark,
@@ -17,7 +16,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import DetailShell from '@/components/common/DetailShell';
 import SectionCard from '@/components/common/SectionCard';
@@ -29,7 +27,14 @@ import ProjectWorkPanel from './ProjectWorkPanel';
 import ProjectPaymentsPanel from '@/components/projects/ProjectPaymentsPanel';
 import PlantDetailsDialog from '@/components/projects/PlantDetailsDialog';
 import { fromProject, structureTypeLabel } from '@/lib/plantDetails';
-import { allProjectStageMeta, pipelineFor, stageIndex, stageProgress } from '@/lib/projectStages';
+import {
+  allProjectStageMeta,
+  pipelineFor,
+  stageBlockers,
+  stageIndex,
+  stageNumber,
+  stageProgress,
+} from '@/lib/projectStages';
 import { fetchProject, fetchStageRequirements, projectIdentity } from '@/lib/projects';
 import { formatMoney, involvesLoan, paymentTypeMeta } from '@/lib/payments';
 
@@ -43,7 +48,6 @@ const ProjectDetailPage = () => {
   // Tab lives in the URL so a link can point at a specific tab and the browser
   // back button steps between them.
   const [plantOpen, setPlantOpen] = useState(false);
-  const currentStepRef = useRef<HTMLLIElement>(null);
 
   const tab = searchParams.get('tab') ?? 'customer';
   const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true });
@@ -75,13 +79,11 @@ const ProjectDetailPage = () => {
   const pipeline = project ? pipelineFor(project.payment_type) : [];
   const currentIndex = project ? stageIndex(project.status, project.payment_type) : -1;
   const progress = project ? stageProgress(project.status, project.payment_type) : 0;
-
-  // The rail scrolls sideways when it does not fit, so a project halfway down
-  // the pipeline would otherwise open showing stage one. `block: 'nearest'`
-  // keeps this from yanking the page vertically as well.
-  useEffect(() => {
-    currentStepRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' });
-  }, [currentIndex]);
+  const currentStage = currentIndex >= 0 ? pipeline[currentIndex] : undefined;
+  const nextStageDef = currentIndex >= 0 ? pipeline[currentIndex + 1] : undefined;
+  // Computed here as well as inside the control: both read the same pure
+  // function, and the bar shows the reasons while the control owns the button.
+  const nextBlockers = nextStageDef ? stageBlockers(nextStageDef.stage, requirements) : [];
 
   return (
     <DetailShell
@@ -120,85 +122,45 @@ const ProjectDetailPage = () => {
       }
       banner={
         project && (
-          // The pipeline is what this page is *about*, so it runs across the top
-          // rather than down the 340px aside. Twelve stages read as a path when
-          // they are laid along one; stacked in a narrow column they were a list
-          // to scroll, which is why the completed ones had to be collapsed out of
-          // the way. Laid out horizontally they all fit, so nothing is hidden.
-          <SectionCard
-            title="Pipeline"
-            actions={
-              currentIndex >= 0 && (
-                <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-bold tabular-nums text-foreground">
-                  {currentIndex + 1}/{pipeline.length}
+          // One dense rail rather than twelve markers and their labels: the
+          // question this answers is "where is it, and what is next", and the
+          // full stage list belongs in the picker, which is where you go when
+          // you want to change it. On the sidebar's dark scale so it reads as
+          // chrome belonging to the page rather than another content card, and
+          // because that scale stays dark in both themes.
+          <div className="rounded-2xl bg-sidebar px-4 py-3 text-sidebar-foreground shadow-card">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-sidebar-foreground/55">
+                  {currentIndex >= 0 ? `${stageNumber(currentIndex)} / ${pipeline.length}` : '—'}
                 </span>
-              )
-            }
-          >
-            <div className="space-y-3">
-              {/* Scrolls sideways rather than wrapping: a rail that wraps onto a
-                  second line stops reading as one sequence. */}
-              <div className="-mx-1 overflow-x-auto px-1 pb-1">
-                <ol className="flex min-w-max items-start sm:min-w-full">
-                  {pipeline.map((stage, index) => {
-                    const done = currentIndex >= 0 && index < currentIndex;
-                    const current = index === currentIndex;
-                    const last = index === pipeline.length - 1;
-                    return (
-                      <li
-                        key={stage.stage}
-                        ref={current ? currentStepRef : undefined}
-                        className="relative flex w-[104px] shrink-0 flex-col items-center gap-1.5 sm:w-auto sm:flex-1"
-                      >
-                        {!last && (
-                          <span
-                            aria-hidden
-                            className={cn(
-                              'absolute left-1/2 top-[7px] h-px w-full',
-                              done ? 'bg-success/60' : 'bg-muted-foreground/25'
-                            )}
-                          />
-                        )}
-                        {/* bg-card so the rail passes behind the marker, not through it. */}
-                        <span className="relative z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-card">
-                          {done ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                          ) : (
-                            <span
-                              className={cn(
-                                'h-2 w-2 rounded-full',
-                                current ? 'bg-primary ring-4 ring-primary/20' : 'bg-muted-foreground/30'
-                              )}
-                            />
-                          )}
-                        </span>
-                        <span
-                          className={cn(
-                            'px-1 text-center text-[10px] leading-tight',
-                            current
-                              ? 'font-bold text-foreground'
-                              : done
-                                ? 'text-muted-foreground'
-                                : 'text-muted-foreground/70'
-                          )}
-                        >
-                          {stage.label}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
+                <span aria-hidden className="h-4 w-px shrink-0 bg-sidebar-foreground/20" />
+                <span className="truncate text-sm font-bold">
+                  {currentStage?.label ?? allProjectStageMeta[project.status]?.label ?? project.status}
+                </span>
               </div>
 
-              {/* lg, not sm: the action carries a stage name and the progress a
-                  label, and side by side below ~1024px they clipped each other. */}
-              <div className="flex flex-col gap-3 border-t border-border/70 pt-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-3 lg:max-w-[18rem] lg:flex-1">
-                  <Progress value={progress} className="h-1.5 flex-1" />
-                  <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">
-                    {currentIndex >= 0 ? `${progress}% through` : 'Off-pipeline'}
-                  </span>
-                </div>
+              {/* Not the `Progress` primitive: that paints on the app's light
+                  track, which disappears on this ground. */}
+              <div
+                className="h-1 w-full overflow-hidden rounded-full bg-sidebar-foreground/15 lg:flex-1"
+                role="progressbar"
+                aria-valuenow={progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Pipeline progress"
+              >
+                <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${progress}%` }} />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 lg:justify-end">
+                <span className="truncate text-xs text-sidebar-foreground/60">
+                  {nextStageDef
+                    ? `Next · ${nextStageDef.label}`
+                    : currentIndex >= 0
+                      ? 'Final stage'
+                      : 'Off-pipeline'}
+                </span>
 
                 <StageAdvanceControl
                   projectId={project.id}
@@ -207,7 +169,6 @@ const ProjectDetailPage = () => {
                   facts={requirements}
                   canEdit={canEditProject}
                   isAdmin={role === 'admin'}
-                  layout="inline"
                   onChanged={() => {
                     void queryClient.invalidateQueries({ queryKey: ['project', projectId] });
                     void queryClient.invalidateQueries({ queryKey: ['project-requirements', projectId] });
@@ -215,7 +176,21 @@ const ProjectDetailPage = () => {
                 />
               </div>
             </div>
-          </SectionCard>
+
+            {/* Why the button will refuse, on the bar rather than behind a
+                click. Amber on navy, so it reads as a caveat to the action
+                beside it and not an error state for the whole page. */}
+            {nextBlockers.length > 0 && canEditProject && (
+              <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-sidebar-foreground/10 pt-2.5">
+                {nextBlockers.map((reason) => (
+                  <li key={reason} className="flex items-baseline gap-1.5 text-[11px] leading-snug text-amber-300/90">
+                    <span aria-hidden className="h-1 w-1 shrink-0 translate-y-[-2px] rounded-full bg-current" />
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )
       }
       aside={
