@@ -35,7 +35,6 @@ import {
   RefreshCw,
   XCircle,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 // The fields in our leads database table
 const DB_LEAD_FIELDS = [
@@ -133,8 +132,11 @@ export default function LeadImportWizard({
     setFile(selectedFile);
     const reader = new FileReader();
 
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
+        // 114 kB gzipped for a spreadsheet parser that only matters once someone
+        // actually picks a file to import. Fetched here, after that choice.
+        const XLSX = await import('xlsx');
         const bstr = evt.target?.result;
         const workbook = XLSX.read(bstr, { type: 'binary' });
         const firstSheetName = workbook.SheetNames[0];

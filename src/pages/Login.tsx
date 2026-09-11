@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { Browser } from '@capacitor/browser';
@@ -9,7 +9,14 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Phone, Lock, ArrowRight, Sun, Mail, KeyRound, ShieldCheck, User } from 'lucide-react';
 import logo from '@/assets/mayukh-solar-logo.png';
-import SolarScene from '@/components/three/SolarScene';
+/**
+ * Three.js, fiber and drei come to 217 kB gzipped — more than the entire app
+ * shell — for a decorative wallpaper behind the sign-in card. Loaded after the
+ * form so the first screen anyone sees is not waiting on a 3D renderer; the
+ * gradient veils below sit over it either way, so its absence for a moment
+ * reads as the background it is.
+ */
+const SolarScene = lazy(() => import('@/components/three/SolarScene'));
 
 
 type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'email_password' | 'forgot_password' | 'signup';
@@ -299,7 +306,9 @@ const Login = () => {
 
       {/* Live 3D Solar Wallpaper */}
       <div className="fixed inset-0 z-0">
-        <SolarScene />
+        <Suspense fallback={null}>
+          <SolarScene />
+        </Suspense>
       </div>
       {/* Atmospheric gradient veils */}
       <div className="fixed inset-0 z-[1] pointer-events-none">

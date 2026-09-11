@@ -1,5 +1,12 @@
 // Image capture helpers: compression + simple blur heuristic.
-import imageCompression from 'browser-image-compression';
+
+/**
+ * Loaded on demand (21 kB gzipped). Only attendance and proof photos compress,
+ * and only at the moment a photo is taken — no reason for every page load to
+ * carry it.
+ */
+const loadImageCompression = async () =>
+  (await import('browser-image-compression')).default;
 
 export async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
@@ -11,6 +18,7 @@ export async function compressImage(file: File): Promise<File> {
     initialQuality: 0.82,
   };
   try {
+    const imageCompression = await loadImageCompression();
     const out = await imageCompression(file, opts);
     return new File([out], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
   } catch {

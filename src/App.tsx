@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -5,45 +7,45 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
-import Index from "./pages/Index.tsx";
-import Login from "./pages/Login.tsx";
-import SetPassword from "./pages/SetPassword.tsx";
-import UserManagementPage from "./pages/users/UserManagementPage.tsx";
-import AddStaff from "./pages/AddStaff.tsx";
-import StaffDetailPage from "./pages/staff/StaffDetailPage.tsx";
-import StaffFormPage from "./pages/staff/StaffFormPage.tsx";
-import AdminLeadsList from "./pages/AdminLeadsList.tsx";
-import CancelledLeadsBin from "./pages/CancelledLeadsBin.tsx";
-import CreateLead from "./pages/CreateLead.tsx";
-import LeadDetail from "./pages/LeadDetail.tsx";
-import ProjectFinalizationForm from "./pages/ProjectFinalizationForm.tsx";
-import ProjectDocuments from "./pages/ProjectDocuments.tsx";
-import OperatorProjectDetail from "./pages/OperatorProjectDetail.tsx";
-import MaterialDispatch from "./pages/MaterialDispatch.tsx";
-import WelderDashboard from "./pages/WelderDashboard.tsx";
-import ElectricianDashboard from "./pages/ElectricianDashboard.tsx";
-import ProjectsListPage from "./pages/projects/ProjectsListPage.tsx";
-import ProjectDetailPage from "./pages/projects/ProjectDetailPage.tsx";
-import PaymentsListPage from "./pages/payments/PaymentsListPage.tsx";
-import PaymentDetailPage from "./pages/payments/PaymentDetailPage.tsx";
-import SettingsPage from "./pages/SettingsPage.tsx";
-import ActivityLogs from "./pages/ActivityLogs.tsx";
-import InstallApp from "./pages/InstallApp.tsx";
-import Attendance from "./pages/Attendance.tsx";
-import AdminAttendance from "./pages/AdminAttendance.tsx";
-import SalaryManagement from "./pages/SalaryManagement.tsx";
-import MyAttendance from "./pages/MyAttendance.tsx";
-import AdminSettings from "./pages/AdminSettings.tsx";
-import StaffPerformance from "./pages/StaffPerformance.tsx";
-import Tasks from "./pages/Tasks.tsx";
-import ProjectHomeLocation from "./pages/ProjectHomeLocation.tsx";
-import NotFound from "./pages/NotFound.tsx";
-import PasswordResetLogs from "./pages/PasswordResetLogs.tsx";
-import StaffProfile from "./pages/StaffProfile.tsx";
-import KNumberLookup from "./pages/KNumberLookup.tsx";
-import StaffContacts from "./pages/StaffContacts.tsx";
-import VisitsListPage from "./pages/visits/VisitsListPage.tsx";
-import VisitDetailPage from "./pages/visits/VisitDetailPage.tsx";
+const Index = lazy(() => import("./pages/Index.tsx"));
+const Login = lazy(() => import("./pages/Login.tsx"));
+const SetPassword = lazy(() => import("./pages/SetPassword.tsx"));
+const UserManagementPage = lazy(() => import("./pages/users/UserManagementPage.tsx"));
+const AddStaff = lazy(() => import("./pages/AddStaff.tsx"));
+const StaffDetailPage = lazy(() => import("./pages/staff/StaffDetailPage.tsx"));
+const StaffFormPage = lazy(() => import("./pages/staff/StaffFormPage.tsx"));
+const AdminLeadsList = lazy(() => import("./pages/AdminLeadsList.tsx"));
+const CancelledLeadsBin = lazy(() => import("./pages/CancelledLeadsBin.tsx"));
+const CreateLead = lazy(() => import("./pages/CreateLead.tsx"));
+const LeadDetail = lazy(() => import("./pages/LeadDetail.tsx"));
+const ProjectFinalizationForm = lazy(() => import("./pages/ProjectFinalizationForm.tsx"));
+const ProjectDocuments = lazy(() => import("./pages/ProjectDocuments.tsx"));
+const OperatorProjectDetail = lazy(() => import("./pages/OperatorProjectDetail.tsx"));
+const MaterialDispatch = lazy(() => import("./pages/MaterialDispatch.tsx"));
+const WelderDashboard = lazy(() => import("./pages/WelderDashboard.tsx"));
+const ElectricianDashboard = lazy(() => import("./pages/ElectricianDashboard.tsx"));
+const ProjectsListPage = lazy(() => import("./pages/projects/ProjectsListPage.tsx"));
+const ProjectDetailPage = lazy(() => import("./pages/projects/ProjectDetailPage.tsx"));
+const PaymentsListPage = lazy(() => import("./pages/payments/PaymentsListPage.tsx"));
+const PaymentDetailPage = lazy(() => import("./pages/payments/PaymentDetailPage.tsx"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage.tsx"));
+const ActivityLogs = lazy(() => import("./pages/ActivityLogs.tsx"));
+const InstallApp = lazy(() => import("./pages/InstallApp.tsx"));
+const Attendance = lazy(() => import("./pages/Attendance.tsx"));
+const AdminAttendance = lazy(() => import("./pages/AdminAttendance.tsx"));
+const SalaryManagement = lazy(() => import("./pages/SalaryManagement.tsx"));
+const MyAttendance = lazy(() => import("./pages/MyAttendance.tsx"));
+const AdminSettings = lazy(() => import("./pages/AdminSettings.tsx"));
+const StaffPerformance = lazy(() => import("./pages/StaffPerformance.tsx"));
+const Tasks = lazy(() => import("./pages/Tasks.tsx"));
+const ProjectHomeLocation = lazy(() => import("./pages/ProjectHomeLocation.tsx"));
+const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const PasswordResetLogs = lazy(() => import("./pages/PasswordResetLogs.tsx"));
+const StaffProfile = lazy(() => import("./pages/StaffProfile.tsx"));
+const KNumberLookup = lazy(() => import("./pages/KNumberLookup.tsx"));
+const StaffContacts = lazy(() => import("./pages/StaffContacts.tsx"));
+const VisitsListPage = lazy(() => import("./pages/visits/VisitsListPage.tsx"));
+const VisitDetailPage = lazy(() => import("./pages/visits/VisitDetailPage.tsx"));
 import ProtectedRoute from "./components/auth/ProtectedRoute.tsx";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { isRetryable } from "@/lib/retry";
@@ -75,6 +77,12 @@ const queryClient = new QueryClient({
   },
 });
 
+const RouteFallback = () => (
+  <div className="flex min-h-screen items-center justify-center bg-background">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+);
+
 // Preserve the :id when redirecting the old /staff/:id[/edit] URLs to /users/:id.
 const StaffRedirect = ({ edit = false }: { edit?: boolean }) => {
   const { id } = useParams();
@@ -90,6 +98,12 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <ErrorBoundary>
+          {/* Every page is a lazy chunk, so a route change can need a network
+              round trip before it renders. The fallback is deliberately the same
+              full-screen spinner ProtectedRoute shows while the profile
+              resolves, so a cold navigation looks like one wait rather than two
+              different ones. */}
+          <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/set-password" element={<SetPassword />} />
@@ -333,6 +347,7 @@ const App = () => (
             />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
           </ErrorBoundary>
         </AuthProvider>
       </BrowserRouter>

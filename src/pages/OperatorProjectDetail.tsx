@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import JSZip from 'jszip';
 import DocumentPreviewDialog from '@/components/common/DocumentPreviewDialog';
 import {
   createShareLink,
@@ -285,6 +284,8 @@ const OperatorProjectDetail = () => {
     if (fileDocs.length === 0) return;
     setBulkDownloading(true);
     try {
+      // 30 kB gzipped, and only a bulk document download needs it.
+      const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       let added = 0;
       for (const d of fileDocs) {

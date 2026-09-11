@@ -1,5 +1,14 @@
-// @ts-ignore - html2pdf.js ships no types
-import html2pdf from 'html2pdf.js';
+/**
+ * html2pdf.js pulls in jsPDF and html2canvas: 982 kB raw, 285 kB gzipped, the
+ * single largest thing the app could bundle. It is used only when someone
+ * renders a quotation, so it is fetched then rather than shipped to every user
+ * who opens the app to look at a lead.
+ */
+const loadHtml2Pdf = async () => {
+  // @ts-ignore - html2pdf.js ships no types
+  const mod = await import('html2pdf.js');
+  return (mod.default ?? mod) as any;
+};
 
 /**
  * Shared html2pdf configuration for quotation documents. Previously duplicated
@@ -28,18 +37,24 @@ const pdfOptions = (filename: string) =>
 type PdfSource = HTMLElement | string;
 
 /** Renders a quotation to a Blob, for upload or sharing. */
-export const renderQuotationPdfBlob = (
+export const renderQuotationPdfBlob = async (
   source: PdfSource,
   quotationNumber: string
-): Promise<Blob> =>
-  html2pdf()
+): Promise<Blob> => {
+  const html2pdf = await loadHtml2Pdf();
+  return html2pdf()
     .set(pdfOptions(`Quotation_${quotationNumber}.pdf`))
     .from(source)
     .output('blob');
+};
 
 /** Triggers a browser download of the quotation PDF. */
-export const downloadQuotationPdf = (source: PdfSource, quotationNumber: string): void => {
-  html2pdf()
+export const downloadQuotationPdf = async (
+  source: PdfSource,
+  quotationNumber: string
+): Promise<void> => {
+  const html2pdf = await loadHtml2Pdf();
+  await html2pdf()
     .set(pdfOptions(`Quotation_${quotationNumber || 'draft'}.pdf`))
     .from(source)
     .save();
