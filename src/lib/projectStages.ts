@@ -211,3 +211,91 @@ export const allProjectStageMeta: Record<string, StatusMeta> = {
     ])
   ),
 };
+
+/**
+ * The subset of `project_stage_requirements` that gates a stage transition.
+ * Declared structurally rather than imported from `lib/projects` so this module
+ * stays free of Supabase and unit-testable.
+ */
+export interface StageGateFacts {
+  documents_uploaded: boolean;
+  documents_verified: boolean;
+  home_location_saved: boolean;
+  serial_numbers_entered: boolean;
+  welder_work_done: boolean;
+  electrician_work_done: boolean;
+  structure_photo_uploaded: boolean;
+  wiring_photo_uploaded: boolean;
+  loan_first_installment_received: boolean;
+  is_loan: boolean;
+  fully_paid: boolean;
+}
+
+/**
+ * Why a project may not enter `stage` yet — empty when it may.
+ *
+ * A deliberate mirror of `can_advance_project`, the way `dueStatusFor` mirrors
+ * the SQL dues boundary: the database stays the thing that actually decides
+ * (its trigger refuses the UPDATE regardless of what this says), and this
+ * exists so the UI can disable the control and name the blocker *before* the
+ * user presses it, rather than turning a refusal into a toast. Both are unit
+ * tested against the same cases, so drift shows up as a failing test.
+ *
+ * Stages absent from the server's CASE — every legacy value — are permitted
+ * there and so return no blockers here.
+ */
+export const stageBlockers = (
+  stage: string,
+  facts: StageGateFacts | null | undefined
+): string[] => {
+  if (!facts) return [];
+  const blockers: string[] = [];
+  const need = (ok: boolean, reason: string) => {
+    if (!ok) blockers.push(reason);
+  };
+
+  switch (stage) {
+    case 'documents_approved':
+      need(facts.documents_uploaded, 'Customer documents have not been uploaded.');
+      need(facts.documents_verified, 'Every uploaded document must be verified by an operator.');
+      break;
+    case 'loan_application_pending':
+      need(facts.is_loan, 'This is not a financed project.');
+      need(facts.documents_verified, 'Documents must be verified before the bank file opens.');
+      break;
+    case 'loan_approved':
+      need(facts.is_loan, 'This is not a financed project.');
+      break;
+    case 'installation_scheduled':
+      need(facts.documents_verified, 'Documents must be verified first.');
+      need(facts.home_location_saved, 'The home location has not been captured.');
+      // A part-financed file is a financed file: involvesLoan, never === 'loan'.
+      if (facts.is_loan) {
+        need(
+          facts.loan_first_installment_received,
+          "The bank's first installment has not been received.",
+        );
+      }
+      break;
+    case 'installation_completed':
+      need(facts.welder_work_done, 'The welder has not marked the structure done.');
+      need(facts.structure_photo_uploaded, 'The structure photo is missing.');
+      need(facts.electrician_work_done, 'The electrician has not marked the wiring done.');
+      need(facts.wiring_photo_uploaded, 'The wiring photo is missing.');
+      break;
+    case 'net_meter_applied':
+    case 'net_meter_installed':
+      need(facts.serial_numbers_entered, 'Panel and inverter serial numbers have not been entered.');
+      break;
+    case 'project_completed':
+    case 'closed':
+      need(facts.fully_paid, 'The project is not fully paid.');
+      break;
+    default:
+      // new_project, documents_pending, payment_pending and every legacy stage
+      // are ungated server-side.
+      break;
+  }
+
+  return blockers;
+};

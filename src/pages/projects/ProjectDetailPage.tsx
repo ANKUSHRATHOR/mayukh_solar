@@ -25,6 +25,7 @@ import DetailShell from '@/components/common/DetailShell';
 import SectionCard from '@/components/common/SectionCard';
 import DetailField, { DetailGrid } from '@/components/common/DetailField';
 import StatusBadge from '@/components/common/StatusBadge';
+import StageAdvanceControl from '@/components/projects/StageAdvanceControl';
 import ProjectDocumentsTab from './ProjectDocumentsTab';
 import ProjectWorkPanel from './ProjectWorkPanel';
 import ProjectPaymentsPanel from '@/components/projects/ProjectPaymentsPanel';
@@ -59,8 +60,9 @@ const ProjectDetailPage = () => {
 
   const project = projectQuery.data;
   // Mirrors the projects UPDATE policies: admin and operator can edit any
-  // project, a sales person only one assigned to them.
-  const canEditPlant =
+  // project, a sales person only one assigned to them. Governs the plant fields
+  // and the stage control alike — both are an UPDATE on the same row.
+  const canEditProject =
     role === 'admin' ||
     role === 'operator' ||
     (role === 'sales_person' && project?.assigned_sales_person_id === user?.id);
@@ -220,6 +222,21 @@ const ProjectDetailPage = () => {
                     );
                   })}
                 </ol>
+
+                {/* The pipeline card already says where the project is; moving it
+                    on belongs to the same card rather than a panel of its own. */}
+                <StageAdvanceControl
+                  projectId={project.id}
+                  pipeline={pipeline}
+                  currentIndex={currentIndex}
+                  facts={requirements}
+                  canEdit={canEditProject}
+                  isAdmin={role === 'admin'}
+                  onChanged={() => {
+                    void queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+                    void queryClient.invalidateQueries({ queryKey: ['project-requirements', projectId] });
+                  }}
+                />
               </div>
             </SectionCard>
 
@@ -381,7 +398,7 @@ const ProjectDetailPage = () => {
             <SectionCard
               title="System specification"
               icon={Sun}
-              actions={canEditPlant && (
+              actions={canEditProject && (
                 <Button
                   variant="outline"
                   size="sm"
