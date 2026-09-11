@@ -122,7 +122,11 @@ function TableToolbar<T>({
                 <span className="flex items-center gap-2">
                   {v.label}
                   {typeof v.count === 'number' && (
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                    // The tally is half of what this control says — "which subset"
+                    // and "how many are in it". As muted-on-muted at 10px it
+                    // measured 4.34:1, under this design system's floor and the
+                    // faintest thing in a toolbar of otherwise solid controls.
+                    <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-foreground">
                       {v.count}
                     </span>
                   )}

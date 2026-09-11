@@ -27,7 +27,14 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+      // An unselected tab is still a control someone has to read and aim at, so
+      // it carries its own colour rather than inheriting the list's
+      // `text-muted-foreground`: that measured 4.34:1 on `bg-muted`, under the
+      // 4.5:1 this design system holds every text token to, and it made the
+      // unselected tabs on every module page look disabled. `foreground/70`
+      // clears the bar while staying clearly quieter than the selected tab,
+      // which sits on its own raised background at 17:1.
+      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium text-foreground/70 ring-offset-background transition-all hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
       className,
     )}
     {...props}
