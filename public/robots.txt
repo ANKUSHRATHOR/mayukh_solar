@@ -37,4 +37,4 @@ Disallow: /settings
 Disallow: /projects/
 Disallow: /operator/
 
-Sitemap: https://mayukh-solar.lovable.app/sitemap.xml
+Sitemap: https://astra.mayukhsolar.in/sitemap.xml

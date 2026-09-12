@@ -298,10 +298,10 @@ const Login = () => {
       <Helmet>
         <title>Sign In | Mayukh Solar Staff Portal</title>
         <meta name="description" content="Secure staff sign-in for Mayukh Solar CRM. Access your leads, projects, quotations, and field workflow." />
-        <link rel="canonical" href="https://mayukh-solar.lovable.app/login" />
+        <link rel="canonical" href="https://astra.mayukhsolar.in/login" />
         <meta property="og:title" content="Sign In | Mayukh Solar Staff Portal" />
         <meta property="og:description" content="Secure staff sign-in for Mayukh Solar CRM." />
-        <meta property="og:url" content="https://mayukh-solar.lovable.app/login" />
+        <meta property="og:url" content="https://astra.mayukhsolar.in/login" />
       </Helmet>
 
       {/* Live 3D Solar Wallpaper */}

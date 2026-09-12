@@ -98,10 +98,10 @@ const InstallApp = () => {
       <Helmet>
         <title>Install the App | Mayukh Solar CRM</title>
         <meta name="description" content="Install Mayukh Solar CRM on iPhone or Android for faster access, offline use, and push notifications for staff." />
-        <link rel="canonical" href="https://mayukh-solar.lovable.app/install" />
+        <link rel="canonical" href="https://astra.mayukhsolar.in/install" />
         <meta property="og:title" content="Install Mayukh Solar CRM on Your Phone" />
         <meta property="og:description" content="Add the CRM to your Home Screen and enable push notifications." />
-        <meta property="og:url" content="https://mayukh-solar.lovable.app/install" />
+        <meta property="og:url" content="https://astra.mayukhsolar.in/install" />
       </Helmet>
       <section className="mx-auto flex max-w-2xl flex-col items-center text-center">
         <img src={logo} alt="Mayukh Solar" className="h-20 w-20 object-contain" />
