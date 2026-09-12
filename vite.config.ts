@@ -44,6 +44,45 @@ export default defineConfig(({ mode }) => ({
       },
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        /**
+         * Group the always-loaded libraries into a few stable chunks.
+         *
+         * Rollup's default is a chunk per shared module, which after route
+         * splitting produced 144 of them — every one a request, and every one
+         * invalidating its neighbours' cache boundaries on an unrelated bump.
+         * Grouping by library means a React or Radix upgrade re-downloads one
+         * chunk instead of scattering across dozens.
+         *
+         * Deliberately partial: anything not named here returns undefined and
+         * keeps Rollup's own splitting. A catch-all `return 'vendor'` would be
+         * worse than the default, because a vendor chunk the entry imports is
+         * eager — so a dependency used only by a lazy page (html2pdf, xlsx,
+         * three) would be pulled back into the initial download, undoing the
+         * split it exists to preserve.
+         */
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return;
+
+          if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/@supabase')) return 'vendor-supabase';
+          if (id.includes('node_modules/@tanstack')) return 'vendor-query';
+          if (
+            /node_modules\/(@radix-ui|lucide-react|cmdk|vaul|sonner|class-variance-authority|clsx|tailwind-merge)/.test(
+              id,
+            )
+          ) {
+            return 'vendor-ui';
+          }
+          return undefined;
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     buildVersionPlugin,
