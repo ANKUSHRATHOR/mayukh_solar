@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import { initNative } from "./native";
+import { installChunkReloadHandler } from "./lib/lazyRoute";
 import "./index.css";
 
 // Unregister stale service workers (sw.js / service-worker.js) and clear caches
@@ -34,6 +35,10 @@ const cleanupStaleServiceWorkers = async () => {
 };
 
 cleanupStaleServiceWorkers();
+
+// A tab open across a deploy asks for route chunks the new build has renamed;
+// reload onto the new index.html instead of erroring. See lib/lazyRoute.ts.
+installChunkReloadHandler();
 
 // Capacitor shell wiring (splash, status bar, back button, offline state).
 // No-op in the browser and in the PWA — see src/native/index.ts.

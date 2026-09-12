@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { Browser } from '@capacitor/browser';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Phone, Lock, ArrowRight, Sun, Mail, KeyRound, ShieldCheck, User } from 'lucide-react';
 import logo from '@/assets/mayukh-solar-logo.png';
+import { lazyRoute } from '@/lib/lazyRoute';
 /**
  * Three.js, fiber and drei come to 217 kB gzipped — more than the entire app
  * shell — for a decorative wallpaper behind the sign-in card. Loaded after the
@@ -16,7 +17,7 @@ import logo from '@/assets/mayukh-solar-logo.png';
  * gradient veils below sit over it either way, so its absence for a moment
  * reads as the background it is.
  */
-const SolarScene = lazy(() => import('@/components/three/SolarScene'));
+const SolarScene = lazyRoute(() => import('@/components/three/SolarScene'));
 
 
 type LoginMode = 'choose' | 'otp' | 'password' | 'email_otp' | 'email_password' | 'forgot_password' | 'signup';
