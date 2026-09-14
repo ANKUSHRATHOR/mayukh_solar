@@ -138,14 +138,27 @@ const VISIT_SELECT = `
   )
 `;
 
-export type VisitTab = 'open' | 'completed';
+export type VisitTab = 'open' | 'completed' | 'cancelled';
+
+/**
+ * Roles that book, edit and cancel visits. The server (`can_manage_site_visit`)
+ * is the real gate and also narrows by lead ownership; this only decides
+ * whether to offer the controls.
+ */
+export const VISIT_MANAGER_ROLES = ['admin', 'telecaller', 'sales_person', 'operator'] as const;
+
+export const canManageVisits = (role: string | null | undefined): boolean =>
+  (VISIT_MANAGER_ROLES as readonly string[]).includes(role ?? '');
+
+/** Permanent deletion is admin-only; everyone else cancels. */
+export const canDeleteVisits = (role: string | null | undefined): boolean => role === 'admin';
 
 /**
  * One page of visits for the Visits module.
  *
- * `open` means still to be done — scheduled visits only. Cancelled visits are
- * excluded from both tabs; they are neither outstanding work nor a record of a
- * survey, and showing them in "open" would keep dead work on the list forever.
+ * `open` means still to be done — scheduled visits only. Cancelled visits have
+ * their own subset: they are neither outstanding work nor a record of a survey,
+ * and showing them in "open" would keep dead work on the list forever.
  */
 export const fetchVisitsPage = async (
   params: TableQueryParams
@@ -155,10 +168,10 @@ export const fetchVisitsPage = async (
 
   let query = supabase.from('site_visits').select(VISIT_SELECT, { count: 'exact' });
 
-  query =
-    tab === 'completed'
-      ? query.eq('visit_status', 'completed')
-      : query.eq('visit_status', 'scheduled');
+  query = query.eq(
+    'visit_status',
+    tab === 'completed' ? 'completed' : tab === 'cancelled' ? 'cancelled' : 'scheduled'
+  );
 
   if (term) {
     // PostgREST cannot `or()` across an embedded resource, so the lead match is
@@ -185,7 +198,7 @@ export const fetchVisitsPage = async (
   return toTablePage<VisitWithLead>(result as any);
 };
 
-/** Counts for the Open / Completed tabs. */
+/** Counts for the Open / Completed / Cancelled subsets. */
 export const fetchVisitTabCounts = async (): Promise<Record<VisitTab, number>> => {
   const countOf = async (status: string) => {
     const { count } = await supabase
@@ -194,8 +207,12 @@ export const fetchVisitTabCounts = async (): Promise<Record<VisitTab, number>> =
       .eq('visit_status', status);
     return count ?? 0;
   };
-  const [open, completed] = await Promise.all([countOf('scheduled'), countOf('completed')]);
-  return { open, completed };
+  const [open, completed, cancelled] = await Promise.all([
+    countOf('scheduled'),
+    countOf('completed'),
+    countOf('cancelled'),
+  ]);
+  return { open, completed, cancelled };
 };
 
 export const fetchVisit = async (visitId: string): Promise<VisitWithLead | null> => {
@@ -233,40 +250,58 @@ export const fetchLeadDocuments = async (leadId: string) => {
   return data ?? [];
 };
 
+/**
+ * The visit functions postdate the generated types. One untyped entry point
+ * instead of an `as any` per call.
+ */
+type UntypedRpc = (
+  fn: string,
+  args?: Record<string, unknown>
+) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+const visitRpc: UntypedRpc = (fn, args) =>
+  (supabase.rpc as unknown as UntypedRpc).call(supabase, fn, args);
+
 export interface BookVisitInput {
   leadId: string;
   scheduledFor: string;
-  assignedToUserId: string;
+  /** Null leaves the visit open for anyone to claim. */
+  assignedToUserId: string | null;
   notes?: string;
 }
 
-/** Books a visit and moves the lead to `visit_created`. */
-export const bookVisit = async (
-  input: BookVisitInput,
-  createdByUserId: string
-): Promise<SiteVisit> => {
-  const { data, error } = await supabase
-    .from('site_visits')
-    .insert({
-      lead_id: input.leadId,
-      staff_id: createdByUserId,
-      assigned_to_user_id: input.assignedToUserId,
-      visit_status: 'scheduled',
-      scheduled_for: input.scheduledFor,
-      visit_date: input.scheduledFor,
-      visit_notes: input.notes || null,
-    } as any)
-    .select()
-    .single();
-
+/**
+ * Books a visit through `book_site_visit`, which also moves the lead to
+ * `visit_created`, points its follow-up date at the next scheduled visit, and
+ * fills the lead's assignee only if it has none. The creator is always the
+ * caller, so there is no user id to pass.
+ */
+export const bookVisit = async (input: BookVisitInput): Promise<SiteVisit> => {
+  const { data, error } = await visitRpc('book_site_visit', {
+    _lead_id: input.leadId,
+    _scheduled_for: input.scheduledFor,
+    _assigned_to: input.assignedToUserId,
+    _notes: input.notes ?? null,
+  });
   if (error) throw new Error(error.message);
+  return data as unknown as SiteVisit;
+};
 
-  const { error: leadError } = await supabase
-    .from('leads')
-    .update({ status: 'visit_created' as any, follow_up_date: input.scheduledFor })
-    .eq('id', input.leadId);
-  if (leadError) throw new Error(leadError.message);
+export interface UpdateVisitInput {
+  visitId: string;
+  scheduledFor: string;
+  assignedToUserId: string | null;
+  notes?: string;
+}
 
+/** Edits a scheduled visit. Every field is written, so send the whole form. */
+export const updateVisit = async (input: UpdateVisitInput): Promise<SiteVisit> => {
+  const { data, error } = await visitRpc('update_site_visit', {
+    _visit_id: input.visitId,
+    _scheduled_for: input.scheduledFor,
+    _assigned_to: input.assignedToUserId,
+    _notes: input.notes ?? null,
+  });
+  if (error) throw new Error(error.message);
   return data as unknown as SiteVisit;
 };
 
@@ -350,11 +385,21 @@ export const completeVisit = async (input: CompleteVisitInput): Promise<void> =>
   if (error) throw new Error(error.message);
 };
 
+/**
+ * Cancels a scheduled visit. The row stays, marked cancelled with the reason,
+ * so the lead's history still shows it was booked.
+ */
 export const cancelVisit = async (visitId: string, reason: string): Promise<void> => {
-  const { error } = await supabase
-    .from('site_visits')
-    .update({ visit_status: 'cancelled', cancelled_reason: reason } as any)
-    .eq('id', visitId);
+  const { error } = await visitRpc('cancel_site_visit', {
+    _visit_id: visitId,
+    _reason: reason,
+  });
+  if (error) throw new Error(error.message);
+};
+
+/** Permanently deletes a visit. Admin only; the row is kept in audit_logs. */
+export const deleteVisit = async (visitId: string): Promise<void> => {
+  const { error } = await visitRpc('delete_site_visit', { _visit_id: visitId });
   if (error) throw new Error(error.message);
 };
 

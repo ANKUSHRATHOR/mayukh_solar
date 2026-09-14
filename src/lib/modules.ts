@@ -50,7 +50,9 @@ export const DEFAULT_ROLE_MODULES: Record<AppRole, ModuleKey[]> = {
   sales_person: ['crm', 'site_visits', 'projects', 'payments', 'tasks', 'attendance', 'contacts'],
   // `crm` is deliberate and matches production: an admin turned it on for
   // operators on 2026-08-01. The original seed had it false.
-  operator: ['crm', 'projects', 'payments', 'operations', 'tasks', 'attendance', 'contacts'],
+  // `site_visits` since 2026-09-14: operators book and work visits
+  // (migration 20260914010000).
+  operator: ['crm', 'site_visits', 'projects', 'payments', 'operations', 'tasks', 'attendance', 'contacts'],
   welder: ['projects', 'tasks', 'attendance', 'contacts'],
   electrician: ['projects', 'tasks', 'attendance', 'contacts'],
 };

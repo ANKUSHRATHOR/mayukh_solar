@@ -2,11 +2,16 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, isPast } from 'date-fns';
 import {
+  Ban,
   CalendarClock,
+  CalendarPlus,
   CheckCircle2,
   Clock,
   MapPin,
+  MoreVertical,
   Navigation,
+  Pencil,
+  Trash2,
   User,
   XCircle,
 } from 'lucide-react';
@@ -15,15 +20,35 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import SectionCard from '@/components/common/SectionCard';
 import ErrorState from '@/components/common/ErrorState';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import CompleteVisitDialog from './CompleteVisitDialog';
+import VisitFormDialog from './VisitFormDialog';
+import CancelVisitDialog from './CancelVisitDialog';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { fetchVisits, outcomeLabel, type SiteVisit } from '@/lib/visits';
+import {
+  canDeleteVisits,
+  canManageVisits,
+  fetchVisits,
+  outcomeLabel,
+  type SiteVisit,
+} from '@/lib/visits';
 
 interface Props {
   leadId: string;
   userId: string;
   staffNames: Record<string, string>;
   onVisitCompleted: () => void;
+  /** Called after a visit is booked, edited, cancelled or deleted. */
+  onVisitsChanged?: () => void;
+  /** Whether a new visit may be booked — false once the lead is final or cancelled. */
+  canBook?: boolean;
   /**
    * `card` renders the full visit history section. `banner` renders a slim
    * call-to-action strip only while a visit is scheduled — and nothing at all
@@ -44,9 +69,19 @@ const LeadVisitsPanel = ({
   userId,
   staffNames,
   onVisitCompleted,
+  onVisitsChanged,
+  canBook = true,
   variant = 'card',
 }: Props) => {
+  const { role } = useAuth();
+  const canManage = canManageVisits(role);
+  const canDelete = canDeleteVisits(role);
   const [completing, setCompleting] = useState<SiteVisit | null>(null);
+  // `booking` opens the form empty; `editing` opens it on a visit.
+  const [booking, setBooking] = useState(false);
+  const [editing, setEditing] = useState<SiteVisit | null>(null);
+  const [cancelling, setCancelling] = useState<SiteVisit | null>(null);
+  const [deleting, setDeleting] = useState<SiteVisit | null>(null);
 
   const visitsQuery = useQuery({
     queryKey: ['lead-visits', leadId],
@@ -143,10 +178,11 @@ const LeadVisitsPanel = ({
             : undefined
         }
         actions={
-          scheduled.length > 0 ? (
-            <Badge className="border-transparent bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning">
-              Booked
-            </Badge>
+          canManage && canBook ? (
+            <Button size="sm" variant="outline" className="h-11 gap-1.5 sm:h-8" onClick={() => setBooking(true)}>
+              <CalendarPlus className="h-4 w-4" />
+              {visits.length > 0 ? 'Book another visit' : 'Book visit'}
+            </Button>
           ) : undefined
         }
         contentClassName="p-0"
@@ -160,7 +196,7 @@ const LeadVisitsPanel = ({
           <ErrorState error={visitsQuery.error} onRetry={() => visitsQuery.refetch()} />
         ) : visits.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-            No site visit booked yet. Use Actions → Book Visit.
+            No site visit booked yet.
           </p>
         ) : (
           <ul className="divide-y divide-border/50">
@@ -257,6 +293,47 @@ const LeadVisitsPanel = ({
                         </p>
                       )}
                     </div>
+
+                    {/* Edit and cancel apply only while a visit is scheduled — a
+                        completed one carries GPS proof and has already moved the
+                        lead. Delete is the admin's, on any visit. */}
+                    {((canManage && isScheduled) || canDelete) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="-mr-2 h-11 w-11 shrink-0 text-muted-foreground sm:h-8 sm:w-8"
+                            aria-label="Visit actions"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          {canManage && isScheduled && (
+                            <>
+                              <DropdownMenuItem onSelect={() => setEditing(visit)} className="gap-2">
+                                <Pencil className="h-4 w-4" /> Edit visit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => setCancelling(visit)} className="gap-2">
+                                <Ban className="h-4 w-4" /> Cancel visit
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {canDelete && (
+                            <>
+                              {canManage && isScheduled && <DropdownMenuSeparator />}
+                              <DropdownMenuItem
+                                onSelect={() => setDeleting(visit)}
+                                className="gap-2 text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
 
                   {isScheduled && (
@@ -284,6 +361,32 @@ const LeadVisitsPanel = ({
           visitsQuery.refetch();
           onVisitCompleted();
         }}
+      />
+
+      <VisitFormDialog
+        open={booking || Boolean(editing)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBooking(false);
+            setEditing(null);
+          }
+        }}
+        leadId={leadId}
+        visit={editing}
+        onSaved={onVisitsChanged}
+      />
+
+      <CancelVisitDialog
+        mode="cancel"
+        visit={cancelling}
+        onOpenChange={(open) => !open && setCancelling(null)}
+        onDone={onVisitsChanged}
+      />
+      <CancelVisitDialog
+        mode="delete"
+        visit={deleting}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        onDone={onVisitsChanged}
       />
     </>
   );

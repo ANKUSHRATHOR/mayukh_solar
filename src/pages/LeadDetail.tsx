@@ -40,6 +40,8 @@ import { sendQuotationNotification } from '@/lib/whatsapp';
 import { calculateSubsidy, formatSubsidy, useSubsidySlabs } from '@/lib/subsidy';
 import { leadStatusMeta, resolveStatus, toneClasses } from '@/lib/statusMeta';
 import LeadVisitsPanel from '@/components/leads/LeadVisitsPanel';
+import VisitFormDialog from '@/components/leads/VisitFormDialog';
+import { canManageVisits } from '@/lib/visits';
 import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
 import { fromLeadQuotation } from '@/lib/quotationDocument';
 import { buildQuotationBody } from '@/lib/quotationTemplate';
@@ -151,6 +153,10 @@ const LeadDetail = () => {
 
   // Edit contact details state
   const [isEditContactOpen, setIsEditContactOpen] = useState(false);
+  const [isEditCampaignOpen, setIsEditCampaignOpen] = useState(false);
+  const [editCampaign, setEditCampaign] = useState('');
+  const [campaignOptions, setCampaignOptions] = useState<string[]>([]);
+  const [savingCampaign, setSavingCampaign] = useState(false);
   const [editName, setEditName] = useState('');
   const [editMobile, setEditMobile] = useState('');
   const [editAltMobile, setEditAltMobile] = useState('');
@@ -171,10 +177,6 @@ const LeadDetail = () => {
   const [loggingCall, setLoggingCall] = useState(false);
 
   // Appointment state
-  const [apptDate, setApptDate] = useState('');
-  const [apptSalesId, setApptSalesId] = useState('');
-  const [apptNotes, setApptNotes] = useState('');
-  const [bookingAppt, setBookingAppt] = useState(false);
 
   // Status update state
   const [newStatus, setNewStatus] = useState<LeadStatus | ''>('');
@@ -211,7 +213,6 @@ const LeadDetail = () => {
     [lead?.kw_interest, subsidySlabs]
   );
   const [project, setProject] = useState<any>(null);
-  const [salesPersons, setSalesPersons] = useState<{ user_id: string; full_name: string; mobile: string; email: string | null }[]>([]);
   const [people, setPeople] = useState<{ creator: any; assignee: any; history: any[] } | null>(null);
 
   const fetchLead = async () => {
@@ -220,10 +221,9 @@ const LeadDetail = () => {
     const { data: leadData } = await supabase.from('leads').select('*').eq('id', id).single();
     setLead(leadData);
 
-    const [visitRes, projectRes, salesRes, peopleRes, allStaffRes, configRes, vendorRes] = await Promise.all([
+    const [visitRes, projectRes, peopleRes, allStaffRes, configRes, vendorRes] = await Promise.all([
       supabase.from('site_visits').select('*').eq('lead_id', id).order('visit_date', { ascending: false }),
       supabase.from('projects').select('*').eq('lead_id', id).maybeSingle(),
-      supabase.rpc('get_assignable_sales_persons'),
       supabase.rpc('get_lead_people' as any, { _lead_id: id }),
       supabase.from('staff').select('user_id, full_name'),
       supabase.from('system_configs' as any).select('value').eq('key', 'plant_details_dropdown_options').maybeSingle(),
@@ -231,8 +231,6 @@ const LeadDetail = () => {
     ]);
     setVisits(visitRes.data || []);
     setProject(projectRes.data);
-    const sales = (salesRes.data as any[]) || [];
-    setSalesPersons(sales);
     setAllStaff(allStaffRes.data || []);
 
     if (configRes.data && (configRes.data as any).value) {
@@ -403,49 +401,6 @@ const LeadDetail = () => {
     }
   };
 
-  const handleBookAppointment = async () => {
-    if (!apptDate || !lead || !user) {
-      toast({ title: 'Date required', description: 'Please select an appointment date & time.', variant: 'destructive' });
-      return;
-    }
-    setBookingAppt(true);
-    try {
-      const { error: leadErr } = await supabase.from('leads').update({
-        follow_up_date: apptDate,
-        assigned_to_user_id: apptSalesId || null,
-        status: 'visit_created'
-      }).eq('id', lead.id);
-      if (leadErr) throw leadErr;
-
-      const formattedApptDate = new Date(apptDate).toLocaleString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
-      // Written as a real scheduled visit, not a note. Before this it was
-      // indistinguishable from a call log, so a booked visit was invisible on
-      // the lead page and there was nothing to mark complete.
-      const { error: visitErr } = await supabase.from('site_visits').insert({
-        lead_id: lead.id,
-        staff_id: user.id,
-        assigned_to_user_id: apptSalesId || null,
-        visit_status: 'scheduled',
-        scheduled_for: apptDate,
-        visit_date: apptDate,
-        visit_notes: apptNotes.trim() || null,
-        status_updated_to: 'visit_created',
-      } as any);
-      if (visitErr) throw visitErr;
-      void formattedApptDate;
-      toast({ title: 'Appointment Booked!', description: apptSalesId ? 'Sales person assigned.' : 'Visit open for claiming.' });
-      setApptDate(''); setApptSalesId(''); setApptNotes('');
-      setIsBookVisitOpen(false);
-      fetchLead();
-    } catch (err: any) {
-      toast({ title: 'Booking failed', description: err.message, variant: 'destructive' });
-    } finally {
-      setBookingAppt(false);
-    }
-  };
-
   const handleOpenCreateQuote = (index: number | null = null) => {
     setEditingQuoteIndex(index);
     setIsCreateQuoteOpen(true);
@@ -576,6 +531,40 @@ const LeadDetail = () => {
       toast({ title: 'Failed to send PDF on WhatsApp', description: err.message, variant: 'destructive' });
     } finally {
       setSendingWhatsApp(false);
+    }
+  };
+
+  const handleOpenEditCampaign = async () => {
+    if (!lead) return;
+    setEditCampaign(lead.campaign || '');
+    setIsEditCampaignOpen(true);
+    // Existing names as suggestions, so a campaign keeps one spelling. Losing
+    // them on failure costs nothing but the suggestions.
+    const { data, error } = await supabase.rpc('lead_campaigns' as any);
+    if (!error) setCampaignOptions(((data as string[] | null) || []).filter(Boolean));
+  };
+
+  const handleSaveCampaign = async () => {
+    if (!lead) return;
+    setSavingCampaign(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('leads')
+        .update({ campaign: editCampaign.trim() || null })
+        .eq('id', lead.id)
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast({ title: 'Permission Denied', description: 'You might not have authorization to edit this lead.', variant: 'destructive' });
+        return;
+      }
+      toast({ title: editCampaign.trim() ? 'Campaign saved' : 'Campaign cleared' });
+      setIsEditCampaignOpen(false);
+      fetchLead();
+    } catch (e: any) {
+      toast({ title: 'Failed to save campaign', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingCampaign(false);
     }
   };
 
@@ -862,7 +851,7 @@ const LeadDetail = () => {
                   <Phone className="h-4 w-4 text-muted-foreground" /> Log a Call
                 </DropdownMenuItem>
 
-                {lead.status !== 'cancelled' && lead.status !== 'final' && (
+                {canManageVisits(role) && lead.status !== 'cancelled' && lead.status !== 'final' && (
                   <DropdownMenuItem onSelect={() => setIsBookVisitOpen(true)} className="gap-2 cursor-pointer text-sm hover:bg-accent hover:text-accent-foreground px-2.5 py-2 rounded">
                     <Calendar className="h-4 w-4 text-muted-foreground" /> Book Visit
                   </DropdownMenuItem>
@@ -899,6 +888,7 @@ const LeadDetail = () => {
           userId={user?.id ?? ''}
           staffNames={staffNameMap}
           onVisitCompleted={fetchLead}
+          onVisitsChanged={fetchLead}
         />
 
         <Tabs defaultValue="details" className="space-y-4">
@@ -1049,7 +1039,22 @@ const LeadDetail = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <InfoRow label="Interested Capacity" value={lead.kw_interest ? `${lead.kw_interest} kW` : null} />
                   <InfoRow label="Lead Source" value={statusLabel(lead.source)} />
-                  <InfoRow label="Campaign" value={lead.campaign} />
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Campaign</p>
+                    <div className="flex min-w-0 items-center gap-1">
+                      <p className="truncate font-semibold text-foreground text-sm" title={lead.campaign || undefined}>{lead.campaign || '—'}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => void handleOpenEditCampaign()}
+                        aria-label={lead.campaign ? 'Edit campaign' : 'Add campaign'}
+                        title={lead.campaign ? 'Edit campaign' : 'Add campaign'}
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                   <InfoRow label="Created" value={new Date(lead.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} />
                   <InfoRow label="Created By" value={staffName(lead.created_by_user_id)} />
                 </div>
@@ -1339,6 +1344,18 @@ const LeadDetail = () => {
               </div>
             </Section>
 
+            {/* Every visit on the lead — booked, completed and cancelled — with
+                book, edit and cancel. Kept off the Details tab, where it sat
+                directly under the banner showing the same next visit. */}
+            <LeadVisitsPanel
+              leadId={lead.id}
+              userId={user?.id ?? ''}
+              staffNames={staffNameMap}
+              onVisitCompleted={fetchLead}
+              onVisitsChanged={fetchLead}
+              canBook={lead.status !== 'cancelled' && lead.status !== 'final'}
+            />
+
           </TabsContent>
         </Tabs>
       </div>
@@ -1405,56 +1422,13 @@ const LeadDetail = () => {
           site_visits row, which already feeds the activity timeline — a
           separate manual log only produced duplicate entries. */}
 
-      {/* 4. Book Visit Dialog */}
-      <Dialog open={isBookVisitOpen} onOpenChange={setIsBookVisitOpen}>
-        <DialogContent className="sm:max-w-[450px] bg-background border border-border shadow-lg p-6 rounded-lg animate-in fade-in-50 duration-100">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <Calendar className="h-4.5 w-4.5 text-primary" /> Book Site Visit / Appointment
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Schedule a site visit date and assign a representative.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Visit Date & Time *</Label>
-              <Input type="datetime-local" value={apptDate} onChange={e => setApptDate(e.target.value)} className="h-10 text-sm" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Assign Sales Person (Optional)</Label>
-              <Select value={apptSalesId || '__none__'} onValueChange={v => setApptSalesId(v === '__none__' ? '' : v)}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue placeholder="Leave unassigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Leave unassigned (Open for Claim)</SelectItem>
-                  {salesPersons.map(sp => (
-                    <SelectItem key={sp.user_id} value={sp.user_id}>{sp.full_name} — {sp.mobile}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Visit Instructions / Notes</Label>
-              <Input
-                placeholder="Directions or specific client requests..."
-                value={apptNotes}
-                onChange={(e) => setApptNotes(e.target.value)}
-                className="h-10 text-sm"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => { setIsBookVisitOpen(false); setApptDate(''); setApptSalesId(''); setApptNotes(''); }}>
-              Cancel
-            </Button>
-            <Button onClick={handleBookAppointment} disabled={bookingAppt || !apptDate} size="sm" className="gradient-primary text-primary-foreground font-semibold">
-              {bookingAppt ? 'Booking...' : 'Book Appointment'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 4. Book Visit Dialog — the same form the visit list uses to book and edit. */}
+      <VisitFormDialog
+        open={isBookVisitOpen}
+        onOpenChange={setIsBookVisitOpen}
+        leadId={lead.id}
+        onSaved={fetchLead}
+      />
 
       {/* 5. Update Status Dialog */}
       <Dialog open={isStatusUpdateOpen} onOpenChange={setIsStatusUpdateOpen}>
@@ -1662,6 +1636,44 @@ const LeadDetail = () => {
             </Button>
             <Button onClick={handleSaveContactDetails} size="sm" className="gradient-primary text-primary-foreground font-semibold">
               Save Contact Details
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Campaign Dialog */}
+      <Dialog open={isEditCampaignOpen} onOpenChange={(open) => { if (!savingCampaign) setIsEditCampaignOpen(open); }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Edit className="h-4 w-4 text-primary" /> {lead?.campaign ? 'Edit Campaign' : 'Add Campaign'}
+            </DialogTitle>
+            <DialogDescription>
+              Which campaign brought this lead in. Leave empty to clear it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label htmlFor="lead-edit-campaign" className="text-xs font-semibold">Campaign</Label>
+            <Input
+              id="lead-edit-campaign"
+              list="lead-edit-campaign-options"
+              value={editCampaign}
+              onChange={e => setEditCampaign(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') void handleSaveCampaign(); }}
+              placeholder="e.g. Facebook Sept 2026"
+              className="h-10 text-sm"
+              autoFocus
+            />
+            <datalist id="lead-edit-campaign-options">
+              {campaignOptions.map(c => <option key={c} value={c} />)}
+            </datalist>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setIsEditCampaignOpen(false)} disabled={savingCampaign}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={() => void handleSaveCampaign()} disabled={savingCampaign}>
+              {savingCampaign ? 'Saving…' : 'Save Campaign'}
             </Button>
           </DialogFooter>
         </DialogContent>

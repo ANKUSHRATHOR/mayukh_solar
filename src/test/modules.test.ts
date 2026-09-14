@@ -35,12 +35,13 @@ describe('role access model', () => {
 
   // Operator was grouped with the trades until an admin switched crm on for
   // them in production on 2026-08-01; the defaults now match that intent rather
-  // than contradicting the live table.
-  it('operator gets crm and operations but not site_visits', () => {
+  // than contradicting the live table. Site visits followed on 2026-09-14, when
+  // operators started booking and working visits.
+  it('operator gets crm, operations and site_visits', () => {
     expect(defaultAllowed('operator', 'crm')).toBe(true);
     expect(defaultAllowed('operator', 'operations')).toBe(true);
     expect(defaultAllowed('operator', 'projects')).toBe(true);
-    expect(defaultAllowed('operator', 'site_visits')).toBe(false);
+    expect(defaultAllowed('operator', 'site_visits')).toBe(true);
   });
 
   // The projects module used to unlock the payments pages too, which handed a

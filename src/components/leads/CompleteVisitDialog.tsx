@@ -169,15 +169,12 @@ const CompleteVisitDialog = ({
       // would drop the lead off the open-visits list entirely.
       if (needsNewDate && rescheduleFor) {
         setProgress('Booking the new date…');
-        await bookVisit(
-          {
-            leadId,
-            scheduledFor: new Date(rescheduleFor).toISOString(),
-            assignedToUserId: visit.assigned_to_user_id ?? visit.staff_id ?? userId,
-            notes: notes.trim() || undefined,
-          },
-          userId
-        );
+        await bookVisit({
+          leadId,
+          scheduledFor: new Date(rescheduleFor).toISOString(),
+          assignedToUserId: visit.assigned_to_user_id ?? visit.staff_id ?? userId,
+          notes: notes.trim() || undefined,
+        });
       }
 
       toast({

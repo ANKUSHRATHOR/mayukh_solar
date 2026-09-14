@@ -3,13 +3,17 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
+  Ban,
   CalendarClock,
   CheckCircle2,
   ExternalLink,
   FileText,
   MapPin,
+  MoreVertical,
   Navigation,
+  Pencil,
   Phone,
+  Trash2,
   User,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,10 +22,19 @@ import { Badge } from '@/components/ui/badge';
 import DetailShell from '@/components/common/DetailShell';
 import SectionCard from '@/components/common/SectionCard';
 import DetailField, { DetailGrid } from '@/components/common/DetailField';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import CompleteVisitDialog from '@/components/leads/CompleteVisitDialog';
+import VisitFormDialog from '@/components/leads/VisitFormDialog';
+import CancelVisitDialog from '@/components/leads/CancelVisitDialog';
 import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
 import LeadQuotationsPanel from '@/components/leads/LeadQuotationsPanel';
-import { fetchVisit, outcomeLabel } from '@/lib/visits';
+import { canDeleteVisits, canManageVisits, fetchVisit, outcomeLabel } from '@/lib/visits';
 import type { LeadQuotation } from '@/lib/leadQuotations';
 
 /**
@@ -34,11 +47,14 @@ import type { LeadQuotation } from '@/lib/leadQuotations';
 const VisitDetailPage = () => {
   const { visitId } = useParams<{ visitId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const queryClient = useQueryClient();
 
   const [completing, setCompleting] = useState(false);
   const [quoting, setQuoting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // Quotation being edited via the panel's row menu; null means the dialog
   // (when open) is creating a fresh one.
   const [editingQuote, setEditingQuote] = useState<LeadQuotation | null>(null);
@@ -52,6 +68,9 @@ const VisitDetailPage = () => {
   const visit = visitQuery.data;
   const lead = visit?.leads ?? null;
   const isOpen = visit?.visit_status === 'scheduled';
+  const isCancelled = visit?.visit_status === 'cancelled';
+  const canEdit = isOpen && canManageVisits(role);
+  const canDelete = canDeleteVisits(role);
 
   const address =
     [lead?.address, lead?.village_city, lead?.district, lead?.state]
@@ -89,10 +108,13 @@ const VisitDetailPage = () => {
               className={
                 isOpen
                   ? 'border-transparent bg-warning/15 px-2 py-0.5 text-[10px] font-bold uppercase text-warning'
-                  : 'border-transparent bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase text-success'
+                  : isCancelled
+                    ? 'border-transparent bg-muted px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground'
+                    : 'border-transparent bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase text-success'
               }
             >
-              {isOpen ? 'Open' : 'Completed'}
+              {/* A cancelled visit used to read "Completed" here. */}
+              {isOpen ? 'Open' : isCancelled ? 'Cancelled' : 'Completed'}
             </Badge>
           )
         }
@@ -112,6 +134,38 @@ const VisitDetailPage = () => {
               >
                 <FileText className="h-4 w-4" /> Create quotation
               </Button>
+              {(canEdit || canDelete) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-9 shrink-0 p-0" aria-label="More visit actions">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    {canEdit && (
+                      <>
+                        <DropdownMenuItem onSelect={() => setEditing(true)} className="gap-2">
+                          <Pencil className="h-4 w-4" /> Edit visit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setCancelling(true)} className="gap-2">
+                          <Ban className="h-4 w-4" /> Cancel visit
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {canDelete && (
+                      <>
+                        {canEdit && <DropdownMenuSeparator />}
+                        <DropdownMenuItem
+                          onSelect={() => setDeleting(true)}
+                          className="gap-2 text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </>
           )
         }
@@ -200,6 +254,9 @@ const VisitDetailPage = () => {
                   emptyText="Not yet"
                 />
                 <DetailField label="Outcome" value={visit.outcome ? outcomeLabel(visit.outcome) : undefined} />
+                {isCancelled && (
+                  <DetailField label="Cancelled because" wide value={visit.cancelled_reason} />
+                )}
                 <DetailField label="Notes" wide value={visit.visit_notes} />
               </DetailGrid>
 
@@ -222,6 +279,26 @@ const VisitDetailPage = () => {
 
       {visit && lead && (
         <>
+          <VisitFormDialog
+            open={editing}
+            onOpenChange={setEditing}
+            leadId={lead.id}
+            visit={visit}
+            onSaved={() => visitQuery.refetch()}
+          />
+          <CancelVisitDialog
+            mode="cancel"
+            visit={cancelling ? visit : null}
+            onOpenChange={setCancelling}
+            onDone={() => visitQuery.refetch()}
+          />
+          <CancelVisitDialog
+            mode="delete"
+            visit={deleting ? visit : null}
+            onOpenChange={setDeleting}
+            // The visit no longer exists, so its page has nothing left to show.
+            onDone={() => navigate('/visits')}
+          />
           <CompleteVisitDialog
             open={completing}
             onOpenChange={setCompleting}

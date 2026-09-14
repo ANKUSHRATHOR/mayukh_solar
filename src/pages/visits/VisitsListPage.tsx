@@ -99,10 +99,10 @@ const VisitsListPage = () => {
     {
       id: 'when',
       mobile: 'meta',
-      header: tab === 'open' ? 'Scheduled' : 'Completed',
-      sortKey: tab === 'open' ? 'scheduled_for' : 'completed_at',
+      header: tab === 'completed' ? 'Completed' : 'Scheduled',
+      sortKey: tab === 'completed' ? 'completed_at' : 'scheduled_for',
       cell: (v) => {
-        const when = tab === 'open' ? v.scheduled_for : v.completed_at;
+        const when = tab === 'completed' ? v.completed_at : v.scheduled_for;
         if (!when) return <span className="text-muted-foreground/60">—</span>;
         const overdue = tab === 'open' && isPast(new Date(when));
         return (
@@ -123,12 +123,16 @@ const VisitsListPage = () => {
     },
     {
       id: 'outcome',
-      header: tab === 'open' ? 'Status' : 'Outcome',
+      header: tab === 'open' ? 'Status' : tab === 'cancelled' ? 'Reason' : 'Outcome',
       mobile: 'badge',
       cell: (v) =>
         tab === 'open' ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-warning">
             <Clock className="h-3.5 w-3.5" /> Pending
+          </span>
+        ) : tab === 'cancelled' ? (
+          <span className="block max-w-[240px] truncate text-xs text-muted-foreground" title={v.cancelled_reason ?? undefined}>
+            {v.cancelled_reason || 'Cancelled'}
           </span>
         ) : (
           <span className="text-xs text-foreground">{outcomeLabel(v.outcome)}</span>
@@ -139,6 +143,7 @@ const VisitsListPage = () => {
   const tabs: { value: VisitTab; label: string; count?: number }[] = [
     { value: 'open', label: 'Open Visits', count: counts?.open },
     { value: 'completed', label: 'Completed', count: counts?.completed },
+    { value: 'cancelled', label: 'Cancelled', count: counts?.cancelled },
   ];
 
   return (
@@ -165,11 +170,13 @@ const VisitsListPage = () => {
         columns={columns}
         rowKey={(v) => v.id}
         onRowClick={(v) => navigate(`/visits/${v.id}`)}
-        emptyTitle={tab === 'open' ? 'No open visits' : 'No completed visits yet'}
+        emptyTitle={tab === 'open' ? 'No open visits' : tab === 'cancelled' ? 'No cancelled visits' : 'No completed visits yet'}
         emptyDescription={
           tab === 'open'
             ? 'Visits appear here once they are booked from a lead.'
-            : 'Completed surveys will be listed here.'
+            : tab === 'cancelled'
+              ? 'Visits cancelled from a lead or visit page are kept here.'
+              : 'Completed surveys will be listed here.'
         }
         emptyIcon={MapPin}
       />
