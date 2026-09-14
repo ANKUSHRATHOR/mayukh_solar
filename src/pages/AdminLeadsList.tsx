@@ -80,6 +80,7 @@ type LeadRow = {
   status: LeadStatus;
   kNumber: string | null;
   email: string | null;
+  campaign: string | null;
 };
 
 
@@ -178,6 +179,7 @@ const mapLeadRow = (lead: any, staffMap: Record<string, StaffMember>): LeadRow =
   status: lead.status,
   kNumber: lead.k_number,
   email: lead.email,
+  campaign: lead.campaign?.trim() || null,
 });
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -215,6 +217,8 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const [filterAssigned, setFilterAssigned] = useStickyState<string>('admin-leads:assigned', 'all');
   const [filterOperator, setFilterOperator] = useStickyState<string>('admin-leads:operator', 'all');
   const [filterProjectType, setFilterProjectType] = useStickyState<'all' | PaymentType>('admin-leads:projectType', 'all');
+  const [filterCampaign, setFilterCampaign] = useStickyState<string>('admin-leads:campaign', 'all');
+  const [campaignOptions, setCampaignOptions] = useState<string[]>([]);
   const [filterDate, setFilterDate] = useStickyState<DateFilter>('admin-leads:date', 'all');
   const [customFrom, setCustomFrom] = useStickyState<string>('admin-leads:customFrom', '');
   const [customTo, setCustomTo] = useStickyState<string>('admin-leads:customTo', '');
@@ -281,6 +285,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     else if (filterAssigned !== 'all') query = query.eq('assigned_to_user_id', filterAssigned);
     if (filterOperator !== 'all') query = query.eq('assigned_operator_id', filterOperator);
     if (filterProjectType !== 'all') query = query.eq('project_type', filterProjectType);
+    if (filterCampaign !== 'all') query = query.eq('campaign', filterCampaign);
 
     if (filterDate === 'today') query = query.gte('last_activity_at', startOfToday().toISOString());
     else if (filterDate === 'this_week') query = query.gte('last_activity_at', startOfWeek().toISOString());
@@ -301,7 +306,16 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     }
 
     return query.order(sort.column, { ascending: sort.direction === 'asc', nullsFirst: false });
-  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, role, salesTab, sort, user]);
+  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCampaign, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, role, salesTab, sort, user]);
+
+  // Campaign names for the filter. Reloaded after an import, which is where new
+  // campaigns come from; a failure only empties the dropdown.
+  const loadCampaigns = useCallback(async () => {
+    const { data, error } = await supabase.rpc('lead_campaigns' as any);
+    if (!error) setCampaignOptions(((data as string[] | null) || []).filter(Boolean));
+  }, []);
+
+  useEffect(() => { void loadCampaigns(); }, [loadCampaigns]);
 
   /**
    * The staff directory changes on its own schedule, not with the filters, so it
@@ -386,8 +400,11 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       _to: to,
       _scope: role === 'sales_person' && user ? salesTab : 'all',
       _scope_user: role === 'sales_person' && user ? user.id : null,
+      // Sent only when set, so the counts keep working against a database that
+      // predates the parameter — PostgREST rejects an argument it does not know.
+      ...(filterCampaign !== 'all' ? { _campaign: filterCampaign } : {}),
     };
-  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCreator, filterDate, filterOperator, filterProjectType, role, salesTab, user]);
+  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCampaign, filterCreator, filterDate, filterOperator, filterProjectType, role, salesTab, user]);
 
   const fetchData = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
@@ -633,6 +650,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     filterAssigned !== 'all',
     filterOperator !== 'all',
     filterProjectType !== 'all',
+    filterCampaign !== 'all',
     filterDate !== 'all',
   ].filter(Boolean).length;
 
@@ -706,6 +724,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     setFilterAssigned('all');
     setFilterOperator('all');
     setFilterProjectType('all');
+    setFilterCampaign('all');
     setFilterDate('all');
     setCustomFrom('');
     setCustomTo('');
@@ -717,6 +736,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       { header: 'K Number', value: (row: LeadRow) => row.kNumber ?? '' },
       { header: 'Consumer Name', value: (row: LeadRow) => row.consumerName },
       { header: 'Mobile Number', value: (row: LeadRow) => row.mobile },
+      { header: 'Campaign', value: (row: LeadRow) => row.campaign ?? '' },
       { header: 'Created By', value: (row: LeadRow) => row.createdByName },
       { header: 'Assigned To', value: (row: LeadRow) => row.assignedToName },
       { header: 'Assigned Operator', value: (row: LeadRow) => row.operatorName },
@@ -832,6 +852,19 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           )}
         </div>
       ),
+    },
+    {
+      id: 'campaign',
+      header: 'Campaign',
+      sortKey: 'campaign',
+      mobile: 'meta',
+      hideBelow: 'lg',
+      cell: (lead) =>
+        lead.campaign ? (
+          <span className="block max-w-[180px] truncate" title={lead.campaign}>{lead.campaign}</span>
+        ) : (
+          <span className="text-muted-foreground/60">—</span>
+        ),
     },
     {
       id: 'assigned',
@@ -961,6 +994,20 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                           {member.full_name}{member.role === 'telecaller' ? ' (Telecaller)' : ''}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Campaign</Label>
+                  <Select value={filterCampaign} onValueChange={setFilterCampaign}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Campaigns</SelectItem>
+                      {/* A stale sticky value keeps its option, or the trigger would render blank. */}
+                      {filterCampaign !== 'all' && !campaignOptions.includes(filterCampaign) && (
+                        <SelectItem value={filterCampaign}>{filterCampaign}</SelectItem>
+                      )}
+                      {campaignOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1116,7 +1163,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       <LeadImportWizard
         open={isImportOpen}
         onOpenChange={setIsImportOpen}
-        onImportComplete={() => void fetchData(true)}
+        onImportComplete={() => { void fetchData(true); void loadCampaigns(); }}
       />
 
       <AlertDialog open={knoTarget !== null} onOpenChange={(open) => !open && setKnoTarget(null)}>

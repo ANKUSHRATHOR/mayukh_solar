@@ -96,6 +96,18 @@ const CreateLead = () => {
   const [referenceName, setReferenceName] = useStickyState(`cl:ref:${user?.id}`, '');
   const [kwInterest, setKwInterest] = useStickyState(`cl:kw:${user?.id}`, '');
   const [notes, setNotes] = useStickyState(`cl:notes:${user?.id}`, '');
+  const [campaign, setCampaign] = useStickyState(`cl:campaign:${user?.id}`, '');
+  const [campaignOptions, setCampaignOptions] = useState<string[]>([]);
+
+  // Existing campaign names as suggestions, so one campaign keeps one spelling.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase.rpc('lead_campaigns' as any);
+      if (!cancelled && !error) setCampaignOptions(((data as string[] | null) || []).filter(Boolean));
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ------------- Sales Assignment -------------
   const [assignedToUserId, setAssignedToUserId] = useStickyState(`cl:assignee:${user?.id ?? 'anon'}`, '');
@@ -260,6 +272,7 @@ const CreateLead = () => {
       };
       // Conditionally add new columns only if they have a value
       if (email.trim()) insertPayload['email'] = email.trim();
+      if (campaign.trim()) insertPayload['campaign'] = campaign.trim();
       if (kNumber) insertPayload['k_number'] = kNumber;
       if (knoData) insertPayload['kno_details'] = knoData;
       if (knoData?.latitude) insertPayload['latitude'] = parseNum(knoData.latitude);
@@ -286,6 +299,7 @@ const CreateLead = () => {
       setReferenceName('');
       setKwInterest('');
       setNotes('');
+      setCampaign('');
       setAssignedToUserId('');
       setDuplicate(null);
       setDuplicateChecked(false);
@@ -749,6 +763,22 @@ const CreateLead = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {/* Campaign */}
+              <div className="space-y-1.5">
+                <Label htmlFor="create-lead-campaign" className="text-xs font-semibold">Campaign <span className="font-normal text-muted-foreground">(Optional)</span></Label>
+                <Input
+                  id="create-lead-campaign"
+                  list="create-lead-campaign-options"
+                  value={campaign}
+                  onChange={e => setCampaign(e.target.value)}
+                  placeholder="e.g. Facebook Sept 2026"
+                  className="h-10"
+                />
+                <datalist id="create-lead-campaign-options">
+                  {campaignOptions.map(c => <option key={c} value={c} />)}
+                </datalist>
               </div>
 
               {source === 'reference' && (

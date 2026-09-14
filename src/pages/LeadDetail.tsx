@@ -1049,6 +1049,7 @@ const LeadDetail = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <InfoRow label="Interested Capacity" value={lead.kw_interest ? `${lead.kw_interest} kW` : null} />
                   <InfoRow label="Lead Source" value={statusLabel(lead.source)} />
+                  <InfoRow label="Campaign" value={lead.campaign} />
                   <InfoRow label="Created" value={new Date(lead.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} />
                   <InfoRow label="Created By" value={staffName(lead.created_by_user_id)} />
                 </div>

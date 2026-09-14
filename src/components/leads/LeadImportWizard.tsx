@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -48,6 +48,7 @@ const DB_LEAD_FIELDS = [
   { key: 'district', label: 'District', required: false },
   { key: 'state', label: 'State', required: false },
   { key: 'kw_interest', label: 'kW Interest', required: false },
+  { key: 'campaign', label: 'Campaign', required: false },
   { key: 'notes', label: 'Notes', required: false },
 ];
 
@@ -75,6 +76,23 @@ export default function LeadImportWizard({
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
+  // Applied to every row whose campaign cell is empty — or to all rows when the
+  // file has no campaign column at all, which is the usual case for a list
+  // bought or exported for one campaign.
+  const [defaultCampaign, setDefaultCampaign] = useState('');
+  const [campaignOptions, setCampaignOptions] = useState<string[]>([]);
+
+  // Existing campaign names, offered as suggestions so the same campaign is not
+  // imported under three spellings. Failure only loses the suggestions.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase.rpc('lead_campaigns' as any);
+      if (!cancelled && !error) setCampaignOptions(((data as string[] | null) || []).filter(Boolean));
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
 
   // Results
   const [successCount, setSuccessCount] = useState(0);
@@ -89,6 +107,7 @@ export default function LeadImportWizard({
     setMappings({});
     setImporting(false);
     setProgress(0);
+    setDefaultCampaign('');
     setSuccessCount(0);
     setFailedRows([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -98,8 +117,8 @@ export default function LeadImportWizard({
   const handleDownloadSample = () => {
     const csvHeaders = DB_LEAD_FIELDS.map((f) => f.label.replace(' *', ''));
     const sampleRows = [
-      ['LAL CHAND RATHORE', '9876543210', '9876543211', 'lalchand@example.com', '210721033383', 'H.NO-457 VINOBA BHAWEY NAGAR', 'Kota', 'Kota', 'Rajasthan', '3', 'Domestic load connection details.'],
-      ['RAMESH KUMAR', '8765432109', '', 'ramesh@example.com', '', '12-B NEW COLONY', 'Jaipur', 'Jaipur', 'Rajasthan', '5', 'Interested in cash option.'],
+      ['LAL CHAND RATHORE', '9876543210', '9876543211', 'lalchand@example.com', '210721033383', 'H.NO-457 VINOBA BHAWEY NAGAR', 'Kota', 'Kota', 'Rajasthan', '3', 'Facebook Sept 2026', 'Domestic load connection details.'],
+      ['RAMESH KUMAR', '8765432109', '', 'ramesh@example.com', '', '12-B NEW COLONY', 'Jaipur', 'Jaipur', 'Rajasthan', '5', '', 'Interested in cash option.'],
     ];
 
     const csvContent = [
@@ -256,6 +275,7 @@ export default function LeadImportWizard({
       const kwInterestRaw = row[mappings['kw_interest']];
       const kwInterest = kwInterestRaw ? parseFloat(kwInterestRaw) : null;
       const notes = row[mappings['notes']] || null;
+      const campaign = (mappings['campaign'] ? row[mappings['campaign']]?.trim() : '') || defaultCampaign.trim();
 
       // Validation check
       if (!customerName) {
@@ -287,6 +307,7 @@ export default function LeadImportWizard({
         };
         if (email) rowPayload['email'] = email;
         if (kNumber) rowPayload['k_number'] = kNumber;
+        if (campaign) rowPayload['campaign'] = campaign;
 
         const { error } = await supabase.from('leads').insert(rowPayload);
 
@@ -377,7 +398,8 @@ export default function LeadImportWizard({
                 <ScrollArea className="flex-1 pr-2">
                   <div className="space-y-3">
                     {DB_LEAD_FIELDS.map((field) => (
-                      <div key={field.key} className="grid grid-cols-[130px_1fr] items-center gap-2">
+                      <React.Fragment key={field.key}>
+                      <div className="grid grid-cols-[130px_1fr] items-center gap-2">
                         <Label className="text-xs font-medium text-foreground">{field.label}</Label>
                         <Select
                           value={mappings[field.key] || 'skip'}
@@ -401,6 +423,32 @@ export default function LeadImportWizard({
                           </SelectContent>
                         </Select>
                       </div>
+                      {field.key === 'campaign' && (
+                        <div className="grid grid-cols-[130px_1fr] items-start gap-2">
+                          <Label htmlFor="import-default-campaign" className="pt-2.5 text-xs font-medium text-muted-foreground">
+                            Custom Campaign
+                          </Label>
+                          <div className="space-y-1">
+                            <Input
+                              id="import-default-campaign"
+                              list="import-campaign-options"
+                              value={defaultCampaign}
+                              onChange={(e) => setDefaultCampaign(e.target.value)}
+                              placeholder="e.g. Facebook Sept 2026"
+                              className="h-9 text-xs"
+                            />
+                            <datalist id="import-campaign-options">
+                              {campaignOptions.map((c) => <option key={c} value={c} />)}
+                            </datalist>
+                            <p className="text-[11px] leading-snug text-muted-foreground">
+                              {mappings['campaign']
+                                ? 'Used for rows where the campaign column is empty.'
+                                : 'Applied to every imported lead.'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      </React.Fragment>
                     ))}
                   </div>
                 </ScrollArea>
