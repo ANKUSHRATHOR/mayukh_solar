@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
@@ -382,8 +381,8 @@ export default function LeadImportWizard({
 
         {/* Step 2: Mapping & Preview */}
         {step === 2 && (
-          <div className="space-y-4 py-2 flex-1 overflow-hidden flex flex-col">
-            <Alert className="bg-primary/5 border-primary/20">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 py-2">
+            <Alert className="shrink-0 bg-primary/5 border-primary/20">
               <Database className="h-4 w-4 text-primary" />
               <AlertTitle className="text-sm font-semibold">Map File Headers to Lead Fields</AlertTitle>
               <AlertDescription className="text-xs">
@@ -391,15 +390,65 @@ export default function LeadImportWizard({
               </AlertDescription>
             </Alert>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden">
+            {/* Campaign sits above the mapping list rather than inside it: it is the
+                one field usually absent from the file, and at the bottom of a long
+                list its custom value was pushed out of the dialog entirely. */}
+            <div className="shrink-0 rounded-xl border border-primary/20 bg-card p-4">
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Campaign</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-foreground">Campaign column in file</Label>
+                  <Select
+                    value={mappings['campaign'] || 'skip'}
+                    onValueChange={(val) =>
+                      setMappings((prev) => ({ ...prev, campaign: val === 'skip' ? '' : val }))
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="-- No campaign column --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="skip">-- No campaign column --</SelectItem>
+                      {headers.map((h) => (
+                        <SelectItem key={h} value={h}>{h}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="import-default-campaign" className="text-xs font-medium text-foreground">
+                    Custom campaign value
+                  </Label>
+                  <Input
+                    id="import-default-campaign"
+                    list="import-campaign-options"
+                    value={defaultCampaign}
+                    onChange={(e) => setDefaultCampaign(e.target.value)}
+                    placeholder="e.g. Facebook Sept 2026"
+                    className="h-9 text-xs"
+                  />
+                  <datalist id="import-campaign-options">
+                    {campaignOptions.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                {mappings['campaign']
+                  ? `Rows with an empty "${mappings['campaign']}" cell get the custom value.`
+                  : 'The custom value is applied to every imported lead.'}
+              </p>
+            </div>
+
+            {/* One scroll region for both panels. The ScrollAreas this replaces had
+                no bounded height, so they grew to their content and the dialog's
+                overflow clipped the rest with no way to reach it. */}
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto md:grid-cols-2">
               {/* Mapping fields form */}
-              <div className="border rounded-xl p-4 bg-muted/20 flex flex-col">
+              <div className="border rounded-xl p-4 bg-muted/20">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Field Mapping</p>
-                <ScrollArea className="flex-1 pr-2">
                   <div className="space-y-3">
-                    {DB_LEAD_FIELDS.map((field) => (
-                      <React.Fragment key={field.key}>
-                      <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+                    {DB_LEAD_FIELDS.filter((field) => field.key !== 'campaign').map((field) => (
+                      <div key={field.key} className="grid grid-cols-[130px_1fr] items-center gap-2">
                         <Label className="text-xs font-medium text-foreground">{field.label}</Label>
                         <Select
                           value={mappings[field.key] || 'skip'}
@@ -423,41 +472,14 @@ export default function LeadImportWizard({
                           </SelectContent>
                         </Select>
                       </div>
-                      {field.key === 'campaign' && (
-                        <div className="grid grid-cols-[130px_1fr] items-start gap-2">
-                          <Label htmlFor="import-default-campaign" className="pt-2.5 text-xs font-medium text-muted-foreground">
-                            Custom Campaign
-                          </Label>
-                          <div className="space-y-1">
-                            <Input
-                              id="import-default-campaign"
-                              list="import-campaign-options"
-                              value={defaultCampaign}
-                              onChange={(e) => setDefaultCampaign(e.target.value)}
-                              placeholder="e.g. Facebook Sept 2026"
-                              className="h-9 text-xs"
-                            />
-                            <datalist id="import-campaign-options">
-                              {campaignOptions.map((c) => <option key={c} value={c} />)}
-                            </datalist>
-                            <p className="text-[11px] leading-snug text-muted-foreground">
-                              {mappings['campaign']
-                                ? 'Used for rows where the campaign column is empty.'
-                                : 'Applied to every imported lead.'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      </React.Fragment>
                     ))}
                   </div>
-                </ScrollArea>
               </div>
 
               {/* Data Preview */}
-              <div className="border rounded-xl p-4 flex flex-col">
+              <div className="border rounded-xl p-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">File Data Preview (First 4 rows)</p>
-                <ScrollArea className="flex-1">
+                <div>
                   <div className="space-y-2.5">
                     {parsedRows.slice(0, 4).map((row, i) => (
                       <div key={i} className="text-xs border rounded p-2.5 bg-card space-y-1">
@@ -477,7 +499,7 @@ export default function LeadImportWizard({
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
+                </div>
               </div>
             </div>
 
@@ -507,8 +529,8 @@ export default function LeadImportWizard({
 
         {/* Step 4: Summary Report */}
         {step === 4 && (
-          <div className="space-y-4 py-2 flex-1 overflow-hidden flex flex-col">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 py-2">
+            <div className="grid shrink-0 grid-cols-2 gap-4">
               <div className="border rounded-xl p-4 bg-emerald-500/5 border-emerald-500/20 text-center space-y-1">
                 <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
                 <p className="text-2xl font-bold text-emerald-600">{successCount}</p>
@@ -526,11 +548,11 @@ export default function LeadImportWizard({
             </div>
 
             {failedRows.length > 0 && (
-              <div className="border rounded-xl p-4 flex-1 overflow-hidden flex flex-col">
+              <div className="border rounded-xl p-4 min-h-0 flex-1 flex flex-col">
                 <p className="text-xs font-bold uppercase tracking-wider text-destructive flex items-center gap-1 mb-2">
                   <AlertTriangle className="h-4 w-4" /> Errors Report
                 </p>
-                <ScrollArea className="flex-1 bg-muted/40 rounded p-2">
+                <div className="min-h-0 flex-1 overflow-y-auto bg-muted/40 rounded p-2">
                   <div className="space-y-1.5 font-mono text-[10px]">
                     {failedRows.map((fail, i) => (
                       <div key={i} className="p-2 border-b last:border-0 border-border flex flex-col gap-0.5">
@@ -546,7 +568,7 @@ export default function LeadImportWizard({
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
+                </div>
               </div>
             )}
 
