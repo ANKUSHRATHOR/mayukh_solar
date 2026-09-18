@@ -179,6 +179,57 @@ export type Database = {
         }
         Relationships: []
       }
+      call_logs: {
+        Row: {
+          created_at: string
+          follow_up_date: string | null
+          id: string
+          lead_id: string
+          logged_at: string | null
+          notes: string | null
+          outcome: string
+          staff_id: string
+          status_updated_to: Database["public"]["Enums"]["lead_status"] | null
+        }
+        Insert: {
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          lead_id: string
+          logged_at?: string | null
+          notes?: string | null
+          outcome?: string
+          staff_id?: string
+          status_updated_to?: Database["public"]["Enums"]["lead_status"] | null
+        }
+        Update: {
+          created_at?: string
+          follow_up_date?: string | null
+          id?: string
+          lead_id?: string
+          logged_at?: string | null
+          notes?: string | null
+          outcome?: string
+          staff_id?: string
+          status_updated_to?: Database["public"]["Enums"]["lead_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_list"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           custom_name: string | null
@@ -259,6 +310,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      drive_folders: {
+        Row: {
+          created_at: string
+          folder_id: string
+          id: string
+          owner_key: string
+          scope: string
+        }
+        Insert: {
+          created_at?: string
+          folder_id: string
+          id?: string
+          owner_key: string
+          scope: string
+        }
+        Update: {
+          created_at?: string
+          folder_id?: string
+          id?: string
+          owner_key?: string
+          scope?: string
+        }
+        Relationships: []
       }
       field_visits: {
         Row: {
@@ -373,6 +448,7 @@ export type Database = {
           address: string
           alt_mobile: string | null
           assigned_to_user_id: string | null
+          campaign: string | null
           cancelled_reason:
             | Database["public"]["Enums"]["cancellation_reason"]
             | null
@@ -407,6 +483,7 @@ export type Database = {
           address: string
           alt_mobile?: string | null
           assigned_to_user_id?: string | null
+          campaign?: string | null
           cancelled_reason?:
             | Database["public"]["Enums"]["cancellation_reason"]
             | null
@@ -441,6 +518,7 @@ export type Database = {
           address?: string
           alt_mobile?: string | null
           assigned_to_user_id?: string | null
+          campaign?: string | null
           cancelled_reason?:
             | Database["public"]["Enums"]["cancellation_reason"]
             | null
@@ -1692,6 +1770,7 @@ export type Database = {
           alt_mobile: string | null
           assigned_operator_id: string | null
           assigned_to_user_id: string | null
+          campaign: string | null
           cancelled_reason:
             | Database["public"]["Enums"]["cancellation_reason"]
             | null
@@ -1847,17 +1926,78 @@ export type Database = {
           total_km: number
         }[]
       }
+      book_site_visit: {
+        Args: {
+          _assigned_to?: string
+          _lead_id: string
+          _notes?: string
+          _scheduled_for: string
+        }
+        Returns: {
+          assigned_to_user_id: string | null
+          cancelled_reason: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          latitude: number | null
+          lead_id: string
+          location_accuracy_m: number | null
+          longitude: number | null
+          outcome: string | null
+          scheduled_for: string | null
+          staff_id: string
+          status_updated_to: Database["public"]["Enums"]["lead_status"] | null
+          visit_date: string
+          visit_notes: string | null
+          visit_status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "site_visits"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       bulk_assign_leads: {
         Args: { _assignee: string; _lead_ids: string[] }
         Returns: Json
       }
       bulk_bin_leads: { Args: { _lead_ids: string[] }; Returns: Json }
+      can_act_on_lead: { Args: { _lead_id: string }; Returns: boolean }
       can_advance_project: {
         Args: {
           _project_id: string
           _target: Database["public"]["Enums"]["project_status"]
         }
         Returns: boolean
+      }
+      can_manage_site_visit: { Args: { _visit_id: string }; Returns: boolean }
+      cancel_site_visit: {
+        Args: { _reason: string; _visit_id: string }
+        Returns: {
+          assigned_to_user_id: string | null
+          cancelled_reason: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          latitude: number | null
+          lead_id: string
+          location_accuracy_m: number | null
+          longitude: number | null
+          outcome: string | null
+          scheduled_for: string | null
+          staff_id: string
+          status_updated_to: Database["public"]["Enums"]["lead_status"] | null
+          visit_date: string
+          visit_notes: string | null
+          visit_status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "site_visits"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       check_duplicate_lead: {
         Args: { _mobile: string }
@@ -1912,6 +2052,7 @@ export type Database = {
         }
       }
       count_admins: { Args: never; Returns: number }
+      delete_site_visit: { Args: { _visit_id: string }; Returns: Json }
       generate_project_code: { Args: never; Returns: string }
       generate_quotation_number: { Args: never; Returns: string }
       get_assignable_sales_persons: {
@@ -1983,9 +2124,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      lead_campaigns: { Args: never; Returns: string[] }
       leads_stage_counts: {
         Args: {
           _assigned?: string
+          _campaign?: string
           _creator?: string
           _from?: string
           _operator?: string
@@ -1997,6 +2140,32 @@ export type Database = {
           _unassigned?: boolean
         }
         Returns: Json
+      }
+      log_call: {
+        Args: {
+          _follow_up_date?: string
+          _lead_id: string
+          _notes?: string
+          _outcome: string
+          _status?: string
+        }
+        Returns: {
+          created_at: string
+          follow_up_date: string | null
+          id: string
+          lead_id: string
+          logged_at: string | null
+          notes: string | null
+          outcome: string
+          staff_id: string
+          status_updated_to: Database["public"]["Enums"]["lead_status"] | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "call_logs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       log_user_event: {
         Args: { _action: string; _meta?: Json }
@@ -2038,6 +2207,7 @@ export type Database = {
       }
       payment_due_days: { Args: never; Returns: number }
       payments_kpis: { Args: never; Returns: Json }
+      project_for_lead: { Args: { _lead_id: string }; Returns: string }
       project_payment_summary: { Args: { _project_id: string }; Returns: Json }
       project_stage_requirements: {
         Args: { _project_id: string }
@@ -2066,6 +2236,7 @@ export type Database = {
           total_value: number
         }[]
       }
+      record_dial_attempt: { Args: { _lead_id: string }; Returns: string }
       request_special_punch_out: {
         Args: { _lat: number; _lng: number; _reason: string }
         Returns: string
@@ -2120,11 +2291,45 @@ export type Database = {
           user_id: string
         }[]
       }
+      sync_lead_visit_state: { Args: { _lead_id: string }; Returns: undefined }
       tables_without_rls: {
         Args: never
         Returns: {
           table_name: string
         }[]
+      }
+      telecaller_day_stats: { Args: { _staff?: string }; Returns: Json }
+      update_site_visit: {
+        Args: {
+          _assigned_to?: string
+          _notes?: string
+          _scheduled_for: string
+          _visit_id: string
+        }
+        Returns: {
+          assigned_to_user_id: string | null
+          cancelled_reason: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          latitude: number | null
+          lead_id: string
+          location_accuracy_m: number | null
+          longitude: number | null
+          outcome: string | null
+          scheduled_for: string | null
+          staff_id: string
+          status_updated_to: Database["public"]["Enums"]["lead_status"] | null
+          visit_date: string
+          visit_notes: string | null
+          visit_status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "site_visits"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
@@ -2176,6 +2381,7 @@ export type Database = {
         | "quotation_sent"
         | "quotation_accepted"
         | "quotation_rejected"
+        | "not_connected"
       payment_type: "cash" | "loan" | "loan_cash"
       project_status:
         | "pending_documents"
@@ -2398,6 +2604,7 @@ export const Constants = {
         "quotation_sent",
         "quotation_accepted",
         "quotation_rejected",
+        "not_connected",
       ],
       payment_type: ["cash", "loan", "loan_cash"],
       project_status: [

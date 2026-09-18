@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import CompleteVisitDialog from '@/components/leads/CompleteVisitDialog';
+import LeadCallLink from '@/components/leads/LeadCallLink';
 import VisitFormDialog from '@/components/leads/VisitFormDialog';
 import CancelVisitDialog from '@/components/leads/CancelVisitDialog';
 import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
@@ -186,9 +187,9 @@ const VisitDetailPage = () => {
               <div className="mt-4 grid grid-cols-1 gap-2 border-t border-border/50 pt-4 sm:grid-cols-2">
                 {lead?.mobile && (
                   <Button variant="outline" className="h-11 gap-2" asChild>
-                    <a href={`tel:${lead.mobile}`}>
+                    <LeadCallLink leadId={lead.id} mobile={lead.mobile}>
                       <Phone className="h-4 w-4" /> Call {lead.mobile}
-                    </a>
+                    </LeadCallLink>
                   </Button>
                 )}
                 {mapsHref && (

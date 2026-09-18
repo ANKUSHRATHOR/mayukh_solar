@@ -28,6 +28,7 @@ import { useStickyState } from '@/hooks/useStickyState';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { Database } from '@/integrations/supabase/types';
 import LeadImportWizard from '@/components/leads/LeadImportWizard';
+import LeadCallLink from '@/components/leads/LeadCallLink';
 import { fetchConsumerDetails } from '@/lib/discom';
 import TablePagination from '@/components/common/TablePagination';
 import PageContainer from '@/components/common/PageContainer';
@@ -134,6 +135,7 @@ const STAGE_BAR_STAGES: { value: StatusFilter; label: string; tone: StatusTone }
   { value: 'new', label: 'New', tone: 'info' },
   { value: 'site_visit', label: 'Contacted', tone: 'progress' },
   { value: 'follow_up', label: 'Follow Up', tone: 'warning' },
+  { value: 'not_connected', label: 'Not Connected', tone: 'neutral' },
   { value: 'interested', label: 'Interested', tone: 'success' },
   { value: 'quotation_sent', label: 'Quoted', tone: 'info' },
   { value: 'final', label: 'Finalized', tone: 'success' },
@@ -842,13 +844,13 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
             {lead.consumerName}
           </div>
           {lead.mobile && (
-            <a
-              href={`tel:${lead.mobile}`}
-              onClick={(e) => e.stopPropagation()}
+            <LeadCallLink
+              leadId={lead.id}
+              mobile={lead.mobile}
               className="text-xs font-medium text-primary hover:underline"
             >
               {lead.mobile}
-            </a>
+            </LeadCallLink>
           )}
         </div>
       ),
@@ -1110,9 +1112,9 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           <>
             {lead.mobile && (
               <Button asChild variant="ghost" size="icon" className="h-9 w-9 text-primary">
-                <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.consumerName}`}>
+                <LeadCallLink leadId={lead.id} mobile={lead.mobile} aria-label={`Call ${lead.consumerName}`}>
                   <Phone className="h-4 w-4" />
-                </a>
+                </LeadCallLink>
               </Button>
             )}
             {lead.kNumber && (

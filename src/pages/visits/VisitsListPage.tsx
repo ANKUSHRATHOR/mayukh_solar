@@ -12,6 +12,7 @@ import { defaultTableView, type TableView } from '@/components/common/ViewToggle
 import { useStickyState } from '@/hooks/useStickyState';
 import TablePagination from '@/components/common/TablePagination';
 import StatusBadge from '@/components/common/StatusBadge';
+import LeadCallLink from '@/components/leads/LeadCallLink';
 import { useServerTable } from '@/hooks/useServerTable';
 import { defaultSort } from '@/lib/tableQuery';
 import {
@@ -73,14 +74,14 @@ const VisitsListPage = () => {
           <div className="truncate font-semibold text-foreground">
             {v.leads?.customer_name ?? 'Unknown'}
           </div>
-          {v.leads?.mobile && (
-            <a
-              href={`tel:${v.leads.mobile}`}
-              onClick={(e) => e.stopPropagation()}
+          {v.leads?.mobile && v.leads.id && (
+            <LeadCallLink
+              leadId={v.leads.id}
+              mobile={v.leads.mobile}
               className="text-xs font-medium text-primary hover:underline"
             >
               {v.leads.mobile}
-            </a>
+            </LeadCallLink>
           )}
         </div>
       ),

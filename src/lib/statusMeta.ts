@@ -29,12 +29,15 @@ export const toneClasses: Record<StatusTone, string> = {
   danger: 'bg-red-100 text-red-800 border-transparent dark:bg-red-500/15 dark:text-red-300',
 };
 
-/** All 11 values of the `lead_status` enum. */
+/** All 12 values of the `lead_status` enum. */
 export const leadStatusMeta: Record<string, StatusMeta> = {
   new: { label: 'New', tone: 'info' },
   visit_created: { label: 'Visit Booked', tone: 'progress' },
   visited: { label: 'Visited', tone: 'progress' },
   follow_up: { label: 'Follow Up', tone: 'warning' },
+  // Rang, nobody answered. A call outcome that the lead sits at until someone
+  // reaches them, so it reads as unfinished work rather than a dead end.
+  not_connected: { label: 'Not Connected', tone: 'neutral' },
   interested: { label: 'Interested', tone: 'success' },
   quotation_sent: { label: 'Quotation Sent', tone: 'info' },
   quotation_accepted: { label: 'Quotation Accepted', tone: 'success' },

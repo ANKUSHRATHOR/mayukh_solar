@@ -1,59 +1,40 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import StatCard from '@/components/dashboard/StatCard';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { PhoneCall, Users, TrendingUp, Calendar } from 'lucide-react';
+import {
+  PhoneCall,
+  Users,
+  TrendingUp,
+  Calendar,
+  PhoneOff,
+  PhoneForwarded,
+  MapPin,
+  AlertTriangle,
+  ArrowRight,
+} from 'lucide-react';
+import { fetchTelecallerDayStats, type TelecallerDayStats } from '@/lib/calls';
 
-const statusColor: Record<string, string> = {
-  new: 'bg-info text-info-foreground',
-  visited: 'bg-accent text-accent-foreground',
-  follow_up: 'bg-warning text-warning-foreground',
-  interested: 'bg-success text-success-foreground',
-  not_interested: 'bg-destructive text-destructive-foreground',
-  cancelled: 'bg-muted text-muted-foreground',
-  final: 'bg-primary text-primary-foreground',
-};
-
-const statusLabel = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
-type DateRange = 'all' | 'today' | 'this_month' | 'last_month';
-
-const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-      active
-        ? 'bg-primary text-primary-foreground border-primary'
-        : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
-    }`}
-  >
-    {children}
-  </button>
-);
-
+/**
+ * A telecaller's own day.
+ *
+ * The lead list that used to sit here was a second, weaker copy of /leads: its
+ * own filter chips, its own row layout, capped at 500 rows and filtered in the
+ * browser. The dashboard now answers "how is today going, and what do I owe?"
+ * and hands off to the Leads page for the working list.
+ */
 const TelecallerDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [leads, setLeads] = useState<any[]>([]);
-  const [salesStaff, setSalesStaff] = useState<{ user_id: string; full_name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, thisMonth: 0, today: 0 });
+  // Today's calling figures, from one RPC. Null until it answers — and it stays
+  // null if it fails, so the tiles are absent rather than showing a false zero.
+  const [day, setDay] = useState<TelecallerDayStats | null>(null);
 
-  // Filters
-  const [dateRange, setDateRange] = useState<DateRange>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [assignedFilter, setAssignedFilter] = useState<string>('all');
-
-  const fetchLeads = async () => {
+  const fetchStats = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -64,80 +45,47 @@ const TelecallerDashboard = () => {
     // though RLS grants access to both.
     const ownScope = `created_by_user_id.eq.${user.id},assigned_to_user_id.eq.${user.id}`;
 
-    const [allRes, totalRes, monthRes, todayRes, salesRes] = await Promise.all([
-      supabase.from('leads').select('*').or(ownScope).order('created_at', { ascending: false }).limit(500),
+    const [totalRes, monthRes, todayRes] = await Promise.all([
       supabase.from('leads').select('id', { count: 'exact', head: true }).or(ownScope),
       supabase.from('leads').select('id', { count: 'exact', head: true }).or(ownScope).gte('created_at', startOfMonth),
       supabase.from('leads').select('id', { count: 'exact', head: true }).or(ownScope).gte('created_at', startOfDay),
-      supabase.rpc('get_assignable_sales_persons'),
     ]);
 
-    setLeads(allRes.data || []);
-    setSalesStaff(((salesRes.data as any[]) || []).map(s => ({ user_id: s.user_id, full_name: s.full_name })));
     setStats({
       total: totalRes.count || 0,
       thisMonth: monthRes.count || 0,
       today: todayRes.count || 0,
     });
-    setLoading(false);
-  };
+  }, [user]);
 
-  useEffect(() => { fetchLeads(); }, [user]);
+  const loadDayStats = useCallback(() => {
+    if (!user) return;
+    fetchTelecallerDayStats().then(setDay).catch(() => setDay(null));
+  }, [user]);
+
+  useEffect(() => { void fetchStats(); loadDayStats(); }, [fetchStats, loadDayStats]);
 
   useEffect(() => {
     if (!user) return;
     // postgres_changes takes a single equality filter, so assigned and created
     // leads need one subscription each — without the second, a lead assigned to
-    // this telecaller would not appear until a manual reload.
+    // this telecaller would not move the counts until a manual reload.
     const channel = supabase
       .channel(`telecaller-leads-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `created_by_user_id=eq.${user.id}` }, () => fetchLeads())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `assigned_to_user_id=eq.${user.id}` }, () => fetchLeads())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `created_by_user_id=eq.${user.id}` }, () => void fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `assigned_to_user_id=eq.${user.id}` }, () => void fetchStats())
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, fetchStats]);
 
-  // Restrict the "Sales Person Assigned" chips to staff actually assigned in this list
-  const assignedSalesInData = useMemo(() => {
-    const ids = new Set<string>();
-    leads.forEach(l => { if (l.assigned_to_user_id) ids.add(l.assigned_to_user_id); });
-    return salesStaff.filter(s => ids.has(s.user_id));
-  }, [leads, salesStaff]);
-
-  const filteredLeads = useMemo(() => {
-    const now = new Date();
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-    const endLastMonth = startThisMonth;
-
-    return leads.filter(l => {
-      const ts = new Date(l.created_at).getTime();
-      if (dateRange === 'today' && ts < startToday) return false;
-      if (dateRange === 'this_month' && ts < startThisMonth) return false;
-      if (dateRange === 'last_month' && (ts < startLastMonth || ts >= endLastMonth)) return false;
-      if (statusFilter !== 'all' && l.status !== statusFilter) return false;
-      if (sourceFilter !== 'all' && l.source !== sourceFilter) return false;
-      if (assignedFilter !== 'all') {
-        if (assignedFilter === 'unassigned' && l.assigned_to_user_id) return false;
-        if (assignedFilter !== 'unassigned' && l.assigned_to_user_id !== assignedFilter) return false;
-      }
-      return true;
-    });
-  }, [leads, dateRange, statusFilter, sourceFilter, assignedFilter]);
-
-  const activeFilterCount =
-    (dateRange !== 'all' ? 1 : 0) +
-    (statusFilter !== 'all' ? 1 : 0) +
-    (sourceFilter !== 'all' ? 1 : 0) +
-    (assignedFilter !== 'all' ? 1 : 0);
-
-  const clearFilters = () => {
-    setDateRange('all');
-    setStatusFilter('all');
-    setSourceFilter('all');
-    setAssignedFilter('all');
-  };
+  // A call logged on a lead page changes these numbers, and a telecaller moves
+  // between the two all day; refresh when the tab regains focus rather than
+  // leaving this morning's tally on screen.
+  useEffect(() => {
+    const onFocus = () => loadDayStats();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [loadDayStats]);
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
@@ -150,106 +98,79 @@ const TelecallerDashboard = () => {
         </Button>
       </div>
 
+      {/* Today first: a telecaller's day is judged on calls made, not on the
+          lifetime lead count that used to lead this page. */}
+      {day && (
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-bold text-foreground">Today</h2>
+            <p className="text-xs text-muted-foreground">
+              {day.month_calls} call{day.month_calls === 1 ? '' : 's'} this month
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard title="Dialled" value={day.dialed} icon={PhoneCall} accent="primary" />
+            <StatCard title="Connected" value={day.connected} icon={PhoneForwarded} accent="success" />
+            <StatCard title="Not Connected" value={day.not_connected} icon={PhoneOff} accent="warning" />
+            <StatCard title="Visits Created" value={day.visits_created} icon={MapPin} accent="info" />
+          </div>
+
+          {/* What the talking produced, and what is still owed. Read as a line
+              rather than more tiles — these qualify the figures above, they are
+              not four more headline numbers. */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-card px-4 py-3 text-xs">
+            <span className="text-muted-foreground">
+              Interested <span className="font-bold text-success">{day.interested}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Follow-up <span className="font-bold text-warning">{day.follow_up}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Not interested <span className="font-bold text-foreground">{day.not_interested}</span>
+            </span>
+            <span className="text-muted-foreground">
+              New leads <span className="font-bold text-foreground">{day.leads_created}</span>
+            </span>
+            {day.unlogged > 0 && (
+              <span className="text-muted-foreground">
+                Dialled, not logged <span className="font-bold text-foreground">{day.unlogged}</span>
+              </span>
+            )}
+          </div>
+
+          {(day.follow_ups_due_today > 0 || day.follow_ups_overdue > 0) && (
+            <button
+              type="button"
+              onClick={() => navigate('/leads')}
+              className="flex w-full items-center gap-2 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-left text-xs font-semibold text-foreground transition-colors hover:bg-warning/10"
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+              {day.follow_ups_due_today} follow-up{day.follow_ups_due_today === 1 ? '' : 's'} due today
+              {day.follow_ups_overdue > 0 && (
+                <span className="text-destructive">· {day.follow_ups_overdue} overdue</span>
+              )}
+            </button>
+          )}
+        </section>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard onClick={() => setDateRange('all')} title="Total Leads" value={stats.total} icon={Users} />
-        <StatCard onClick={() => setDateRange('this_month')} title="This Month" value={stats.thisMonth} icon={TrendingUp} />
-        <StatCard onClick={() => setDateRange('today')} title="Today" value={stats.today} icon={Calendar} />
+        <StatCard title="Total Leads" value={stats.total} icon={Users} />
+        <StatCard title="This Month" value={stats.thisMonth} icon={TrendingUp} />
+        <StatCard title="Today" value={stats.today} icon={Calendar} />
       </div>
 
-      <Card className="shadow-card border-border">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base font-semibold">Leads</CardTitle>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">{filteredLeads.length} shown</span>
-            <FiltersPopover activeCount={activeFilterCount} onClear={clearFilters}>
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Date Range</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {([
-                    { v: 'all', l: 'All Time' },
-                    { v: 'today', l: 'Today' },
-                    { v: 'this_month', l: 'This Month' },
-                    { v: 'last_month', l: 'Last Month' },
-                  ] as { v: DateRange; l: string }[]).map(c => (
-                    <Chip key={c.v} active={dateRange === c.v} onClick={() => setDateRange(c.v)}>{c.l}</Chip>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Status</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {['all', 'new', 'visited', 'follow_up', 'interested', 'not_interested', 'final', 'cancelled'].map(s => (
-                    <Chip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-                      {s === 'all' ? 'All' : statusLabel(s)}
-                    </Chip>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead Source</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
-                    <Chip key={s} active={sourceFilter === s} onClick={() => setSourceFilter(s)}>
-                      {s === 'all' ? 'All' : statusLabel(s)}
-                    </Chip>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Sales Person Assigned</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <Chip active={assignedFilter === 'all'} onClick={() => setAssignedFilter('all')}>All</Chip>
-                  <Chip active={assignedFilter === 'unassigned'} onClick={() => setAssignedFilter('unassigned')}>Unassigned</Chip>
-                  {assignedSalesInData.map(s => (
-                    <Chip key={s.user_id} active={assignedFilter === s.user_id} onClick={() => setAssignedFilter(s.user_id)}>
-                      {s.full_name}
-                    </Chip>
-                  ))}
-                </div>
-              </div>
-            </FiltersPopover>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-muted-foreground text-sm py-4 text-center">Loading...</p>
-          ) : filteredLeads.length === 0 ? (
-            <p className="text-muted-foreground text-sm py-8 text-center">
-              {leads.length === 0 ? 'No leads yet. Create your first lead!' : 'No leads match the current filters.'}
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {filteredLeads.map((lead) => (
-                <div key={lead.id} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors cursor-pointer" onClick={() => navigate(`/leads/${lead.id}`)}>
-                  <div className="h-9 w-9 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-xs shrink-0">
-                    {lead.customer_name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-foreground truncate">{lead.customer_name}</p>
-                    <p className="text-xs text-muted-foreground">{lead.mobile} • {lead.village_city}, {lead.district}</p>
-                  </div>
-                  {lead.mobile && (
-                    <a
-                      href={`tel:${lead.mobile}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-8 w-8 rounded-full bg-success/10 text-success flex items-center justify-center hover:bg-success/20 transition-colors shrink-0"
-                      aria-label={`Call ${lead.customer_name}`}
-                    >
-                      <PhoneCall className="h-4 w-4" />
-                    </a>
-                  )}
-                  <Badge className={`text-xs shrink-0 ${statusColor[lead.status] || ''}`}>
-                    {statusLabel(lead.status)}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* The working list lives on /leads, which searches, filters and pages in
+          the database rather than over the first 500 rows. */}
+      <Button
+        variant="outline"
+        className="h-11 w-full justify-between"
+        onClick={() => navigate('/leads')}
+      >
+        <span>Open my leads</span>
+        <ArrowRight className="h-4 w-4" />
+      </Button>
     </div>
   );
 };

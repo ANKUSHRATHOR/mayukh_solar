@@ -20,6 +20,8 @@ const LEAD_STATUSES = [
   'quotation_sent',
   'quotation_accepted',
   'quotation_rejected',
+  // Added 2026-09-18 with the call log's "not connected" outcome.
+  'not_connected',
 ];
 
 const PROJECT_STATUSES = [

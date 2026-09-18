@@ -42,6 +42,15 @@ import { leadStatusMeta, resolveStatus, toneClasses } from '@/lib/statusMeta';
 import LeadVisitsPanel from '@/components/leads/LeadVisitsPanel';
 import VisitFormDialog from '@/components/leads/VisitFormDialog';
 import { canManageVisits } from '@/lib/visits';
+import LeadCallLink from '@/components/leads/LeadCallLink';
+import {
+  CALL_OUTCOMES,
+  callOutcomeLabel,
+  fetchLeadCalls,
+  logCall,
+  type CallLog,
+  type CallOutcome,
+} from '@/lib/calls';
 import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
 import { fromLeadQuotation } from '@/lib/quotationDocument';
 import { buildQuotationBody } from '@/lib/quotationTemplate';
@@ -58,6 +67,7 @@ const EVENT_ICON: Record<string, React.ReactNode> = {
   created:            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />,
   assigned:           <User className="h-3.5 w-3.5 text-violet-500" />,
   visit_or_note:      <MessageSquare className="h-3.5 w-3.5 text-sky-500" />,
+  call:               <Phone className="h-3.5 w-3.5 text-primary" />,
   quotation_sent:     <MessageCircle className="h-3.5 w-3.5 text-yellow-500" />,
   quotation_accepted: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />,
   quotation_rejected: <AlertTriangle className="h-3.5 w-3.5 text-red-500" />,
@@ -172,6 +182,8 @@ const LeadDetail = () => {
 
   // Call log state
   const [callNotes, setCallNotes] = useState('');
+  const [callOutcome, setCallOutcome] = useState<Exclude<CallOutcome, 'dialed'>>('connected');
+  const [calls, setCalls] = useState<CallLog[]>([]);
   const [callStatus, setCallStatus] = useState<LeadStatus | ''>('');
   const [callFollowUpDate, setCallFollowUpDate] = useState('');
   const [loggingCall, setLoggingCall] = useState(false);
@@ -230,6 +242,9 @@ const LeadDetail = () => {
       supabase.from('vendor_profiles' as any).select('*').eq('is_default', true).maybeSingle(),
     ]);
     setVisits(visitRes.data || []);
+    // Calls live in their own table now; failing to load them must not take the
+    // lead page down with them.
+    fetchLeadCalls(id).then(setCalls).catch(() => setCalls([]));
     setProject(projectRes.data);
     setAllStaff(allStaffRes.data || []);
 
@@ -355,30 +370,28 @@ const LeadDetail = () => {
   };
 
   const handleLogCall = async () => {
-    if (!callNotes.trim() || !lead || !user) {
+    if (!lead || !user) return;
+    // A connected call is a conversation, so it needs writing up. An unanswered
+    // one has nothing to say, and demanding notes for it is what drove people to
+    // type "no answer" into the notes of a status they did not mean.
+    if (callOutcome === 'connected' && !callNotes.trim()) {
       toast({ title: 'Comment required', description: 'Please enter call comments.', variant: 'destructive' });
       return;
     }
-    // A follow-up must have a date — it becomes the task's due date.
     if (callStatus === 'follow_up' && !callFollowUpDate) {
       toast({ title: 'Follow-up date required', description: 'Pick the date to follow up on.', variant: 'destructive' });
       return;
     }
     setLoggingCall(true);
     try {
-      const { error: visitErr } = await supabase.from('site_visits').insert({
-        lead_id: lead.id,
-        staff_id: user.id,
-        visit_notes: `[Call Log] ${callNotes.trim()}`,
-        status_updated_to: callStatus || null,
+      await logCall({
+        leadId: lead.id,
+        outcome: callOutcome,
+        notes: callNotes.trim() || undefined,
+        status: callStatus || null,
+        followUpDate: callStatus === 'follow_up' ? callFollowUpDate : null,
       });
-      if (visitErr) throw visitErr;
-      if (callStatus) {
-        const leadUpdate: any = { status: callStatus };
-        if (callStatus === 'follow_up') leadUpdate.follow_up_date = callFollowUpDate;
-        const { error: leadErr } = await supabase.from('leads').update(leadUpdate).eq('id', lead.id);
-        if (leadErr) throw leadErr;
-      }
+
       // A follow-up creates a task for the lead's assignee, due on the
       // follow-up date. The RPC is SECURITY DEFINER so non-admin callers
       // (telecaller/sales) can create it despite the tasks INSERT policy.
@@ -391,7 +404,7 @@ const LeadDetail = () => {
         if (taskErr) throw taskErr;
       }
       toast({ title: callStatus === 'follow_up' ? 'Call logged & follow-up task created!' : 'Call log added!' });
-      setCallNotes(''); setCallStatus(''); setCallFollowUpDate('');
+      setCallNotes(''); setCallStatus(''); setCallFollowUpDate(''); setCallOutcome('connected');
       setIsCallLogOpen(false);
       fetchLead();
     } catch (err: any) {
@@ -637,7 +650,9 @@ const LeadDetail = () => {
         });
       });
     }
-    visits.forEach((v: any) => {
+    // Legacy call logs still sit in site_visits as notes; they were copied into
+    // call_logs by 20260918000100, so showing both would double every one.
+    visits.filter((v: any) => !String(v.visit_notes ?? '').startsWith('[Call Log]')).forEach((v: any) => {
       events.push({
         id: `visit-${v.id}`, type: 'visit_or_note',
         date: new Date(v.visit_date),
@@ -646,6 +661,19 @@ const LeadDetail = () => {
         by: staffName(v.staff_id),
       });
     });
+    calls.forEach((c) => {
+      events.push({
+        id: `call-${c.id}`,
+        type: 'call',
+        date: new Date(c.created_at),
+        title: c.status_updated_to
+          ? `${callOutcomeLabel(c.outcome)} → ${statusLabel(c.status_updated_to)}`
+          : callOutcomeLabel(c.outcome),
+        content: c.notes,
+        by: staffName(c.staff_id),
+      });
+    });
+
     // Include audit log entries (quotation_sent, quotation_accepted, quotation_rejected)
     auditLogs.forEach((log: any, idx: number) => {
       const actionLabel: Record<string, string> = {
@@ -670,7 +698,7 @@ const LeadDetail = () => {
       }
     });
     return events.sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [lead, people, visits, allStaff, auditLogs]);
+  }, [lead, people, visits, calls, allStaff, auditLogs]);
 
   const NEGATIVE_NOTE_MIN_WORDS = 100;
   const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
@@ -808,7 +836,7 @@ const LeadDetail = () => {
             <div className="min-w-0">
               <h1 className="text-lg font-bold leading-tight text-foreground sm:text-xl">{lead.customer_name}</h1>
               <div className="mt-1.5 flex flex-col gap-1.5 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
-                <a href={`tel:${lead.mobile}`} className="flex w-fit items-center gap-1 font-semibold text-primary hover:underline"><Phone className="h-3 w-3 shrink-0" />{lead.mobile}</a>
+                <LeadCallLink leadId={lead.id} mobile={lead.mobile} className="flex w-fit items-center gap-1 font-semibold text-primary hover:underline"><Phone className="h-3 w-3 shrink-0" />{lead.mobile}</LeadCallLink>
                 {lead.email && <span className="flex min-w-0 items-center gap-1"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{lead.email}</span></span>}
                 {lead.village_city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" />{lead.village_city}{lead.district ? `, ${lead.district}` : ''}</span>}
                 <span className="flex items-center gap-1"><Clock className="h-3 w-3 shrink-0" />Created {new Date(lead.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
@@ -834,9 +862,9 @@ const LeadDetail = () => {
                 size="icon"
                 className="h-11 w-11 shrink-0 border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground sm:h-9 sm:w-9"
               >
-                <a href={`tel:${lead.mobile}`} aria-label={`Call ${lead.customer_name}`}>
+                <LeadCallLink leadId={lead.id} mobile={lead.mobile} aria-label={`Call ${lead.customer_name}`}>
                   <Phone className="h-4 w-4" />
-                </a>
+                </LeadCallLink>
               </Button>
             )}
 
@@ -1375,6 +1403,23 @@ const LeadDetail = () => {
           </DialogHeader>
           <div className="space-y-4 py-3">
             <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Did the call connect? *</Label>
+              <Select value={callOutcome} onValueChange={v => {
+                const next = v as Exclude<CallOutcome, 'dialed'>;
+                setCallOutcome(next);
+                // An unanswered call's only sensible status, offered by default
+                // so the common case is one tap.
+                setCallStatus(next === 'not_connected' ? ('not_connected' as LeadStatus) : '');
+              }}>
+                <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CALL_OUTCOMES.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-foreground">Update Lead Status (Optional)</Label>
               <Select value={callStatus} onValueChange={v => setCallStatus(v as LeadStatus)}>
                 <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Keep current status" /></SelectTrigger>
@@ -1382,6 +1427,7 @@ const LeadDetail = () => {
                   <SelectItem value="new">New Lead</SelectItem>
                   <SelectItem value="visited">Site Visited</SelectItem>
                   <SelectItem value="follow_up">Need Follow-up</SelectItem>
+                  <SelectItem value="not_connected">Not Connected</SelectItem>
                   <SelectItem value="interested">Interested</SelectItem>
                   <SelectItem value="not_interested">Not Interested</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -1396,7 +1442,9 @@ const LeadDetail = () => {
               </div>
             )}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Call Comments / Note *</Label>
+              <Label className="text-xs font-semibold text-foreground">
+                Call Comments / Note {callOutcome === 'connected' ? '*' : '(Optional)'}
+              </Label>
               <Textarea
                 placeholder="Type customer feedback or call log notes here..."
                 value={callNotes}
@@ -1407,10 +1455,10 @@ const LeadDetail = () => {
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => { setIsCallLogOpen(false); setCallNotes(''); setCallStatus(''); setCallFollowUpDate(''); }}>
+            <Button variant="outline" size="sm" onClick={() => { setIsCallLogOpen(false); setCallNotes(''); setCallStatus(''); setCallFollowUpDate(''); setCallOutcome('connected'); }}>
               Cancel
             </Button>
-            <Button onClick={handleLogCall} disabled={loggingCall || !callNotes.trim()} size="sm" className="gradient-primary text-primary-foreground font-semibold">
+            <Button onClick={handleLogCall} disabled={loggingCall || (callOutcome === 'connected' && !callNotes.trim())} size="sm" className="gradient-primary text-primary-foreground font-semibold">
               {loggingCall ? 'Logging...' : 'Save Call Log'}
             </Button>
           </DialogFooter>
@@ -1449,6 +1497,7 @@ const LeadDetail = () => {
                 <SelectContent>
                   <SelectItem value="visited">Visited</SelectItem>
                   <SelectItem value="follow_up">Follow-up</SelectItem>
+                  <SelectItem value="not_connected">Not Connected</SelectItem>
                   <SelectItem value="interested">Interested</SelectItem>
                   <SelectItem value="not_interested">Not Interested</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
