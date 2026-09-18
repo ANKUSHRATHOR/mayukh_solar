@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Users, CheckCircle2, XCircle, FileText, IndianRupee, Clock, Briefcase,
   UserPlus, FolderOpen, Activity, LayoutDashboard, Filter, Calendar as CalendarIcon, Loader2,
+  PhoneCall,
 } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import AdminLeadsList from './AdminLeadsList';
 import ProjectsListPage from './projects/ProjectsListPage';
 import Tasks from './Tasks';
 import AdminAttendance from './AdminAttendance';
+import TeamPerformancePanel from '@/components/dashboard/TeamPerformancePanel';
 import { involvesLoan } from '@/lib/payments';
 
 interface DashboardStats {
@@ -150,20 +152,25 @@ const AdminDashboard = () => {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="grid w-full sm:w-auto grid-cols-2 lg:flex lg:w-fit gap-1 bg-muted p-1 rounded-lg">
-          <TabsTrigger value="overview" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+        {/* h-auto and wrapping: TabsList is h-10, so six triggers wrapped to
+            three rows and spilled over the panel below rather than growing. */}
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-lg bg-muted p-1 lg:w-fit lg:flex-nowrap">
+          <TabsTrigger value="overview" className="flex-1 gap-1.5 rounded-md px-3 py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground sm:flex-none sm:py-1.5">
             <LayoutDashboard className="h-3.5 w-3.5" /> Overview
           </TabsTrigger>
-          <TabsTrigger value="leads" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+          <TabsTrigger value="leads" className="flex-1 gap-1.5 rounded-md px-3 py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground sm:flex-none sm:py-1.5">
             <Users className="h-3.5 w-3.5" /> Leads Cockpit
           </TabsTrigger>
-          <TabsTrigger value="projects" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+          <TabsTrigger value="projects" className="flex-1 gap-1.5 rounded-md px-3 py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground sm:flex-none sm:py-1.5">
             <Briefcase className="h-3.5 w-3.5" /> Projects Pipeline
           </TabsTrigger>
-          <TabsTrigger value="tasks" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+          <TabsTrigger value="tasks" className="flex-1 gap-1.5 rounded-md px-3 py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground sm:flex-none sm:py-1.5">
             <Clock className="h-3.5 w-3.5" /> Task Board
           </TabsTrigger>
-          <TabsTrigger value="attendance" className="gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground text-xs font-semibold px-3 py-1.5 rounded-md">
+          <TabsTrigger value="team" className="flex-1 gap-1.5 rounded-md px-3 py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground sm:flex-none sm:py-1.5">
+            <PhoneCall className="h-3.5 w-3.5" /> Team Performance
+          </TabsTrigger>
+          <TabsTrigger value="attendance" className="flex-1 gap-1.5 rounded-md px-3 py-2 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground sm:flex-none sm:py-1.5">
             <CheckCircle2 className="h-3.5 w-3.5" /> Staff Attendance
           </TabsTrigger>
         </TabsList>
@@ -267,6 +274,10 @@ const AdminDashboard = () => {
 
         <TabsContent value="tasks" className="mt-0">
           <Tasks isEmbedded={true} />
+        </TabsContent>
+
+        <TabsContent value="team" className="mt-0">
+          <TeamPerformancePanel />
         </TabsContent>
 
         <TabsContent value="attendance" className="mt-0">
