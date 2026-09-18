@@ -15,6 +15,7 @@ import {
   Phone,
   Trash2,
   User,
+  UserCog,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -33,9 +34,18 @@ import CompleteVisitDialog from '@/components/leads/CompleteVisitDialog';
 import LeadCallLink from '@/components/leads/LeadCallLink';
 import VisitFormDialog from '@/components/leads/VisitFormDialog';
 import CancelVisitDialog from '@/components/leads/CancelVisitDialog';
+import LeadAssignmentCard from '@/components/leads/LeadAssignmentCard';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import QuotationFormDialog from '@/components/leads/QuotationFormDialog';
 import LeadQuotationsPanel from '@/components/leads/LeadQuotationsPanel';
 import { canDeleteVisits, canManageVisits, fetchVisit, outcomeLabel } from '@/lib/visits';
+import { useStaffNames } from '@/hooks/useStaffNames';
 import type { LeadQuotation } from '@/lib/leadQuotations';
 
 /**
@@ -56,6 +66,12 @@ const VisitDetailPage = () => {
   const [editing, setEditing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingOwner, setEditingOwner] = useState(false);
+  const { nameOf } = useStaffNames();
+  // Admin only, deliberately narrower than the lead page (where an operator can
+  // reassign too): this is the surveyor's screen, and the owner is shown here so
+  // they know who to hand back to, not so the round can be re-dealt in the field.
+  const canEditOwner = role === 'admin';
   // Quotation being edited via the panel's row menu; null means the dialog
   // (when open) is creating a fresh one.
   const [editingQuote, setEditingQuote] = useState<LeadQuotation | null>(null);
@@ -174,13 +190,40 @@ const VisitDetailPage = () => {
         {visit && (
           <>
             {/* Call and navigate first — the two things needed on arrival. */}
-            <SectionCard title="Customer" icon={User}>
+            <SectionCard
+              title="Customer"
+              icon={User}
+              actions={
+                canEditOwner ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-11 gap-1.5 sm:h-8"
+                    onClick={() => setEditingOwner(true)}
+                  >
+                    <UserCog className="h-4 w-4" /> Change owner
+                  </Button>
+                ) : undefined
+              }
+            >
               <DetailGrid>
                 <DetailField label="Name" value={lead?.customer_name} wide />
                 <DetailField label="K-Number" value={lead?.k_number} emptyText="Not linked" />
                 <DetailField
                   label="Interested capacity"
                   value={lead?.kw_interest ? `${lead.kw_interest} kW` : null}
+                />
+                {/* Who owns the lead, so the surveyor knows who booked this and
+                    who to hand the outcome back to. */}
+                <DetailField
+                  label="Telecaller"
+                  value={nameOf(lead?.assigned_telecaller_id)}
+                  emptyText="Not assigned"
+                />
+                <DetailField
+                  label="Sales rep"
+                  value={nameOf(lead?.assigned_to_user_id)}
+                  emptyText="Not assigned"
                 />
               </DetailGrid>
 
@@ -300,6 +343,35 @@ const VisitDetailPage = () => {
             // The visit no longer exists, so its page has nothing left to show.
             onDone={() => navigate('/visits')}
           />
+          {/* The same control the lead page uses, so both screens assign a lead
+              the same way and through the same server checks. */}
+          <Dialog open={editingOwner} onOpenChange={setEditingOwner}>
+            <DialogContent className="sm:max-w-[520px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base font-bold">
+                  <UserCog className="h-4 w-4 text-primary" /> Lead owner
+                </DialogTitle>
+                <DialogDescription>
+                  Who works {lead.customer_name}: the telecaller on the phone, and the sales rep who
+                  visits and closes. Each is set on its own.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-2">
+                <LeadAssignmentCard
+                  leadId={lead.id}
+                  telecallerId={lead.assigned_telecaller_id ?? null}
+                  salesPersonId={lead.assigned_to_user_id ?? null}
+                  onChanged={() => {
+                    // The visit carries the lead's owners, and the list shows
+                    // them in its own column.
+                    void visitQuery.refetch();
+                    queryClient.invalidateQueries({ queryKey: ['visits'] });
+                  }}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <CompleteVisitDialog
             open={completing}
             onOpenChange={setCompleting}

@@ -90,6 +90,9 @@ const LeadVisitsPanel = ({
 
   const visits = visitsQuery.data ?? [];
   const scheduled = visits.filter((v) => v.visit_status === 'scheduled');
+  // One open visit per lead: booking another is blocked until this one is
+  // completed, cancelled or deleted.
+  const hasOpenVisit = scheduled.length > 0;
 
   if (variant === 'banner') {
     // Nothing to act on → nothing on screen. History lives in the timeline.
@@ -179,7 +182,17 @@ const LeadVisitsPanel = ({
         }
         actions={
           canManage && canBook ? (
-            <Button size="sm" variant="outline" className="h-11 gap-1.5 sm:h-8" onClick={() => setBooking(true)}>
+            // A lead carries one open visit at a time (the server refuses a
+            // second). The button stays visible but disabled, so the reason is
+            // on screen rather than the control silently vanishing.
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-11 gap-1.5 sm:h-8"
+              onClick={() => setBooking(true)}
+              disabled={hasOpenVisit}
+              title={hasOpenVisit ? 'Complete or cancel the booked visit first' : undefined}
+            >
               <CalendarPlus className="h-4 w-4" />
               {visits.length > 0 ? 'Book another visit' : 'Book visit'}
             </Button>
@@ -187,6 +200,12 @@ const LeadVisitsPanel = ({
         }
         contentClassName="p-0"
       >
+        {hasOpenVisit && canManage && canBook && (
+          <p className="border-b border-border/50 bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+            A visit is already booked. Complete or cancel it before booking another.
+          </p>
+        )}
+
         {visitsQuery.isLoading ? (
           <div className="space-y-3 p-4">
             <Skeleton className="h-16 rounded-xl" />

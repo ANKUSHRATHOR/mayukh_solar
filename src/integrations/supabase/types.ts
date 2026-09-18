@@ -447,6 +447,7 @@ export type Database = {
         Row: {
           address: string
           alt_mobile: string | null
+          assigned_telecaller_id: string | null
           assigned_to_user_id: string | null
           campaign: string | null
           cancelled_reason:
@@ -482,6 +483,7 @@ export type Database = {
         Insert: {
           address: string
           alt_mobile?: string | null
+          assigned_telecaller_id?: string | null
           assigned_to_user_id?: string | null
           campaign?: string | null
           cancelled_reason?:
@@ -517,6 +519,7 @@ export type Database = {
         Update: {
           address?: string
           alt_mobile?: string | null
+          assigned_telecaller_id?: string | null
           assigned_to_user_id?: string | null
           campaign?: string | null
           cancelled_reason?:
@@ -1769,6 +1772,7 @@ export type Database = {
           address: string | null
           alt_mobile: string | null
           assigned_operator_id: string | null
+          assigned_telecaller_id: string | null
           assigned_to_user_id: string | null
           campaign: string | null
           cancelled_reason:
@@ -1907,6 +1911,51 @@ export type Database = {
           _staff_id: string
         }
         Returns: boolean
+      }
+      assign_lead: {
+        Args: { _assignee: string; _lead_id: string; _slot: string }
+        Returns: {
+          address: string
+          alt_mobile: string | null
+          assigned_telecaller_id: string | null
+          assigned_to_user_id: string | null
+          campaign: string | null
+          cancelled_reason:
+            | Database["public"]["Enums"]["cancellation_reason"]
+            | null
+          cancelled_reason_other: string | null
+          created_at: string
+          created_by_user_id: string
+          customer_name: string
+          district: string
+          email: string | null
+          follow_up_date: string | null
+          id: string
+          is_in_bin: boolean
+          k_number: string | null
+          kno_details: Json | null
+          kw_interest: number | null
+          latitude: number | null
+          longitude: number | null
+          mobile: string
+          notes: string | null
+          plant_details: Json | null
+          quotation_details: Json | null
+          quotation_response_at: string | null
+          quotation_response_message: string | null
+          reference_name: string | null
+          source: Database["public"]["Enums"]["lead_source"]
+          state: string
+          status: Database["public"]["Enums"]["lead_status"]
+          updated_at: string
+          village_city: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       bike_km_for_day: {
         Args: { _date: string; _user: string }
@@ -2052,6 +2101,15 @@ export type Database = {
         }
       }
       count_admins: { Args: never; Returns: number }
+      create_lead_followup_task: {
+        Args: {
+          _due_date: string
+          _lead_id: string
+          _notes?: string
+          _priority?: Database["public"]["Enums"]["task_priority"]
+        }
+        Returns: string
+      }
       delete_site_visit: { Args: { _visit_id: string }; Returns: Json }
       generate_project_code: { Args: never; Returns: string }
       generate_quotation_number: { Args: never; Returns: string }
@@ -2296,6 +2354,26 @@ export type Database = {
         Args: never
         Returns: {
           table_name: string
+        }[]
+      }
+      team_activity_performance: {
+        Args: { _from: string; _to: string }
+        Returns: {
+          connected: number
+          dialed: number
+          follow_ups_overdue: number
+          follow_ups_set: number
+          full_name: string
+          interested: number
+          leads_assigned: number
+          leads_created: number
+          not_connected: number
+          not_interested: number
+          projects_created: number
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+          visits_booked: number
+          visits_completed: number
         }[]
       }
       telecaller_day_stats: { Args: { _staff?: string }; Returns: Json }

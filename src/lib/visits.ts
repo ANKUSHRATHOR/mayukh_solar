@@ -126,6 +126,9 @@ export interface VisitWithLead extends SiteVisit {
     status: string;
     latitude: number | null;
     longitude: number | null;
+    /** The lead's two owners: the telecaller on the phone, the rep who closes. */
+    assigned_telecaller_id: string | null;
+    assigned_to_user_id: string | null;
   } | null;
 }
 
@@ -134,7 +137,8 @@ const VISIT_SELECT = `
   leads!inner(
     id, customer_name, mobile, alt_mobile, email,
     address, village_city, district, state,
-    k_number, kw_interest, status, latitude, longitude
+    k_number, kw_interest, status, latitude, longitude,
+    assigned_telecaller_id, assigned_to_user_id
   )
 `;
 

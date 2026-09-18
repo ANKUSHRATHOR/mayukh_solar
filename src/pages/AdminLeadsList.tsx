@@ -57,6 +57,8 @@ type StaffMember = {
 type LeadRow = {
   assignedToName: string;
   assignedToUserId: string | null;
+  telecallerName: string;
+  telecallerUserId: string | null;
   assignedToMobile: string | null;
   assignedToRole: string | null;
   consumerName: string;
@@ -151,6 +153,8 @@ const STAGE_BAR_STAGES: { value: StatusFilter; label: string; tone: StatusTone }
 const mapLeadRow = (lead: any, staffMap: Record<string, StaffMember>): LeadRow => ({
   assignedToName: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.full_name || 'Not assigned' : 'Not assigned',
   assignedToUserId: lead.assigned_to_user_id,
+  telecallerName: lead.assigned_telecaller_id ? staffMap[lead.assigned_telecaller_id]?.full_name || 'Not assigned' : 'Not assigned',
+  telecallerUserId: lead.assigned_telecaller_id,
   assignedToMobile: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.mobile || null : null,
   assignedToRole: lead.assigned_to_user_id ? staffMap[lead.assigned_to_user_id]?.role || null : null,
   consumerName: lead.customer_name,
@@ -283,8 +287,13 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     else if (filterStatusValue !== 'all') query = query.eq('status', filterStatusValue);
 
     if (filterCreator !== 'all') query = query.eq('created_by_user_id', filterCreator);
-    if (filterAssigned === 'unassigned') query = query.is('assigned_to_user_id', null);
-    else if (filterAssigned !== 'all') query = query.eq('assigned_to_user_id', filterAssigned);
+    // A lead now sits with a telecaller *and* a sales rep, so "assigned to"
+    // matches either slot, and "not assigned" means neither is filled.
+    if (filterAssigned === 'unassigned') {
+      query = query.is('assigned_to_user_id', null).is('assigned_telecaller_id', null);
+    } else if (filterAssigned !== 'all') {
+      query = query.or(`assigned_to_user_id.eq.${filterAssigned},assigned_telecaller_id.eq.${filterAssigned}`);
+    }
     if (filterOperator !== 'all') query = query.eq('assigned_operator_id', filterOperator);
     if (filterProjectType !== 'all') query = query.eq('project_type', filterProjectType);
     if (filterCampaign !== 'all') query = query.eq('campaign', filterCampaign);
@@ -740,7 +749,8 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       { header: 'Mobile Number', value: (row: LeadRow) => row.mobile },
       { header: 'Campaign', value: (row: LeadRow) => row.campaign ?? '' },
       { header: 'Created By', value: (row: LeadRow) => row.createdByName },
-      { header: 'Assigned To', value: (row: LeadRow) => row.assignedToName },
+      { header: 'Telecaller', value: (row: LeadRow) => row.telecallerName },
+      { header: 'Sales Rep', value: (row: LeadRow) => row.assignedToName },
       { header: 'Assigned Operator', value: (row: LeadRow) => row.operatorName },
       { header: 'Status', value: (row: LeadRow) => statusLabel(row.status) },
       { header: 'Last Note', value: (row: LeadRow) => row.lastNote },
@@ -869,8 +879,19 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         ),
     },
     {
+      id: 'telecaller',
+      header: 'Telecaller',
+      mobile: 'meta',
+      hideBelow: 'lg',
+      cell: (lead) => (
+        <span className={lead.telecallerName === 'Not assigned' ? 'italic text-muted-foreground' : ''}>
+          {lead.telecallerName}
+        </span>
+      ),
+    },
+    {
       id: 'assigned',
-      header: 'Assigned',
+      header: 'Sales Rep',
       mobile: 'meta',
       hideBelow: 'lg',
       cell: (lead) => (
@@ -927,7 +948,10 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
               <div className="flex flex-1 sm:flex-none">
                 <Select value={bulkAssignee} onValueChange={setBulkAssignee}>
                   <SelectTrigger className="h-9 w-full rounded-r-none text-sm sm:w-[220px]">
-                    <SelectValue placeholder="Assign to…" />
+                    {/* The slot follows the person: a telecaller fills the
+                        telecaller slot, a sales rep the sales one, so neither
+                        assignment evicts the other. */}
+                    <SelectValue placeholder="Assign to telecaller or sales rep…" />
                   </SelectTrigger>
                   <SelectContent>
                     {allStaff
@@ -985,7 +1009,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold">Assigned To</Label>
+                  <Label className="text-xs font-bold">Assigned To (either role)</Label>
                   <Select value={filterAssigned} onValueChange={setFilterAssigned}>
                     <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>

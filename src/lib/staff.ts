@@ -95,7 +95,8 @@ export const fetchStaffActivity = async (userId: string): Promise<StaffActivity>
 
   const [leadsCreated, leadsAssigned, openTasks] = await Promise.all([
     countOf('leads', (q) => q.eq('created_by_user_id', userId)),
-    countOf('leads', (q) => q.eq('assigned_to_user_id', userId)),
+    // Either slot: a telecaller and a sales rep can hold the same lead.
+    countOf('leads', (q) => q.or(`assigned_to_user_id.eq.${userId},assigned_telecaller_id.eq.${userId}`)),
     countOf('tasks', (q) => q.eq('assigned_to_user_id', userId).neq('status', 'completed')),
   ]);
 

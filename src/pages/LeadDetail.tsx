@@ -31,7 +31,7 @@ import {
   ArrowLeft, MapPin, Phone, Calendar, Clock, User,
   FileText, RefreshCw, Zap, MessageSquare,
   ChevronDown, ChevronUp, Activity, AlertTriangle, CheckCircle2,
-  TrendingUp, Mail, MessageCircle, Edit
+  TrendingUp, Mail, MessageCircle, Edit, Users
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 import { fetchConsumerDetails } from '@/lib/discom';
@@ -41,6 +41,7 @@ import { calculateSubsidy, formatSubsidy, useSubsidySlabs } from '@/lib/subsidy'
 import { leadStatusMeta, resolveStatus, toneClasses } from '@/lib/statusMeta';
 import LeadVisitsPanel from '@/components/leads/LeadVisitsPanel';
 import VisitFormDialog from '@/components/leads/VisitFormDialog';
+import LeadAssignmentCard from '@/components/leads/LeadAssignmentCard';
 import { canManageVisits } from '@/lib/visits';
 import LeadCallLink from '@/components/leads/LeadCallLink';
 import {
@@ -184,6 +185,8 @@ const LeadDetail = () => {
   const [callNotes, setCallNotes] = useState('');
   const [callOutcome, setCallOutcome] = useState<Exclude<CallOutcome, 'dialed'>>('connected');
   const [calls, setCalls] = useState<CallLog[]>([]);
+  // Mirrors the server rule in book_site_visit: a lead carries one open visit.
+  const hasOpenVisit = visits.some((v: any) => v.visit_status === 'scheduled');
   const [callStatus, setCallStatus] = useState<LeadStatus | ''>('');
   const [callFollowUpDate, setCallFollowUpDate] = useState('');
   const [loggingCall, setLoggingCall] = useState(false);
@@ -879,7 +882,8 @@ const LeadDetail = () => {
                   <Phone className="h-4 w-4 text-muted-foreground" /> Log a Call
                 </DropdownMenuItem>
 
-                {canManageVisits(role) && lead.status !== 'cancelled' && lead.status !== 'final' && (
+                {/* One open visit per lead; the rest of the menu stays usable. */}
+                {canManageVisits(role) && lead.status !== 'cancelled' && lead.status !== 'final' && !hasOpenVisit && (
                   <DropdownMenuItem onSelect={() => setIsBookVisitOpen(true)} className="gap-2 cursor-pointer text-sm hover:bg-accent hover:text-accent-foreground px-2.5 py-2 rounded">
                     <Calendar className="h-4 w-4 text-muted-foreground" /> Book Visit
                   </DropdownMenuItem>
@@ -946,6 +950,20 @@ const LeadDetail = () => {
 
           {/* ══════════════ LEFT COLUMN ══════════════ */}
           <div className="space-y-4">
+
+            {/* Who owns this lead. Two independent slots: the telecaller keeps
+                it while a sales rep visits, which the single old field made
+                impossible. */}
+            <Section title="Assigned To" icon={<Users className="h-4 w-4" />}>
+              <div className="p-5">
+                <LeadAssignmentCard
+                  leadId={lead.id}
+                  telecallerId={lead.assigned_telecaller_id ?? null}
+                  salesPersonId={lead.assigned_to_user_id ?? null}
+                  onChanged={fetchLead}
+                />
+              </div>
+            </Section>
 
             {/* 1. Contact Details */}
             <Section

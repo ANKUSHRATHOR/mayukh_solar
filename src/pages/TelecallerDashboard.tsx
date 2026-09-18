@@ -43,7 +43,7 @@ const TelecallerDashboard = () => {
     // A telecaller works the leads they created *and* the ones an admin assigned
     // to them. Filtering on created_by alone hid every assigned lead, even
     // though RLS grants access to both.
-    const ownScope = `created_by_user_id.eq.${user.id},assigned_to_user_id.eq.${user.id}`;
+    const ownScope = `created_by_user_id.eq.${user.id},assigned_to_user_id.eq.${user.id},assigned_telecaller_id.eq.${user.id}`;
 
     const [totalRes, monthRes, todayRes] = await Promise.all([
       supabase.from('leads').select('id', { count: 'exact', head: true }).or(ownScope),
@@ -74,6 +74,7 @@ const TelecallerDashboard = () => {
       .channel(`telecaller-leads-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `created_by_user_id=eq.${user.id}` }, () => void fetchStats())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `assigned_to_user_id=eq.${user.id}` }, () => void fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `assigned_telecaller_id=eq.${user.id}` }, () => void fetchStats())
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
   }, [user, fetchStats]);

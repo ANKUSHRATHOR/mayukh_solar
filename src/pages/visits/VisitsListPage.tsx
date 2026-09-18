@@ -13,6 +13,7 @@ import { useStickyState } from '@/hooks/useStickyState';
 import TablePagination from '@/components/common/TablePagination';
 import StatusBadge from '@/components/common/StatusBadge';
 import LeadCallLink from '@/components/leads/LeadCallLink';
+import { useStaffNames } from '@/hooks/useStaffNames';
 import { useServerTable } from '@/hooks/useServerTable';
 import { defaultSort } from '@/lib/tableQuery';
 import {
@@ -34,6 +35,7 @@ const VisitsListPage = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState<VisitTab>('open');
   const [view, setView] = useStickyState<TableView>('visits-list:view', defaultTableView());
+  const { nameOf } = useStaffNames();
 
   const filters = useMemo(() => ({ tab }), [tab]);
 
@@ -96,6 +98,25 @@ const VisitsListPage = () => {
           {[v.leads?.village_city, v.leads?.district].filter(Boolean).join(', ') || '—'}
         </span>
       ),
+    },
+    {
+      id: 'owner',
+      header: 'Lead owner',
+      mobile: 'meta',
+      hideBelow: 'xl',
+      cell: (v) => {
+        const sales = nameOf(v.leads?.assigned_to_user_id);
+        const telecaller = nameOf(v.leads?.assigned_telecaller_id);
+        if (!sales && !telecaller) return <span className="text-muted-foreground/60">Unassigned</span>;
+        return (
+          <div className="min-w-0 text-xs">
+            {sales && <div className="truncate text-foreground">{sales}</div>}
+            {telecaller && (
+              <div className="truncate text-muted-foreground">{telecaller} · telecaller</div>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: 'when',
