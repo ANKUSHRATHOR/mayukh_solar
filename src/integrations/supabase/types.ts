@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       attendance: {
@@ -668,6 +693,39 @@ export type Database = {
           meta?: Json | null
           reset_by_user_id?: string
           staff_user_id?: string
+        }
+        Relationships: []
+      }
+      performance_targets: {
+        Row: {
+          created_at: string
+          id: string
+          metric: string
+          period_month: string
+          set_by: string | null
+          staff_user_id: string
+          target_value: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metric: string
+          period_month: string
+          set_by?: string | null
+          staff_user_id: string
+          target_value: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metric?: string
+          period_month?: string
+          set_by?: string | null
+          staff_user_id?: string
+          target_value?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1868,6 +1926,24 @@ export type Database = {
           },
         ]
       }
+      performance_work_items_v: {
+        Row: {
+          assigned_at: string | null
+          completed_at: string | null
+          due_date: string | null
+          item_id: string | null
+          kind: string | null
+          lead_id: string | null
+          outcome: string | null
+          owner_id: string | null
+          priority: string | null
+          project_id: string | null
+          status: string | null
+          subject: string | null
+          title: string | null
+        }
+        Relationships: []
+      }
       project_dues: {
         Row: {
           assigned_sales_person_id: string | null
@@ -2265,6 +2341,97 @@ export type Database = {
       }
       payment_due_days: { Args: never; Returns: number }
       payments_kpis: { Args: never; Returns: Json }
+      performance_overview: {
+        Args: { _from: string; _role?: string; _staff?: string; _to: string }
+        Returns: {
+          achievement: number
+          applications_submitted: number
+          approvals_completed: number
+          calls_assigned: number
+          calls_connected: number
+          calls_dialed: number
+          calls_not_attempted: number
+          calls_not_connected: number
+          calls_unlogged: number
+          deals_lost: number
+          deals_won: number
+          documents_pending: number
+          follow_ups_completed: number
+          follow_ups_due: number
+          follow_ups_overdue: number
+          follow_ups_scheduled: number
+          full_name: string
+          installations_completed: number
+          installations_scheduled: number
+          leads_assigned: number
+          leads_contacted: number
+          leads_interested: number
+          leads_not_interested: number
+          leads_qualified: number
+          pipeline_value: number
+          projects_assigned: number
+          projects_completed: number
+          projects_delayed: number
+          quotations_sent: number
+          revenue: number
+          role: Database["public"]["Enums"]["app_role"]
+          surveys_assigned: number
+          surveys_completed: number
+          target_metric: string
+          target_value: number
+          tasks_assigned: number
+          tasks_completed: number
+          tasks_on_time: number
+          tasks_on_time_eligible: number
+          tasks_overdue: number
+          tasks_pending: number
+          user_id: string
+          visits_booked: number
+          visits_completed: number
+          work_assigned: number
+          work_cancelled: number
+          work_completed: number
+          work_completed_in_period: number
+          work_on_time: number
+          work_on_time_eligible: number
+          work_overdue: number
+          work_pending: number
+        }[]
+      }
+      performance_scope: { Args: { _staff: string }; Returns: string }
+      performance_trend: {
+        Args: {
+          _from: string
+          _grain?: string
+          _role?: string
+          _staff?: string
+          _to: string
+        }
+        Returns: {
+          assigned: number
+          bucket: string
+          completed: number
+          revenue: number
+        }[]
+      }
+      performance_work_items: {
+        Args: {
+          _bucket?: string
+          _dir?: string
+          _from: string
+          _kind?: string
+          _limit?: number
+          _offset?: number
+          _priority?: string
+          _role?: string
+          _search?: string
+          _sort?: string
+          _staff?: string
+          _status?: string
+          _to: string
+        }
+        Returns: Json
+      }
       project_for_lead: { Args: { _lead_id: string }; Returns: string }
       project_payment_summary: { Args: { _project_id: string }; Returns: Json }
       project_stage_requirements: {
@@ -2446,7 +2613,13 @@ export type Database = {
         | "subsidy"
         | "invoice"
         | "other"
-      lead_source: "phone_call" | "walk_in" | "reference" | "camp" | "online"
+      lead_source:
+        | "phone_call"
+        | "walk_in"
+        | "reference"
+        | "camp"
+        | "online"
+        | "website"
       lead_status:
         | "new"
         | "visited"
@@ -2629,6 +2802,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: [
@@ -2669,7 +2845,14 @@ export const Constants = {
         "invoice",
         "other",
       ],
-      lead_source: ["phone_call", "walk_in", "reference", "camp", "online"],
+      lead_source: [
+        "phone_call",
+        "walk_in",
+        "reference",
+        "camp",
+        "online",
+        "website",
+      ],
       lead_status: [
         "new",
         "visited",

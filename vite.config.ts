@@ -70,6 +70,12 @@ export default defineConfig(({ mode }) => ({
             return 'vendor-react';
           }
           if (id.includes('node_modules/@supabase')) return 'vendor-supabase';
+          // Charts are heavy and now load on the Performance route. Left in the
+          // route chunk they tripled it; as their own vendor chunk they are
+          // cached once and shared with anything charted later.
+          if (/node_modules\/(recharts|d3-|victory-|internmap|delaunator|robust-predicates)/.test(id)) {
+            return 'vendor-charts';
+          }
           if (id.includes('node_modules/@tanstack')) return 'vendor-query';
           if (
             /node_modules\/(@radix-ui|lucide-react|cmdk|vaul|sonner|class-variance-authority|clsx|tailwind-merge)/.test(

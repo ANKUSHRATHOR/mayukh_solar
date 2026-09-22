@@ -37,44 +37,51 @@ const SectionCard = ({
   const [open, setOpen] = useState(defaultOpen);
   const isOpen = collapsible ? open : true;
 
-  const header = (
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-2.5">
-        {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-foreground">{title}</p>
-          {description && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{description}</p>
-          )}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {actions}
-        {collapsible && (
-          <ChevronDown
-            className={cn(
-              'h-4 w-4 text-muted-foreground transition-transform duration-200',
-              isOpen && 'rotate-180'
-            )}
-          />
+  const titleBlock = (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
+      <div className="min-w-0">
+        <p className="truncate text-sm font-bold text-foreground">{title}</p>
+        {description && (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{description}</p>
         )}
       </div>
     </div>
   );
 
+  const chevron = collapsible && (
+    <ChevronDown
+      className={cn(
+        'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+        isOpen && 'rotate-180'
+      )}
+    />
+  );
+
   return (
     <section className={cn('rounded-2xl border border-border/70 bg-card shadow-card', className)}>
       {collapsible ? (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={isOpen}
-          className="w-full rounded-t-2xl px-4 py-3.5 text-left transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          {header}
-        </button>
+        // The toggle covers the title and the chevron, never the whole header.
+        // `actions` are buttons, and a <button> inside a <button> is invalid
+        // HTML: React warns, and the browser fires both — so pressing Export
+        // also collapsed the section it was exporting.
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={isOpen}
+            className="-mx-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            {titleBlock}
+            {chevron}
+          </button>
+          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        </div>
       ) : (
-        <div className="border-b border-border/60 px-4 py-3.5">{header}</div>
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3.5">
+          {titleBlock}
+          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        </div>
       )}
 
       {isOpen && (
