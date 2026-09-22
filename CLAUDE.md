@@ -45,6 +45,7 @@ Preview the app through the `dev` config in `.claude/launch.json` rather than ru
 
 - Client: `src/integrations/supabase/client.ts`, configured from `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`. The publishable (anon) key is committed on purpose — it ships in the bundle and is constrained by RLS. The service_role key must never appear in `.env` or client code; privileged work belongs in an Edge Function.
 - Types: `src/integrations/supabase/types.ts` is generated from the live schema. Do not hand-edit. When a table or RPC postdates the last generation, existing code works around it with `(supabase as any)` / `supabase.rpc('name' as any)` — follow that pattern, or regenerate types.
+  - **One deliberate deviation.** The file is generated *minus* the `hr_manager` value of `app_role`. The abandoned HRMS work added that value, and Postgres cannot drop an enum value — removing it means recreating the type and every column, signature and policy that mentions it, which is not worth doing for a role nobody holds. So the database still has it and the generated file still lists it. Leaving it in makes `Record<AppRole, …>` in `modules.ts` demand an `hr_manager` entry, which is how a dead role gets quietly reintroduced across the app. **After regenerating, delete the two `hr_manager` lines again** (one in the `app_role` union, one in the `Constants` block) — `npm run typecheck` fails loudly if you forget, so this is a nuisance rather than a trap.
 - Migrations: `supabase/migrations/*.sql`, applied in filename order. There is no local Docker stack here, so migrations are validated against the remote project.
 - Edge Functions (`supabase/functions/`, Deno): `create-staff`, `update-staff`, `update-staff-email` (service_role admin ops, each re-verifies the caller is an admin), `generate-quotation`, `send-push` (web-push/VAPID), `whatsapp-webhook` (parses CONFIRM/REJECT replies), `consumer-lookup` (DISCOM K-Number proxy; the only function with `verify_jwt = false`), `drive-storage` (the only thing that talks to Google Drive — see below).
 - Storage buckets in use: `project-documents`, `attendance-media`, `material-dispatch` — all private — plus the deliberately public `branding`. These now hold **legacy files only**: everything uploaded since the Drive switch goes to Google Drive. See below.
@@ -258,7 +259,7 @@ Every inward payment, across every project. Gated by the **`projects` module** �
 | `/tasks` | `module=tasks` | `Tasks.tsx` |
 | `/contacts` | `module=contacts` | `StaffContacts.tsx` — `get_staff_directory` |
 | `/users`, `/users/new`, `/users/:id`, `/users/:id/edit`, `/users/reset-logs` | `admin` | `users/UserManagementPage.tsx` (tabs: Users, Roles & Access), `AddStaff.tsx`, `staff/StaffDetailPage.tsx`, `staff/StaffFormPage.tsx`, `PasswordResetLogs.tsx` |
-| `/admin/performance` | `admin` | `StaffPerformance.tsx` |
+| `/admin/performance` | `admin` | `StaffPerformance.tsx` + `components/performance/*` — see Performance below |
 | `/admin/salary` | `admin` | `SalaryManagement.tsx` — tabs: Payroll, Profiles, Advances; `compute_salary`, `mark_salary_paid` |
 | `/profile` | any role | `StaffProfile.tsx` |
 | `/settings` | any role | `SettingsPage.tsx` |
@@ -268,6 +269,42 @@ Every inward payment, across every project. Gated by the **`projects` module** �
 - **User Management is the unified module.** Every signup appears there; the admin assigns a role (which activates the account) and configures per-role module access under Roles & Access (`users/RoleAccessPanel.tsx`, `users/UsersPanel.tsx`). The old `/staff/*` URLs all 301 to `/users/*` via redirects in `App.tsx` — `StaffRedirect` preserves the `:id`.
 - Staff creation/editing goes through the `create-staff` / `update-staff` / `update-staff-email` edge functions because they need service_role; each re-verifies the caller is an admin. Password resets issue a **6-digit numeric PIN**, deliberately readable over the phone.
 - Attendance capture helpers live in `lib/capture.ts` (geolocation + `browser-image-compression`); media goes to the `attendance-media` bucket.
+
+#### Performance
+
+`/admin/performance` reports assigned work, outcomes and targets, and every
+figure on it opens the records it counted.
+
+- **One definition of work.** `performance_work_items_v` normalises the four
+  things that can be assigned to a person — a task, a site visit, a lead, a
+  project — into one shape: `not_started | in_progress | completed | cancelled`,
+  with an owner, an assigned date, a due date and a completion. Leads and
+  projects emit a row per owner slot (telecaller *and* sales rep; operator *and*
+  sales rep), deduplicated so one person holding both slots is one item.
+- **Overdue is derived, never stored**: due date in the past, status neither
+  completed nor cancelled, decided against the business day. Stored, it would be
+  wrong by tomorrow and a cancelled item would stay overdue forever.
+- **Tiles and drill-downs are the same query.** `performance_overview` counts
+  that view with FILTER clauses; `performance_work_items` applies the identical
+  predicate and returns the rows. A tile passes its own *bucket* to the
+  drill-down, which is what makes "12 overdue" open twelve records. Do not add a
+  metric by counting its own table — extend the view.
+- **Rates never fabricate.** `rate()` in `lib/performance.ts` returns `null`
+  when the denominator is zero, and the UI prints "No data". 0% is a claim about
+  performance; no denominator supports it. Same for trend comparisons: a
+  previous period of zero gets "No comparison", not "+100%".
+- **Periods are whole days in `Asia/Kolkata`** (`BUSINESS_TIMEZONE`), matching
+  the SQL. This Month compares against the same day count of last month, not
+  against a full month.
+- **`performance_targets`** is the only new data: one row per person per month
+  per metric, pro-rated by days when the period is shorter. Per month because a
+  target edited in place would silently rewrite every past period's achievement.
+  One metric per role (`targetMetricForRole`) so target and achievement are
+  always in the same unit.
+- Scoping is in the functions, not the page: an admin sees everyone, anyone else
+  is coerced to their own rows. The route stays admin-only.
+- `staff_performance` (leads + attendance) is untouched and still on the page, in
+  a collapsed section. It answers an HR question; none of the above replaces it.
 
 ### Cross-cutting
 
