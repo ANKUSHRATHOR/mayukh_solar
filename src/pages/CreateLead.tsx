@@ -20,17 +20,18 @@ import {
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 import { fetchConsumerDetails } from '@/lib/discom';
+import { LEAD_SOURCES, leadSourceMeta } from '@/lib/statusMeta';
 
 type LeadSource = Database['public']['Enums']['lead_source'];
 type AssignableSalesPerson = Database['public']['Functions']['get_assignable_sales_persons']['Returns'][number];
 
-const sourceOptions: { value: LeadSource; label: string }[] = [
-  { value: 'phone_call', label: 'Phone Call' },
-  { value: 'walk_in', label: 'Walk-in' },
-  { value: 'reference', label: 'Reference' },
-  { value: 'camp', label: 'Camp' },
-  { value: 'online', label: 'Online' },
-];
+// No cast: LEAD_SOURCES has to satisfy the generated `lead_source` union, so
+// adding a value here without the matching ALTER TYPE fails typecheck rather
+// than failing at insert time in front of whoever is creating the lead.
+const sourceOptions: { value: LeadSource; label: string }[] = LEAD_SOURCES.map((value) => ({
+  value,
+  label: leadSourceMeta[value].label,
+}));
 
 interface DuplicateInfo {
   id: string;

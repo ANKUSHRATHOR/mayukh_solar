@@ -12,6 +12,7 @@ import {
   Briefcase, Users, Clock,
   Search, MapPin, Calendar as CalendarIcon, Bike, PhoneCall
 } from 'lucide-react';
+import { LEAD_SOURCES } from '@/lib/statusMeta';
 
 const statusColor: Record<string, string> = {
   new: 'bg-info text-info-foreground',
@@ -195,7 +196,7 @@ const SalesPersonDashboard = () => {
           <div className="space-y-2">
             <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead Source</p>
             <div className="flex flex-wrap gap-1.5">
-              {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
+              {(['all', ...LEAD_SOURCES] as const).map(s => (
                 <Chip key={s} active={filterSource === s} onClick={() => setFilterSource(s)}>
                   {s === 'all' ? 'All' : statusLabelLocal(s)}
                 </Chip>

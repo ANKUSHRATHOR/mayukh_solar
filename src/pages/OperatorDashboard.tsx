@@ -16,7 +16,7 @@ import {
 
 import type { Database } from '@/integrations/supabase/types';
 import { allProjectStageMeta } from '@/lib/projectStages';
-import { humanizeStatus } from '@/lib/statusMeta';
+import { humanizeStatus, LEAD_SOURCES } from '@/lib/statusMeta';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
 
@@ -267,7 +267,7 @@ const OperatorDashboard = () => {
           <div className="space-y-2">
             <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead Source</p>
             <div className="flex flex-wrap gap-1.5">
-              {['all', 'phone_call', 'walk_in', 'reference', 'camp', 'online'].map(s => (
+              {(['all', ...LEAD_SOURCES] as const).map(s => (
                 <Chip key={s} active={sourceFilter === s} onClick={() => setSourceFilter(s)}>
                   {s === 'all' ? 'All' : labelize(s)}
                 </Chip>

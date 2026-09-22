@@ -108,6 +108,39 @@ export const requestStatusMeta: Record<string, StatusMeta> = {
   consumed: { label: 'Used', tone: 'neutral' },
 };
 
+/**
+ * All 6 values of the `lead_source` enum, in the order they are offered.
+ *
+ * Lived in three places until now — `CreateLead`'s `sourceOptions` and a
+ * hardcoded array in each of the operator and sales dashboards — which is the
+ * drift this file exists to stop: adding a source meant remembering all three,
+ * and a lead created with a source the dashboards did not list simply could not
+ * be filtered for.
+ *
+ * `website` is distinct from `online`: online is any internet enquiry
+ * (marketplace, social, aggregator), website is one that came through
+ * mayukhsolar's own site.
+ */
+export const LEAD_SOURCES = [
+  'phone_call',
+  'walk_in',
+  'reference',
+  'camp',
+  'online',
+  'website',
+] as const;
+
+export type LeadSourceValue = (typeof LEAD_SOURCES)[number];
+
+export const leadSourceMeta: Record<string, StatusMeta> = {
+  phone_call: { label: 'Phone Call', tone: 'info' },
+  walk_in: { label: 'Walk-in', tone: 'progress' },
+  reference: { label: 'Reference', tone: 'success' },
+  camp: { label: 'Camp', tone: 'warning' },
+  online: { label: 'Online', tone: 'neutral' },
+  website: { label: 'Website', tone: 'info' },
+};
+
 export const roleMeta: Record<string, StatusMeta> = {
   admin: { label: 'Admin', tone: 'danger' },
   telecaller: { label: 'Telecaller', tone: 'info' },
