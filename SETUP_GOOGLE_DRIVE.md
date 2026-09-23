@@ -106,8 +106,8 @@ browse it; the restriction is only on what the *app* may reach.
 
 The app creates `Projects/`, `Leads/`, `Quotations/`, `Attendance/` and
 `Dispatch/` inside it on first use, with a sub-folder per customer named
-K-Number then customer name, so the folders are browsable by a person who does
-not know a row id. Those are app-created too, so they are reachable.
+mobile number then customer name, so the folders are browsable by a person who
+does not know a row id. Those are app-created too, so they are reachable.
 
 ## 6. Set the function secrets
 

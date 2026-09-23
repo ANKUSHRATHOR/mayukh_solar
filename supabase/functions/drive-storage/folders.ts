@@ -1,9 +1,8 @@
 /**
  * Where a file lands in Drive.
  *
- * Folders are named the way the app names things to people — K-Number, then
- * customer name, then mobile — so that someone browsing Drive directly can
- * find a customer without knowing a row id.
+ * Folders are named mobile number, then customer name — so that someone
+ * browsing Drive directly can find a customer without knowing a row id.
  *
  * Resolved ids are cached in `public.drive_folders`. Without the cache every
  * upload costs a Drive search, and two concurrent uploads for the same
@@ -33,8 +32,7 @@ const sanitise = (name: string): string =>
   name.replace(/[\/\\\r\n\t]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) || "Unnamed";
 
 /**
- * The human label for a folder. Falls back through the same order the app
- * uses to identify a project: K-Number, customer name, mobile, then the id.
+ * The human label for a folder: mobile number, then customer name.
  */
 const folderNameFor = async (
   admin: SupabaseClient,
@@ -50,24 +48,22 @@ const folderNameFor = async (
   if (scope === "project" || scope === "dispatch") {
     const { data } = await admin
       .from("projects")
-      .select("k_number, lead_id, leads(customer_name, mobile, k_number)")
+      .select("lead_id, leads(customer_name, mobile)")
       .eq("id", ownerId)
       .maybeSingle();
     const lead = (data as any)?.leads;
-    const kNumber = (data as any)?.k_number || lead?.k_number;
-    const parts = [kNumber, lead?.customer_name || lead?.mobile].filter(Boolean);
-    return sanitise(parts.join(" - ") || ownerId);
+    const parts = [lead?.mobile, lead?.customer_name].filter(Boolean);
+    return sanitise(parts.join("_") || ownerId);
   }
 
   // lead, quotation
   const { data } = await admin
     .from("leads")
-    .select("customer_name, mobile, k_number")
+    .select("customer_name, mobile")
     .eq("id", ownerId)
     .maybeSingle();
-  const parts = [(data as any)?.k_number, (data as any)?.customer_name || (data as any)?.mobile]
-    .filter(Boolean);
-  return sanitise(parts.join(" - ") || ownerId);
+  const parts = [(data as any)?.mobile, (data as any)?.customer_name].filter(Boolean);
+  return sanitise(parts.join("_") || ownerId);
 };
 
 /** Cache key for a scope folder itself (no owner row behind it). */
