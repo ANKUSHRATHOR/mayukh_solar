@@ -140,7 +140,7 @@ const VisitDetailPage = () => {
             <>
               {isOpen && (
                 <Button size="sm" className="gap-2" onClick={() => setCompleting(true)}>
-                  <CheckCircle2 className="h-4 w-4" /> Complete visit
+                  <CheckCircle2 className="h-4 w-4" /> Update Status
                 </Button>
               )}
               <Button

@@ -57,6 +57,19 @@ describe('visit outcomes', () => {
     expect(outcomeLabel('ready_to_proceed')).toBe('Customer ready to move forward');
   });
 
+  it('skips the GPS requirement only for outcomes where nobody went on site', () => {
+    for (const value of ['not_interested', 'call_not_connected']) {
+      expect(findOutcome(value)?.skipsLocation).toBe(true);
+    }
+    for (const value of ['ready_to_proceed', 'follow_up_needed', 'revisit_required', 'reschedule']) {
+      expect(findOutcome(value)?.skipsLocation ?? false).toBe(false);
+    }
+  });
+
+  it('maps a call that never connected to the not_connected lead status', () => {
+    expect(OUTCOME_TO_LEAD_STATUS.call_not_connected).toBe('not_connected');
+  });
+
   it('falls back to the raw value rather than rendering nothing', () => {
     expect(outcomeLabel('brand_new_value')).toBe('brand_new_value');
     expect(outcomeLabel(null)).toBe('—');

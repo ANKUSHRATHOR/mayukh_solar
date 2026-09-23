@@ -33,13 +33,20 @@ export interface SiteVisit {
 }
 
 /**
- * Outcomes a surveyor can record, phrased as the decision the customer actually
- * made on site rather than an engineering verdict on the roof.
+ * Outcomes a surveyor or telecaller can record, phrased as the decision the
+ * customer actually made rather than an engineering verdict on the roof.
  *
  * `requiresDocuments` is the gate on the paperwork below. Only a customer who
  * has agreed to go ahead needs their Aadhaar and bill collected — asking for
- * them when the customer just declined blocks the surveyor from closing the
- * visit at all, so they either fake an upload or leave the visit open.
+ * them when the customer just declined blocks the caller from closing the
+ * update at all, so they either fake an upload or leave it open.
+ *
+ * `skipsLocation` covers the outcomes that never involve anyone going on
+ * site — a call that didn't connect, or a customer who says no over the
+ * phone. Forcing a GPS fix (and the browser permission prompt that comes
+ * with it) for a status update that happened over the phone makes no sense,
+ * so `complete_site_visit` only enforces the location requirement when this
+ * is unset or false.
  */
 export interface VisitOutcome {
   value: string;
@@ -48,11 +55,19 @@ export interface VisitOutcome {
   requiresDocuments: boolean;
   /** Collects a new date and books the follow-on visit. */
   reschedules?: boolean;
+  /** No GPS fix required — nothing happened on site for this outcome. */
+  skipsLocation?: boolean;
 }
 
 export const VISIT_OUTCOMES: readonly VisitOutcome[] = [
   { value: 'ready_to_proceed', label: 'Customer ready to move forward', requiresDocuments: true },
-  { value: 'not_interested', label: 'Customer does not want to proceed', requiresDocuments: false },
+  { value: 'not_interested', label: 'Not interested', requiresDocuments: false, skipsLocation: true },
+  {
+    value: 'call_not_connected',
+    label: 'Call not connected',
+    requiresDocuments: false,
+    skipsLocation: true,
+  },
   { value: 'follow_up_needed', label: 'Needs another follow-up', requiresDocuments: false },
   { value: 'revisit_required', label: 'Another site visit needed', requiresDocuments: false },
   { value: 'reschedule', label: 'Change the visit date', requiresDocuments: false, reschedules: true },
@@ -86,6 +101,7 @@ export const outcomeRequiresDocuments = (value: string | null | undefined): bool
 export const OUTCOME_TO_LEAD_STATUS: Record<string, string> = {
   ready_to_proceed: 'interested',
   not_interested: 'not_interested',
+  call_not_connected: 'not_connected',
   follow_up_needed: 'follow_up',
   revisit_required: 'follow_up',
   // A rescheduled visit is still an outstanding visit, so the lead stays where
@@ -243,17 +259,6 @@ export const fetchVisits = async (leadId: string): Promise<SiteVisit[]> => {
   return (data ?? []) as unknown as SiteVisit[];
 };
 
-/** Documents already attached to this lead, keyed by type. */
-export const fetchLeadDocuments = async (leadId: string) => {
-  const { data, error } = await supabase
-    .from('documents')
-    .select('id, document_type, file_url, uploaded_at')
-    .eq('lead_id', leadId);
-
-  if (error) throw new Error(error.message);
-  return data ?? [];
-};
-
 /**
  * The visit functions postdate the generated types. One untyped entry point
  * instead of an `as any` per call.
@@ -365,16 +370,18 @@ export const uploadVisitDocument = async (
 
 export interface CompleteVisitInput {
   visitId: string;
-  latitude: number;
-  longitude: number;
+  /** Null for outcomes that skip location (see `VisitOutcome.skipsLocation`). */
+  latitude: number | null;
+  longitude: number | null;
   accuracyM: number | null;
   outcome: string;
   notes?: string;
 }
 
 /**
- * Completes a visit. The server refuses without coordinates and writes the
- * observed location back onto the lead, overriding the DISCOM-derived one.
+ * Completes a visit. The server refuses without coordinates unless the
+ * outcome is one that skips location, and otherwise writes the observed
+ * location back onto the lead, overriding the DISCOM-derived one.
  */
 export const completeVisit = async (input: CompleteVisitInput): Promise<void> => {
   const { error } = await supabase.rpc('complete_site_visit', {

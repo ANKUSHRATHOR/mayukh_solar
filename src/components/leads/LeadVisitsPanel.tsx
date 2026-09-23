@@ -151,7 +151,7 @@ const LeadVisitsPanel = ({
             </p>
           </div>
           <Button size="sm" className="h-9 shrink-0 gap-1.5" onClick={() => setCompleting(next)}>
-            <MapPin className="h-4 w-4" /> Complete visit
+            <MapPin className="h-4 w-4" /> Update Status
           </Button>
         </div>
 
@@ -360,7 +360,7 @@ const LeadVisitsPanel = ({
                       className="mt-3 h-11 w-full gap-2"
                       onClick={() => setCompleting(visit)}
                     >
-                      <MapPin className="h-4 w-4" /> Complete this visit
+                      <MapPin className="h-4 w-4" /> Update Status
                     </Button>
                   )}
                 </li>

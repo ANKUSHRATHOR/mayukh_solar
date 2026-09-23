@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   Camera,
@@ -7,7 +8,6 @@ import {
   Loader2,
   MapPin,
   Upload,
-  X,
 } from 'lucide-react';
 import {
   Dialog,
@@ -29,18 +29,24 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { documentLabels, type DocumentType } from '@/lib/documents';
 import {
   VISIT_DOCUMENTS,
   VISIT_OUTCOMES,
   bookVisit,
   captureLocation,
   completeVisit,
-  fetchLeadDocuments,
   findOutcome,
   uploadVisitDocument,
   type Coordinates,
   type SiteVisit,
 } from '@/lib/visits';
+
+interface LeadDocumentRow {
+  document_type: DocumentType;
+  file_url: string | null;
+}
 
 interface Props {
   open: boolean;
@@ -55,11 +61,21 @@ interface Props {
 const POOR_ACCURACY_M = 100;
 
 /**
- * Completes a site visit: outcome, required documents, and a live GPS fix.
+ * Updates a booked visit's status: an outcome and, for outcomes that put
+ * someone on site, a live GPS fix.
  *
- * The location is mandatory and captured here rather than taken from the lead,
- * because the lead's coordinates come from the DISCOM K-number lookup — that's
- * the billing address, which is regularly not where the panels go.
+ * The location is captured here rather than taken from the lead, because the
+ * lead's coordinates come from the DISCOM K-number lookup — that's the
+ * billing address, which is regularly not where the panels go. It's only
+ * mandatory for outcomes where someone actually went on site; see
+ * `VisitOutcome.skipsLocation`.
+ *
+ * Documents upload the same way as the lead's Documents tab
+ * (`LeadDocumentsPanel`) — same `uploadVisitDocument` call, same
+ * `lead-documents` query cache — except each one uploads the moment a file is
+ * picked rather than being staged until the whole form submits. That keeps a
+ * slow or failed upload from being tangled up with recording the visit
+ * outcome itself.
  */
 const CompleteVisitDialog = ({
   open,
@@ -70,6 +86,7 @@ const CompleteVisitDialog = ({
   onCompleted,
 }: Props) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [outcome, setOutcome] = useState('');
@@ -78,20 +95,43 @@ const CompleteVisitDialog = ({
   const [coords, setCoords] = useState<Coordinates | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [files, setFiles] = useState<Record<string, File>>({});
-  const [onFile, setOnFile] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  // Which document type an in-flight upload belongs to, for a row-level spinner.
+  const [uploadingType, setUploadingType] = useState<DocumentType | null>(null);
 
-  // Which documents are already attached, so a re-visit doesn't ask again.
-  useEffect(() => {
-    if (!open) return;
-    fetchLeadDocuments(leadId)
-      .then((docs) =>
-        setOnFile(new Set(docs.filter((d) => d.file_url).map((d) => d.document_type)))
-      )
-      .catch(() => setOnFile(new Set()));
-  }, [open, leadId]);
+  const docsQuery = useQuery({
+    queryKey: ['lead-documents', leadId],
+    enabled: open,
+    queryFn: async (): Promise<LeadDocumentRow[]> => {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('document_type, file_url')
+        .eq('lead_id', leadId);
+      if (error) throw new Error(error.message);
+      return (data as LeadDocumentRow[]) ?? [];
+    },
+  });
+  const onFile = new Set(
+    (docsQuery.data ?? []).filter((d) => d.file_url).map((d) => d.document_type)
+  );
+
+  const uploadDoc = async (type: DocumentType, file: File) => {
+    setUploadingType(type);
+    try {
+      await uploadVisitDocument(leadId, userId, type, file);
+      toast({ title: 'Document saved', description: documentLabels[type] });
+      queryClient.invalidateQueries({ queryKey: ['lead-documents', leadId] });
+    } catch (err) {
+      toast({
+        title: 'Upload failed',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingType(null);
+    }
+  };
 
   const reset = () => {
     setOutcome('');
@@ -99,7 +139,6 @@ const CompleteVisitDialog = ({
     setNotes('');
     setCoords(null);
     setLocationError(null);
-    setFiles({});
     setProgress(null);
   };
 
@@ -127,40 +166,27 @@ const CompleteVisitDialog = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Paperwork is only mandatory once the customer has agreed to go ahead.
-  // Demanding Aadhaar and a bill from someone who just declined leaves the
-  // surveyor unable to close the visit at all.
   const selectedOutcome = findOutcome(outcome);
-  const docsRequired = selectedOutcome?.requiresDocuments ?? false;
   const needsNewDate = selectedOutcome?.reschedules ?? false;
+  // A call that never connected, or a decline over the phone, never puts
+  // anyone on site — don't block on a GPS fix for those.
+  const locationOptional = selectedOutcome?.skipsLocation ?? false;
 
-  const requiredDocs = VISIT_DOCUMENTS.filter((d) => d.required);
-  const missingRequired = docsRequired
-    ? requiredDocs.filter((d) => !files[d.type] && !onFile.has(d.type))
-    : [];
   const canSubmit =
     Boolean(outcome) &&
-    Boolean(coords) &&
-    missingRequired.length === 0 &&
+    (locationOptional || Boolean(coords)) &&
     (!needsNewDate || Boolean(rescheduleFor));
 
   const submit = async () => {
-    if (!visit || !coords) return;
+    if (!visit) return;
     setSubmitting(true);
     try {
-      const pending = Object.entries(files);
-      for (let i = 0; i < pending.length; i += 1) {
-        const [type, file] = pending[i];
-        setProgress(`Uploading ${i + 1} of ${pending.length}…`);
-        await uploadVisitDocument(leadId, userId, type as any, file);
-      }
-
       setProgress('Recording visit…');
       await completeVisit({
         visitId: visit.id,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracyM: coords.accuracy,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+        accuracyM: coords?.accuracy ?? null,
         outcome,
         notes: notes.trim() || undefined,
       });
@@ -178,17 +204,19 @@ const CompleteVisitDialog = ({
       }
 
       toast({
-        title: needsNewDate ? 'Visit rescheduled' : 'Visit completed',
+        title: needsNewDate ? 'Visit rescheduled' : 'Status updated',
         description: needsNewDate
           ? 'The original visit was closed and a new one booked.'
-          : 'Site location saved and the lead status updated.',
+          : coords
+            ? 'Site location saved and the lead status updated.'
+            : 'The lead status was updated.',
       });
       reset();
       onOpenChange(false);
       onCompleted();
     } catch (err) {
       toast({
-        title: 'Could not complete the visit',
+        title: 'Could not update the status',
         description: err instanceof Error ? err.message : String(err),
         variant: 'destructive',
       });
@@ -204,22 +232,29 @@ const CompleteVisitDialog = ({
         className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
         // Requesting geolocation raises a browser permission prompt, which
         // moves focus out of the dialog. Radix reads that as an outside
-        // interaction and closes — dumping the surveyor's staged photos and
-        // notes. A stray tap on the overlay would do the same. Closing is
-        // deliberate only: Cancel, or the X.
+        // interaction and closes — dumping the surveyor's notes. A stray tap
+        // on the overlay would do the same. Closing is deliberate only:
+        // Cancel, or the X.
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Complete site visit</DialogTitle>
+          <DialogTitle>Update status</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">
           {/* Location */}
           <div className="space-y-2">
             <Label className="text-xs font-semibold">
-              Site location<span className="ml-0.5 text-destructive">*</span>
+              Site location
+              {locationOptional ? (
+                <span className="ml-1 font-normal text-muted-foreground">
+                  (not needed for this outcome)
+                </span>
+              ) : (
+                <span className="ml-0.5 text-destructive">*</span>
+              )}
             </Label>
 
             {coords ? (
@@ -332,32 +367,18 @@ const CompleteVisitDialog = ({
 
           {/* Documents */}
           <div className="space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <Label className="text-xs font-semibold">Documents</Label>
-              <span className="text-[11px] text-muted-foreground">
-                {!outcome
-                  ? 'Pick an outcome first'
-                  : docsRequired
-                    ? 'Required for this outcome'
-                    : 'Optional for this outcome'}
-              </span>
-            </div>
+            <Label className="text-xs font-semibold">Documents</Label>
             <ul className="divide-y divide-border/50 rounded-xl border border-border/70">
               {VISIT_DOCUMENTS.map((doc) => {
-                const staged = files[doc.type];
-                const already = onFile.has(doc.type);
-                const done = Boolean(staged) || already;
+                const done = onFile.has(doc.type);
+                const busy = uploadingType === doc.type;
 
                 return (
                   <li key={doc.type} className="flex items-center gap-3 px-3 py-2.5">
                     <span
                       className={cn(
                         'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
-                        done
-                          ? 'bg-success/15 text-success'
-                          : doc.required && docsRequired
-                            ? 'bg-warning/15 text-warning'
-                            : 'bg-muted text-muted-foreground'
+                        done ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
                       )}
                     >
                       {done ? (
@@ -368,38 +389,14 @@ const CompleteVisitDialog = ({
                     </span>
 
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground">
-                        {doc.label}
-                        {doc.required && docsRequired && (
-                          <span className="ml-0.5 text-destructive">*</span>
-                        )}
-                      </p>
+                      <p className="text-sm font-medium text-foreground">{doc.label}</p>
                       <p className="truncate text-[11px] text-muted-foreground">
-                        {staged
-                          ? staged.name
-                          : already
-                            ? 'Already on file'
-                            : 'Not uploaded'}
+                        {busy ? 'Uploading…' : done ? 'On file' : 'Not uploaded'}
                       </p>
                     </div>
 
-                    {staged ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() =>
-                          setFiles((f) => {
-                            const next = { ...f };
-                            delete next[doc.type];
-                            return next;
-                          })
-                        }
-                        aria-label={`Remove ${doc.label}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
                     ) : (
                       <Button
                         type="button"
@@ -409,7 +406,7 @@ const CompleteVisitDialog = ({
                         onClick={() => fileInputs.current[doc.type]?.click()}
                       >
                         <Camera className="h-3.5 w-3.5" />
-                        {already ? 'Replace' : 'Add'}
+                        {done ? 'Replace' : 'Add'}
                       </Button>
                     )}
 
@@ -421,7 +418,8 @@ const CompleteVisitDialog = ({
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) setFiles((f) => ({ ...f, [doc.type]: file }));
+                        e.target.value = '';
+                        if (file) void uploadDoc(doc.type, file);
                       }}
                     />
                   </li>
@@ -449,11 +447,9 @@ const CompleteVisitDialog = ({
                 <span>
                   Still needed:{' '}
                   {[
-                    !coords && 'site location',
+                    !coords && !locationOptional && 'site location',
                     !outcome && 'outcome',
                     needsNewDate && !rescheduleFor && 'new visit date',
-                    missingRequired.length > 0 &&
-                      missingRequired.map((d) => d.label).join(', '),
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -469,7 +465,7 @@ const CompleteVisitDialog = ({
           </Button>
           <Button onClick={submit} disabled={!canSubmit || submitting} className="gap-2">
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            {progress ?? (submitting ? 'Saving…' : 'Complete visit')}
+            {progress ?? (submitting ? 'Saving…' : 'Update Status')}
           </Button>
         </DialogFooter>
       </DialogContent>
