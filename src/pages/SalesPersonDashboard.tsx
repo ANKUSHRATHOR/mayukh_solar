@@ -1,271 +1,210 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { format, isPast } from 'date-fns';
+import { AlertTriangle, CalendarCheck, CalendarClock, Clock, LayoutDashboard, ListChecks, MapPin } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import PageContainer from '@/components/common/PageContainer';
+import PageHeader from '@/components/common/PageHeader';
+import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
+import TableToolbar from '@/components/common/TableToolbar';
+import TablePagination from '@/components/common/TablePagination';
+import StatusBadge from '@/components/common/StatusBadge';
 import StatCard from '@/components/dashboard/StatCard';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import LeadCallLink from '@/components/leads/LeadCallLink';
+import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
+import { useStickyState } from '@/hooks/useStickyState';
+import { useServerTable } from '@/hooks/useServerTable';
+import { defaultSort } from '@/lib/tableQuery';
+import { cn } from '@/lib/utils';
 import {
-  Briefcase, Users, Clock,
-  Search, MapPin, Calendar as CalendarIcon, Bike, PhoneCall
-} from 'lucide-react';
-import { LEAD_SOURCES } from '@/lib/statusMeta';
+  fetchMyVisitCounts,
+  fetchMyVisitsPage,
+  outcomeLabel,
+  type MyVisitScope,
+  type VisitWithLead,
+} from '@/lib/visits';
 
-const statusColor: Record<string, string> = {
-  new: 'bg-info text-info-foreground',
-  visit_created: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-  visited: 'bg-accent text-accent-foreground',
-  follow_up: 'bg-warning text-warning-foreground',
-  interested: 'bg-success text-success-foreground',
-  not_interested: 'bg-destructive text-destructive-foreground',
-  cancelled: 'bg-muted text-muted-foreground',
-  final: 'bg-primary text-primary-foreground',
+const overdueMap = { overdue: { label: 'Overdue', tone: 'danger' as const } };
+
+const emptyCopy: Record<MyVisitScope, { title: string; description: string }> = {
+  today: { title: 'No visits left for today', description: 'Pending visits booked for today appear here.' },
+  due: { title: 'Nothing overdue', description: 'Visits from earlier days that are still open appear here.' },
+  all: { title: 'No visits assigned yet', description: 'Visits booked for you from a lead appear here.' },
 };
 
-const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-
-type DateRange = 'all' | 'today' | 'this_month';
-
-const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-      active
-        ? 'bg-primary text-primary-foreground border-primary'
-        : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
-    }`}
-  >
-    {children}
-  </button>
-);
-
+/**
+ * The sales rep's working day: their site visits.
+ *
+ * Three tiles — today's pending visits, everything assigned, and visits left
+ * open from earlier days — and the tiles are the filter for the list below,
+ * which opens on today's pending work.
+ */
 const SalesPersonDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [leads, setLeads] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterSource, setFilterSource] = useState<string>('all');
-  const [filterDate, setFilterDate] = useState<DateRange>('all');
-  const [filterCity, setFilterCity] = useState<string>('all');
-  const [todayKm, setTodayKm] = useState<number>(0);
-  const [monthKm, setMonthKm] = useState<number>(0);
+  const [scope, setScope] = useState<MyVisitScope>('today');
+  const [view, setView] = useStickyState<TableView>('sales-dashboard:view', defaultTableView());
 
-  const fetchLeads = async () => {
-    if (!user) return;
-    setLoading(true);
-    // Fetch only leads created by self, assigned to self, or visit_created (authorized for sales person)
-    const { data } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('is_in_bin', false)
-      .or(`created_by_user_id.eq.${user.id},assigned_to_user_id.eq.${user.id},status.eq.visit_created`)
-      .order('created_at', { ascending: false });
-    setLeads(data || []);
-    setLoading(false);
-  };
+  const filters = useMemo(() => ({ assignee: user?.id ?? '', scope }), [user?.id, scope]);
 
-  const fetchBikeKm = async () => {
-    if (!user) return;
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = today.getMonth() + 1;
-    const dateStr = today.toISOString().slice(0, 10);
-    const [{ data: dayData }, { data: monthData }] = await Promise.all([
-      supabase.rpc('bike_km_for_day', { _user: user.id, _date: dateStr }),
-      supabase.rpc('bike_km_summary', { _user: user.id, _year: yyyy, _month: mm }),
-    ]);
-    setTodayKm(Number(dayData ?? 0));
-    setMonthKm(Number((monthData as any)?.[0]?.total_km ?? 0));
-  };
-
-  useEffect(() => { fetchLeads(); fetchBikeKm(); }, [user]);
-
-  const stats = {
-    total: leads.length,
-    newLeads: leads.filter(l => l.status === 'new').length,
-    visitCreated: leads.filter(l => l.status === 'visit_created').length,
-    followUps: leads.filter(l => l.status === 'follow_up').length,
-    overdue: leads.filter(l => l.status === 'follow_up' && l.follow_up_date && new Date(l.follow_up_date) < new Date()).length,
-  };
-
-  // Cities present in current leads list
-  const cityOptions = Array.from(new Set(leads.map(l => (l.village_city || '').trim()).filter(Boolean))).sort().slice(0, 24);
-
-  const filtered = leads.filter(l => {
-    const matchSearch = !search || l.customer_name.toLowerCase().includes(search.toLowerCase()) || l.mobile.includes(search) || (l.village_city && l.village_city.toLowerCase().includes(search.toLowerCase()));
-    const matchStatus = filterStatus === 'all' || l.status === filterStatus;
-    const matchSource = filterSource === 'all' || l.source === filterSource;
-    const matchCity = filterCity === 'all' || (l.village_city || '').trim() === filterCity;
-    const ts = new Date(l.created_at).getTime();
-    const now = new Date();
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const matchDate = filterDate === 'all' || (filterDate === 'today' ? ts >= startToday : ts >= startMonth);
-    return matchSearch && matchStatus && matchSource && matchCity && matchDate;
+  const table = useServerTable<VisitWithLead>({
+    queryKey: ['visits', 'mine'],
+    fetchPage: fetchMyVisitsPage,
+    initialSort: defaultSort('scheduled_for', 'asc'),
+    filters,
+    persistKey: 'sales-dashboard',
+    enabled: !!user,
   });
 
-  const activeCount =
-    (filterStatus !== 'all' ? 1 : 0) +
-    (filterSource !== 'all' ? 1 : 0) +
-    (filterCity !== 'all' ? 1 : 0) +
-    (filterDate !== 'all' ? 1 : 0);
+  const { data: counts } = useQuery({
+    queryKey: ['visits', 'mine', 'counts', user?.id],
+    queryFn: () => fetchMyVisitCounts(user!.id),
+    enabled: !!user,
+  });
 
-  const clearFilters = () => {
-    setFilterStatus('all');
-    setFilterSource('all');
-    setFilterCity('all');
-    setFilterDate('all');
-  };
+  const columns: DataTableColumn<VisitWithLead>[] = [
+    {
+      id: 'k_number',
+      header: 'K-Number',
+      mobile: 'title',
+      cell: (v) =>
+        v.leads?.k_number ? (
+          <span className="font-mono text-xs font-bold text-foreground">{v.leads.k_number}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground/60">Not linked</span>
+        ),
+    },
+    {
+      id: 'customer',
+      header: 'Customer',
+      mobile: 'subtitle',
+      cell: (v) => (
+        <div className="min-w-0">
+          <div className="truncate font-semibold text-foreground">{v.leads?.customer_name ?? 'Unknown'}</div>
+          {v.leads?.mobile && v.leads.id && (
+            <LeadCallLink
+              leadId={v.leads.id}
+              mobile={v.leads.mobile}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              {v.leads.mobile}
+            </LeadCallLink>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'location',
+      header: 'Area',
+      mobile: 'meta',
+      hideBelow: 'lg',
+      cell: (v) => (
+        <span className="text-xs text-muted-foreground">
+          {[v.leads?.village_city, v.leads?.district].filter(Boolean).join(', ') || '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'when',
+      header: 'Scheduled',
+      mobile: 'meta',
+      sortKey: 'scheduled_for',
+      cell: (v) => {
+        if (!v.scheduled_for) return <span className="text-muted-foreground/60">—</span>;
+        const overdue = v.visit_status === 'scheduled' && isPast(new Date(v.scheduled_for));
+        return (
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <span className={overdue ? 'font-semibold text-destructive' : ''}>
+              {format(new Date(v.scheduled_for), 'dd MMM, h:mm a')}
+            </span>
+            {overdue && <StatusBadge value="overdue" map={overdueMap} size="sm" />}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      mobile: 'badge',
+      cell: (v) =>
+        v.visit_status === 'scheduled' ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-warning">
+            <Clock className="h-3.5 w-3.5" /> Pending
+          </span>
+        ) : v.visit_status === 'cancelled' ? (
+          <span className="text-xs text-muted-foreground">Cancelled</span>
+        ) : (
+          <span className="text-xs text-foreground">{outcomeLabel(v.outcome)}</span>
+        ),
+    },
+  ];
 
-  const statusLabelLocal = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const views = [
+    { value: 'today', label: "Today's visits", count: counts?.today },
+    { value: 'due', label: 'Due visits', count: counts?.due },
+    { value: 'all', label: 'All assigned', count: counts?.all },
+  ];
+
+  const tile = (value: MyVisitScope) =>
+    cn(scope === value && 'ring-2 ring-primary/60');
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6 font-sans">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Sales Dashboard</h1>
-        </div>
-        <Button onClick={() => navigate('/leads/new')} className="gradient-primary text-primary-foreground font-semibold">
-          <PhoneCall className="mr-2 h-4 w-4" /> Create New Lead
-        </Button>
+    <PageContainer>
+      <PageHeader title="Sales Dashboard" icon={LayoutDashboard} />
+
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <StatCard
+          title="Today's visits"
+          value={counts?.today ?? '—'}
+          icon={CalendarCheck}
+          onClick={() => setScope('today')}
+          className={tile('today')}
+        />
+        <StatCard
+          title="Total assigned"
+          value={counts?.all ?? '—'}
+          icon={ListChecks}
+          accent="info"
+          onClick={() => setScope('all')}
+          className={tile('all')}
+        />
+        <StatCard
+          title="Due visits"
+          value={counts?.due ?? '—'}
+          icon={AlertTriangle}
+          accent="destructive"
+          change={counts ? (counts.due > 0 ? 'Action needed' : 'All clear') : undefined}
+          changeType={counts && counts.due > 0 ? 'down' : 'neutral'}
+          onClick={() => setScope('due')}
+          className={tile('due')}
+        />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard onClick={() => setFilterStatus('all')} title="Total Leads" value={stats.total} icon={Users} />
-        <StatCard onClick={() => setFilterStatus('new')} title="New Leads" value={stats.newLeads} icon={Briefcase} />
-        <StatCard onClick={() => setFilterStatus('visit_created')} title="Visits Booked" value={stats.visitCreated} icon={CalendarIcon} />
-        <StatCard onClick={() => setFilterStatus('follow_up')} title="Follow-ups" value={stats.followUps} icon={CalendarIcon} />
-        <StatCard onClick={() => setFilterStatus('follow_up')} title="Overdue" value={stats.overdue} icon={Clock} changeType={stats.overdue > 0 ? 'down' : 'neutral'} change={stats.overdue > 0 ? 'Action needed!' : 'All clear'} />
-      </div>
+      <TableToolbar
+        table={table}
+        searchPlaceholder="Search by K-Number, customer name or mobile…"
+        views={views}
+        activeView={scope}
+        onViewChange={(v) => setScope(v as MyVisitScope)}
+        viewsLabel="Filter visits"
+        layout={view}
+        onLayoutChange={setView}
+      />
 
-      <Card className="shadow-card border-border">
-        <CardContent className="p-4 flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shrink-0">
-            <Bike className="h-6 w-6" />
-          </div>
-          <div className="flex-1 grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Today's Distance</p>
-              <p className="text-2xl font-bold text-foreground">{todayKm.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">This Month</p>
-              <p className="text-2xl font-bold text-foreground">{monthKm.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <DataTable
+        layout={view}
+        table={table}
+        columns={columns}
+        rowKey={(v) => v.id}
+        onRowClick={(v) => navigate(`/visits/${v.id}`)}
+        emptyTitle={emptyCopy[scope].title}
+        emptyDescription={emptyCopy[scope].description}
+        emptyIcon={scope === 'all' ? CalendarClock : MapPin}
+      />
 
-      {/* Search + Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search by name, mobile, city..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
-        </div>
-        <FiltersPopover activeCount={activeCount} onClear={clearFilters}>
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Status</p>
-            <div className="flex flex-wrap gap-1.5">
-              {['all', 'new', 'visit_created', 'visited', 'follow_up', 'interested', 'not_interested', 'final'].map(s => (
-                <Chip key={s} active={filterStatus === s} onClick={() => setFilterStatus(s)}>
-                  {s === 'all' ? 'All' : statusLabelLocal(s)}
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Date Range</p>
-            <div className="flex flex-wrap gap-1.5">
-              {([
-                { v: 'all', l: 'All Time' },
-                { v: 'this_month', l: 'This Month' },
-                { v: 'today', l: 'Today' },
-              ] as { v: DateRange; l: string }[]).map(c => (
-                <Chip key={c.v} active={filterDate === c.v} onClick={() => setFilterDate(c.v)}>{c.l}</Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead Source</p>
-            <div className="flex flex-wrap gap-1.5">
-              {(['all', ...LEAD_SOURCES] as const).map(s => (
-                <Chip key={s} active={filterSource === s} onClick={() => setFilterSource(s)}>
-                  {s === 'all' ? 'All' : statusLabelLocal(s)}
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          {cityOptions.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">City / Location</p>
-              <div className="flex flex-wrap gap-1.5">
-                <Chip active={filterCity === 'all'} onClick={() => setFilterCity('all')}>All</Chip>
-                {cityOptions.map(c => (
-                  <Chip key={c} active={filterCity === c} onClick={() => setFilterCity(c)}>{c}</Chip>
-                ))}
-              </div>
-            </div>
-          )}
-        </FiltersPopover>
-      </div>
-
-      {/* Lead List */}
-      <Card className="shadow-card border-border">
-        <CardContent className="p-0">
-          {loading ? (
-            <p className="text-muted-foreground text-sm py-12 text-center">Loading leads...</p>
-          ) : filtered.length === 0 ? (
-            <p className="text-muted-foreground text-sm py-12 text-center">No leads found.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {filtered.map(lead => {
-                const isOverdue = lead.status === 'follow_up' && lead.follow_up_date && new Date(lead.follow_up_date) < new Date();
-                return (
-                  <div
-                    key={lead.id}
-                    className={`flex items-center gap-4 p-4 hover:bg-accent/30 transition-colors cursor-pointer ${isOverdue ? 'bg-destructive/5' : ''}`}
-                    onClick={() => navigate(`/leads/${lead.id}`)}
-                  >
-                    <div className="h-10 w-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm shrink-0">
-                      {lead.customer_name.charAt(0)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm text-foreground">{lead.customer_name}</p>
-                        {isOverdue && <Badge variant="destructive" className="text-xs">Overdue</Badge>}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                        {lead.mobile}
-                        <span className="mx-1">•</span>
-                        <MapPin className="h-3 w-3" />
-                        {lead.village_city}, {lead.district}
-                      </p>
-                      {lead.follow_up_date && lead.status === 'follow_up' && (
-                        <p className={`text-xs mt-0.5 ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                          Follow-up: {new Date(lead.follow_up_date).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                    <Badge className={`text-xs shrink-0 ${statusColor[lead.status] || ''}`}>
-                      {statusLabel(lead.status)}
-                    </Badge>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      <TablePagination table={table} entityLabel="visits" />
+    </PageContainer>
   );
 };
 

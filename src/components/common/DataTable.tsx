@@ -371,8 +371,12 @@ function DataTable<T>({
         {layout !== 'table' && (
         <div
           className={cn(
+            // grid-cols-1, not an implicit track: an implicit track is sized
+            // to its widest card's min-content, where a truncated name counts
+            // at full width, so one long customer name pushed every card off
+            // the right edge of a phone. min-w-0 on the card is the same guard.
             layout === 'cards'
-              ? 'grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3'
+              ? 'grid grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-3'
               : 'space-y-2.5 md:hidden'
           )}
         >
@@ -393,7 +397,7 @@ function DataTable<T>({
                   : undefined
               }
               className={cn(
-                'rounded-2xl border border-border/70 bg-card p-3 shadow-card',
+                'min-w-0 rounded-2xl border border-border/70 bg-card p-3 shadow-card',
                 onRowClick &&
                   'cursor-pointer transition-colors hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50'
               )}
@@ -507,7 +511,7 @@ const LoadingRows = <T,>({
     {layout !== 'table' && (
     <div
       className={cn(
-        layout === 'cards' ? 'grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-2.5 md:hidden'
+        layout === 'cards' ? 'grid grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-2.5 md:hidden'
       )}
     >
       {Array.from({ length: layout === 'cards' ? 6 : 4 }).map((_, i) => (

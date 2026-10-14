@@ -193,29 +193,103 @@ export const fetchVisitsPage = async (
     tab === 'completed' ? 'completed' : tab === 'cancelled' ? 'cancelled' : 'scheduled'
   );
 
-  if (term) {
-    // PostgREST cannot `or()` across an embedded resource, so the lead match is
-    // resolved to ids first.
-    const { data: matches } = await supabase
-      .from('leads')
-      .select('id')
-      .or(
-        [
-          `customer_name.ilike.%${term}%`,
-          `mobile.ilike.%${term}%`,
-          `k_number.ilike.%${term}%`,
-        ].join(',')
-      )
-      .limit(500);
-
-    const ids = (matches ?? []).map((l) => l.id);
-    // No matching lead means no matching visit — force an empty result rather
-    // than silently returning every row.
-    query = query.in('lead_id', ids.length > 0 ? ids : ['00000000-0000-0000-0000-000000000000']);
-  }
+  if (term) query = query.in('lead_id', await leadIdsMatching(term));
 
   const result = await applyPaging(query, params);
   return toTablePage<VisitWithLead>(result as any);
+};
+
+/**
+ * Lead ids matching a search term on K-Number, name or mobile. PostgREST cannot
+ * `or()` across an embedded resource, so a visit search resolves leads first.
+ * No match yields a sentinel id, forcing an empty result rather than silently
+ * returning every row.
+ */
+const leadIdsMatching = async (term: string): Promise<string[]> => {
+  const { data: matches } = await supabase
+    .from('leads')
+    .select('id')
+    .or(
+      [
+        `customer_name.ilike.%${term}%`,
+        `mobile.ilike.%${term}%`,
+        `k_number.ilike.%${term}%`,
+      ].join(',')
+    )
+    .limit(500);
+
+  const ids = (matches ?? []).map((l) => l.id);
+  return ids.length > 0 ? ids : ['00000000-0000-0000-0000-000000000000'];
+};
+
+/**
+ * Subsets of one person's visits, for the sales rep's dashboard.
+ *
+ * - `today` — still scheduled, booked for today.
+ * - `due`   — still scheduled, booked for a day that has already passed.
+ * - `all`   — every visit assigned to them, whatever its state.
+ *
+ * `today` and `due` never overlap: a visit booked for 10am that is still open at
+ * 3pm is today's work, and only becomes due tomorrow.
+ */
+export type MyVisitScope = 'today' | 'due' | 'all';
+
+/** Local midnight today and tomorrow, as ISO strings. */
+const todayBounds = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+};
+
+/** The statuses and scheduled window a scope covers; open-ended where unset. */
+const scopeRange = (scope: MyVisitScope) => {
+  if (scope === 'all') return { statuses: ['scheduled', 'completed', 'cancelled'] };
+  const { start, end } = todayBounds();
+  return scope === 'today'
+    ? { statuses: ['scheduled'], from: start, before: end }
+    : { statuses: ['scheduled'], before: start };
+};
+
+/** One page of the visits assigned to `filters.assignee`, narrowed by `filters.scope`. */
+export const fetchMyVisitsPage = async (
+  params: TableQueryParams
+): Promise<TablePage<VisitWithLead>> => {
+  const { assignee, scope } = params.filters as { assignee: string; scope: MyVisitScope };
+  const term = params.search.trim().replace(/[,()*]/g, ' ').trim();
+
+  const { statuses, from, before } = scopeRange(scope);
+  let query = supabase
+    .from('site_visits')
+    .select(VISIT_SELECT, { count: 'exact' })
+    .eq('assigned_to_user_id', assignee)
+    .in('visit_status', statuses);
+  if (from) query = query.gte('scheduled_for', from);
+  if (before) query = query.lt('scheduled_for', before);
+  if (term) query = query.in('lead_id', await leadIdsMatching(term));
+
+  const result = await applyPaging(query, params);
+  return toTablePage(result as unknown as Parameters<typeof toTablePage<VisitWithLead>>[0]);
+};
+
+/** Counts behind the sales rep's three visit tiles. */
+export const fetchMyVisitCounts = async (assignee: string): Promise<Record<MyVisitScope, number>> => {
+  const countOf = async (scope: MyVisitScope) => {
+    const { statuses, from, before } = scopeRange(scope);
+    let query = supabase
+      .from('site_visits')
+      .select('id', { count: 'exact', head: true })
+      .eq('assigned_to_user_id', assignee)
+      .in('visit_status', statuses);
+    if (from) query = query.gte('scheduled_for', from);
+    if (before) query = query.lt('scheduled_for', before);
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  };
+  const [today, due, all] = await Promise.all([countOf('today'), countOf('due'), countOf('all')]);
+  return { today, due, all };
 };
 
 /** Counts for the Open / Completed / Cancelled subsets. */
