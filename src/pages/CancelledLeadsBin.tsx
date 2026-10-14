@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,6 +9,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
 import { Search, Trash2, RotateCcw, MapPin, AlertTriangle } from 'lucide-react';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterSelect from '@/components/common/FilterSelect';
 
 const reasonLabel = (r: string | null) => r ? r.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'N/A';
 
@@ -19,6 +21,9 @@ const CancelledLeadsBin = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [reasonFilter, setReasonFilter] = useState('all');
+  const [creatorFilter, setCreatorFilter] = useState('all');
+  const [districtFilter, setDistrictFilter] = useState('all');
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -66,10 +71,41 @@ const CancelledLeadsBin = () => {
     setDeleteTarget(null);
   };
 
+  // Options come from the binned leads themselves, so no choice leads nowhere.
+  const distinct = (values: (string | null | undefined)[]) =>
+    Array.from(new Set(values.map(v => (v ?? '').trim()).filter(Boolean))).sort();
+  const reasonOptions = useMemo(
+    () => distinct(leads.map(l => l.cancelled_reason)).map(r => ({ value: r, label: reasonLabel(r) })),
+    [leads]
+  );
+  const creatorOptions = useMemo(
+    () => distinct(leads.map(l => l.created_by_user_id))
+      .map(id => ({ value: id, label: staffName(id) }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    // staffName reads `staff`, so the labels follow it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leads, staff]
+  );
+  const districtOptions = useMemo(
+    () => distinct(leads.map(l => l.district)).map(d => ({ value: d, label: d })),
+    [leads]
+  );
+
+  const activeFilterCount =
+    (reasonFilter !== 'all' ? 1 : 0) + (creatorFilter !== 'all' ? 1 : 0) + (districtFilter !== 'all' ? 1 : 0);
+  const clearFilters = () => {
+    setReasonFilter('all');
+    setCreatorFilter('all');
+    setDistrictFilter('all');
+  };
+
   const filtered = leads.filter(l =>
-    !search ||
-    l.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-    l.mobile.includes(search)
+    (!search ||
+      l.customer_name.toLowerCase().includes(search.toLowerCase()) ||
+      l.mobile.includes(search)) &&
+    (reasonFilter === 'all' || l.cancelled_reason === reasonFilter) &&
+    (creatorFilter === 'all' || l.created_by_user_id === creatorFilter) &&
+    (districtFilter === 'all' || (l.district ?? '').trim() === districtFilter)
   );
 
   return (
@@ -81,9 +117,16 @@ const CancelledLeadsBin = () => {
         <p className="text-muted-foreground text-sm mt-1">{leads.length} cancelled leads</p>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search name or mobile..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+      <div className="flex items-center gap-2">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search name or mobile..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+        </div>
+        <FiltersPopover activeCount={activeFilterCount} onClear={clearFilters}>
+          <FilterSelect label="Reason" value={reasonFilter} onChange={setReasonFilter} allLabel="Any reason" options={reasonOptions} />
+          <FilterSelect label="Created by" value={creatorFilter} onChange={setCreatorFilter} allLabel="Anyone" options={creatorOptions} />
+          <FilterSelect label="District" value={districtFilter} onChange={setDistrictFilter} allLabel="All districts" options={districtOptions} />
+        </FiltersPopover>
       </div>
 
       <Card className="shadow-card border-border">

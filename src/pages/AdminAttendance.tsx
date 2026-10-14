@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterSelect from '@/components/common/FilterSelect';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Eye, XCircle, Download, Check, X as XIcon, MapPin } from 'lucide-react';
@@ -28,6 +29,7 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const now = new Date();
   const [month, setMonth] = useStickyState<string>('admin-attendance:month', format(now, 'yyyy-MM'));
   const [staffId, setStaffId] = useStickyState<string>('admin-attendance:staffId', 'all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [activeMapCoords, setActiveMapCoords] = useState<{ lat: number; lng: number; title: string } | null>(null);
 
   const { data: staff } = useQuery({
@@ -114,6 +116,10 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     return s;
   }, [rows]);
 
+  // The status filter narrows the daily list only; the tiles above it are the
+  // month's totals by status, which a status filter would just zero out.
+  const dailyRows = (rows ?? []).filter((r) => statusFilter === 'all' || r.status === statusFilter);
+
   const exportRows = () => {
     if (!rows?.length) return;
     downloadCsv(`attendance-${month}.csv`, [
@@ -140,26 +146,34 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       )}
 
 
-      <Card className="border-border shadow-card">
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="space-y-1.5">
-            <Label>Month</Label>
-            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
-          </div>
-          <div className="space-y-1.5 md:col-span-2">
-            <Label>Staff</Label>
-            <Select value={staffId} onValueChange={setStaffId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Staff</SelectItem>
-                {staff?.map((s) => (
-                  <SelectItem key={s.user_id} value={s.user_id}>{s.full_name} — {s.mobile}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-end gap-2">
+        <div className="space-y-1.5 flex-1 sm:max-w-xs">
+          <Label>Month</Label>
+          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+        </div>
+        <FiltersPopover
+          activeCount={(staffId !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0)}
+          onClear={() => { setStaffId('all'); setStatusFilter('all'); }}
+        >
+          <FilterSelect
+            label="Staff"
+            value={staffId}
+            onChange={setStaffId}
+            allLabel="All staff"
+            options={(staff ?? []).map((s) => ({ value: s.user_id, label: `${s.full_name} — ${s.mobile}` }))}
+          />
+          <FilterSelect
+            label="Daily status"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            allLabel="Any status"
+            options={(['present', 'late', 'half_day', 'absent'] as const).map((k) => ({
+              value: k,
+              label: k.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+            }))}
+          />
+        </FiltersPopover>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         {(['present', 'late', 'half_day', 'absent'] as const).map((k) => (
@@ -181,9 +195,9 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       <Card className="border-border shadow-card">
         <CardHeader className="pb-3"><CardTitle className="text-base">Daily attendance</CardTitle></CardHeader>
         <CardContent>
-          {!rows?.length ? <p className="text-sm text-muted-foreground">No data.</p> : (
+          {!dailyRows.length ? <p className="text-sm text-muted-foreground">No data.</p> : (
             <div className="space-y-2">
-              {rows.map((r: any) => (
+              {dailyRows.map((r: any) => (
                 <div key={r.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-2 text-sm">
                   <div className="min-w-0">
                     <p className="font-medium truncate">{staffName(r.staff_user_id)}</p>

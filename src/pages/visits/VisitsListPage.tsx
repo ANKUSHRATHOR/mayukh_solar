@@ -11,6 +11,7 @@ import TableToolbar from '@/components/common/TableToolbar';
 import { defaultTableView, type TableView } from '@/components/common/ViewToggle';
 import { useStickyState } from '@/hooks/useStickyState';
 import TablePagination from '@/components/common/TablePagination';
+import FilterSelect from '@/components/common/FilterSelect';
 import StatusBadge from '@/components/common/StatusBadge';
 import LeadCallLink from '@/components/leads/LeadCallLink';
 import { useStaffNames } from '@/hooks/useStaffNames';
@@ -19,6 +20,8 @@ import { defaultSort } from '@/lib/tableQuery';
 import {
   fetchVisitTabCounts,
   fetchVisitsPage,
+  SCHEDULED_WINDOWS,
+  type ScheduledWindow,
   type VisitTab,
   type VisitWithLead,
   outcomeLabel,
@@ -35,9 +38,24 @@ const VisitsListPage = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState<VisitTab>('open');
   const [view, setView] = useStickyState<TableView>('visits-list:view', defaultTableView());
-  const { nameOf } = useStaffNames();
+  const [assignee, setAssignee] = useState('all');
+  const [when, setWhen] = useState<ScheduledWindow>('all');
+  const { nameOf, staff } = useStaffNames();
 
-  const filters = useMemo(() => ({ tab }), [tab]);
+  const filters = useMemo(() => ({ tab, assignee, when }), [tab, assignee, when]);
+
+  const staffOptions = useMemo(
+    () =>
+      Array.from(staff?.values() ?? [])
+        .sort((a, b) => a.full_name.localeCompare(b.full_name))
+        .map((s) => ({ value: s.user_id, label: s.full_name })),
+    [staff]
+  );
+  const activeFilterCount = (assignee !== 'all' ? 1 : 0) + (when !== 'all' ? 1 : 0);
+  const clearFilters = () => {
+    setAssignee('all');
+    setWhen('all');
+  };
 
   const table = useServerTable<VisitWithLead>({
     queryKey: ['visits', 'list'],
@@ -184,6 +202,26 @@ const VisitsListPage = () => {
         viewsLabel="Filter by visit state"
         layout={view}
         onLayoutChange={setView}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={clearFilters}
+        filters={
+          <>
+            <FilterSelect
+              label="Assigned to"
+              value={assignee}
+              onChange={setAssignee}
+              allLabel="Anyone"
+              options={[{ value: 'unassigned', label: 'Not assigned' }, ...staffOptions]}
+            />
+            <FilterSelect
+              label="Scheduled"
+              value={when}
+              onChange={(v) => setWhen(v as ScheduledWindow)}
+              allLabel="Any date"
+              options={SCHEDULED_WINDOWS}
+            />
+          </>
+        }
       />
 
       <DataTable

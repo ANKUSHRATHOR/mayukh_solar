@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, KeyRound, ShieldAlert } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterSelect from '@/components/common/FilterSelect';
 
 interface LogRow {
   id: string;
@@ -19,6 +21,8 @@ interface LogRow {
 const PasswordResetLogs = () => {
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [staffFilter, setStaffFilter] = useState('all');
+  const [resetByFilter, setResetByFilter] = useState('all');
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -61,18 +65,40 @@ const PasswordResetLogs = () => {
     })();
   }, [toast]);
 
+  // People who actually appear in the log, so no choice leads to an empty list.
+  const peopleIn = (key: 'staff' | 'reset_by') => {
+    const seen = new Map<string, string>();
+    logs.forEach((l) => seen.set(l[`${key}_user_id`], l[`${key}_name`] ?? 'Unknown'));
+    return Array.from(seen, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+  };
+  const staffOptions = useMemo(() => peopleIn('staff'), [logs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const resetByOptions = useMemo(() => peopleIn('reset_by'), [logs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const visible = logs.filter(
+    (l) =>
+      (staffFilter === 'all' || l.staff_user_id === staffFilter) &&
+      (resetByFilter === 'all' || l.reset_by_user_id === resetByFilter)
+  );
+
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6 animate-in-up">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/users')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl">Password Reset Logs</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Audit trail of admin-issued password resets.
           </p>
         </div>
+        <FiltersPopover
+          activeCount={(staffFilter !== 'all' ? 1 : 0) + (resetByFilter !== 'all' ? 1 : 0)}
+          onClear={() => { setStaffFilter('all'); setResetByFilter('all'); }}
+        >
+          <FilterSelect label="Staff member" value={staffFilter} onChange={setStaffFilter} allLabel="Everyone" options={staffOptions} />
+          <FilterSelect label="Reset by" value={resetByFilter} onChange={setResetByFilter} allLabel="Any admin" options={resetByOptions} />
+        </FiltersPopover>
       </div>
 
       {loading ? (
@@ -82,9 +108,11 @@ const PasswordResetLogs = () => {
           <ShieldAlert className="mx-auto h-12 w-12 text-muted-foreground/40 mb-4" />
           <p className="text-muted-foreground">No password resets have been issued yet.</p>
         </div>
+      ) : visible.length === 0 ? (
+        <div className="bento p-10 text-center text-muted-foreground">No resets match these filters.</div>
       ) : (
         <div className="grid gap-3">
-          {logs.map((l) => (
+          {visible.map((l) => (
             <div
               key={l.id}
               className="bento p-4 flex items-start gap-4 transition-shadow hover:shadow-elevated"

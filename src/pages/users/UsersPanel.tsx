@@ -9,6 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2, KeyRound, History, Users, Phone, Briefcase, Wrench, Settings2, UserCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterSelect from '@/components/common/FilterSelect';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +67,7 @@ const UsersPanel = () => {
   const [staffList, setStaffList] = useState<StaffWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [editStaff, setEditStaff] = useState<StaffWithRole | null>(null);
   const [editName, setEditName] = useState('');
   const [editMobile, setEditMobile] = useState('');
@@ -228,9 +231,15 @@ const UsersPanel = () => {
     return s.role ? cat.roles.includes(s.role) : false;
   };
 
-  const visible = staffList.filter((s) => matchesSearch(s) && inCategory(s, tab));
+  const matchesStatus = (s: StaffWithRole) =>
+    statusFilter === 'all' ||
+    (statusFilter === 'active' && s.is_active) ||
+    (statusFilter === 'inactive' && !s.is_active) ||
+    (statusFilter === 'must_change_password' && Boolean(s.must_change_password));
 
-  const countFor = (key: string) => staffList.filter((s) => inCategory(s, key)).length;
+  const visible = staffList.filter((s) => matchesSearch(s) && matchesStatus(s) && inCategory(s, tab));
+
+  const countFor = (key: string) => staffList.filter((s) => matchesStatus(s) && inCategory(s, key)).length;
 
   const pendingUsers = staffList.filter((s) => !s.role);
 
@@ -363,14 +372,29 @@ const UsersPanel = () => {
         </Card>
       )}
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name, mobile, email, or role..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      <div className="flex items-center gap-2">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name, mobile, email, or role..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <FiltersPopover activeCount={statusFilter !== 'all' ? 1 : 0} onClear={() => setStatusFilter('all')}>
+          <FilterSelect
+            label="Status"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            allLabel="Any status"
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Deactivated' },
+              { value: 'must_change_password', label: 'Must set password' },
+            ]}
+          />
+        </FiltersPopover>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">

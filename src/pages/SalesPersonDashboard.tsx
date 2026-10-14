@@ -9,6 +9,7 @@ import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
 import TablePagination from '@/components/common/TablePagination';
+import FilterSelect from '@/components/common/FilterSelect';
 import StatusBadge from '@/components/common/StatusBadge';
 import StatCard from '@/components/dashboard/StatCard';
 import LeadCallLink from '@/components/leads/LeadCallLink';
@@ -21,9 +22,19 @@ import {
   fetchMyVisitCounts,
   fetchMyVisitsPage,
   outcomeLabel,
+  SCHEDULED_WINDOWS,
   type MyVisitScope,
+  type ScheduledWindow,
   type VisitWithLead,
 } from '@/lib/visits';
+
+type VisitStatusFilter = 'all' | 'scheduled' | 'completed' | 'cancelled';
+
+const STATUS_OPTIONS = [
+  { value: 'scheduled', label: 'Pending' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
 
 const overdueMap = { overdue: { label: 'Overdue', tone: 'danger' as const } };
 
@@ -43,10 +54,35 @@ const emptyCopy: Record<MyVisitScope, { title: string; description: string }> = 
 const SalesPersonDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [scope, setScope] = useState<MyVisitScope>('today');
+  const [scope, setScopeState] = useState<MyVisitScope>('today');
+  const [status, setStatusState] = useState<VisitStatusFilter>('all');
+  const [when, setWhenState] = useState<ScheduledWindow>('all');
   const [view, setView] = useStickyState<TableView>('sales-dashboard:view', defaultTableView());
 
-  const filters = useMemo(() => ({ assignee: user?.id ?? '', scope }), [user?.id, scope]);
+  // The tiles are presets and the popover refines the full list. Picking a
+  // filter therefore moves to "All assigned", and picking Today or Due clears
+  // the filters — so a refinement never silently narrows a tile's count.
+  const setScope = (next: MyVisitScope) => {
+    setScopeState(next);
+    if (next !== 'all') {
+      setStatusState('all');
+      setWhenState('all');
+    }
+  };
+  const setStatus = (next: VisitStatusFilter) => {
+    setStatusState(next);
+    if (next !== 'all') setScopeState('all');
+  };
+  const setWhen = (next: ScheduledWindow) => {
+    setWhenState(next);
+    if (next !== 'all') setScopeState('all');
+  };
+  const activeFilterCount = (status !== 'all' ? 1 : 0) + (when !== 'all' ? 1 : 0);
+
+  const filters = useMemo(
+    () => ({ assignee: user?.id ?? '', scope, status, when }),
+    [user?.id, scope, status, when]
+  );
 
   const table = useServerTable<VisitWithLead>({
     queryKey: ['visits', 'mine'],
@@ -190,6 +226,29 @@ const SalesPersonDashboard = () => {
         viewsLabel="Filter visits"
         layout={view}
         onLayoutChange={setView}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={() => {
+          setStatusState('all');
+          setWhenState('all');
+        }}
+        filters={
+          <>
+            <FilterSelect
+              label="Status"
+              value={status}
+              onChange={(v) => setStatus(v as VisitStatusFilter)}
+              allLabel="Any status"
+              options={STATUS_OPTIONS}
+            />
+            <FilterSelect
+              label="Scheduled"
+              value={when}
+              onChange={(v) => setWhen(v as ScheduledWindow)}
+              allLabel="Any date"
+              options={SCHEDULED_WINDOWS}
+            />
+          </>
+        }
       />
 
       <DataTable

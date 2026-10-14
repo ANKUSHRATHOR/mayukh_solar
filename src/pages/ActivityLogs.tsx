@@ -4,7 +4,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterSelect from '@/components/common/FilterSelect';
 import { Search, ShieldCheck, Trash2, XCircle, Activity, User, Monitor, Smartphone, Download } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
@@ -41,6 +42,7 @@ const ActivityLogs = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
+  const [userFilter, setUserFilter] = useState<string>('all');
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -67,6 +69,7 @@ const ActivityLogs = () => {
 
   const filtered = logs.filter((log) => {
     if (actionFilter !== 'all' && log.action !== actionFilter) return false;
+    if (userFilter !== 'all' && log.user_id !== userFilter) return false;
     const text = `${log.action} ${log.entity_type} ${log.entity_id} ${staffName(log.user_id)} ${reasonText(log)}`.toLowerCase();
     return !search || text.includes(search.toLowerCase());
   });
@@ -97,14 +100,30 @@ const ActivityLogs = () => {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="pl-10" />
           </div>
-          <Select value={actionFilter} onValueChange={setActionFilter}>
-            <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="All actions" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All actions</SelectItem>
-              {allActions.map((a) => <SelectItem key={a} value={a}>{actionLabel(a)}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={exportLogs}><Download className="h-4 w-4 mr-1" /> Export</Button>
+          <div className="flex gap-2">
+            <FiltersPopover
+              activeCount={(actionFilter !== 'all' ? 1 : 0) + (userFilter !== 'all' ? 1 : 0)}
+              onClear={() => { setActionFilter('all'); setUserFilter('all'); }}
+            >
+              <FilterSelect
+                label="Action"
+                value={actionFilter}
+                onChange={setActionFilter}
+                allLabel="All actions"
+                options={allActions.map((a) => ({ value: a, label: actionLabel(a) }))}
+              />
+              <FilterSelect
+                label="User"
+                value={userFilter}
+                onChange={setUserFilter}
+                allLabel="Everyone"
+                options={staff
+                  .map((s) => ({ value: s.user_id, label: s.full_name }))
+                  .sort((a, b) => a.label.localeCompare(b.label))}
+              />
+            </FiltersPopover>
+            <Button variant="outline" className="flex-1 sm:flex-none" onClick={exportLogs}><Download className="h-4 w-4 mr-1" /> Export</Button>
+          </div>
         </div>
       </div>
 

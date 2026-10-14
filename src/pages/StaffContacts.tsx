@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Search, Users } from 'lucide-react';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterSelect from '@/components/common/FilterSelect';
 
 interface StaffContact {
   user_id: string;
@@ -56,7 +58,7 @@ const StaffContacts = () => {
         </h1>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -66,27 +68,18 @@ const StaffContacts = () => {
             className="pl-10 h-11"
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            size="sm"
-            variant={roleFilter === 'all' ? 'default' : 'outline'}
-            onClick={() => setRoleFilter('all')}
-            className={roleFilter === 'all' ? 'gradient-primary text-primary-foreground' : ''}
-          >
-            All ({contacts.length})
-          </Button>
-          {roles.map(r => (
-            <Button
-              key={r}
-              size="sm"
-              variant={roleFilter === r ? 'default' : 'outline'}
-              onClick={() => setRoleFilter(r)}
-              className={roleFilter === r ? 'gradient-primary text-primary-foreground' : ''}
-            >
-              {roleLabel(r)}
-            </Button>
-          ))}
-        </div>
+        <FiltersPopover activeCount={roleFilter !== 'all' ? 1 : 0} onClear={() => setRoleFilter('all')}>
+          <FilterSelect
+            label="Role"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            allLabel={`All roles (${contacts.length})`}
+            options={roles.map(r => ({
+              value: r,
+              label: `${roleLabel(r)} (${contacts.filter(c => c.role === r).length})`,
+            }))}
+          />
+        </FiltersPopover>
       </div>
 
       <Card className="shadow-card">

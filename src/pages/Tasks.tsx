@@ -15,8 +15,10 @@ import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/capture';
 import { uploadFile } from '@/lib/fileStore';
 import DocumentPreviewDialog from '@/components/common/DocumentPreviewDialog';
+import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterSelect from '@/components/common/FilterSelect';
 import { Plus, Camera, CheckCircle2, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isBefore, startOfDay } from 'date-fns';
 
 const priorityColor: Record<string, string> = {
   low: 'bg-muted text-muted-foreground',
@@ -51,7 +53,11 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     },
   });
 
-  const { data: tasks } = useQuery({
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [dueFilter, setDueFilter] = useState('all');
+
+  const { data: allTasks } = useQuery({
     queryKey: ['tasks', role, staff?.user_id],
     enabled: !!staff?.user_id,
     queryFn: async () => {
@@ -121,6 +127,27 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     } catch (e: any) {
       toast({ title: 'Failed', description: e.message, variant: 'destructive' });
     } finally { setSubmitting(false); }
+  };
+
+  // Overdue is derived, never stored: due before today and not yet completed.
+  const isOverdue = (task: { due_date?: string | null; status: string }) =>
+    Boolean(task.due_date) && task.status !== 'completed' && isBefore(new Date(task.due_date), startOfDay(new Date()));
+
+  const tasks = (allTasks || []).filter((task) =>
+    (priorityFilter === 'all' || task.priority === priorityFilter) &&
+    (assigneeFilter === 'all' || task.assigned_to_user_id === assigneeFilter) &&
+    (dueFilter === 'all' ||
+      (dueFilter === 'overdue' && isOverdue(task)) ||
+      (dueFilter === 'has_due' && Boolean(task.due_date)) ||
+      (dueFilter === 'no_due' && !task.due_date))
+  );
+
+  const activeFilterCount =
+    (priorityFilter !== 'all' ? 1 : 0) + (assigneeFilter !== 'all' ? 1 : 0) + (dueFilter !== 'all' ? 1 : 0);
+  const clearFilters = () => {
+    setPriorityFilter('all');
+    setAssigneeFilter('all');
+    setDueFilter('all');
   };
 
   const pendingCount = (tasks || []).filter((x: any) => x.status === 'pending').length;
@@ -201,8 +228,42 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         ))}
       </div>
 
-      {!tasks?.length ? (
-        <div className="bento p-8 text-center text-muted-foreground">No tasks yet.</div>
+      <div className="flex justify-end">
+        <FiltersPopover activeCount={activeFilterCount} onClear={clearFilters}>
+          <FilterSelect
+            label="Priority"
+            value={priorityFilter}
+            onChange={setPriorityFilter}
+            allLabel="Any priority"
+            options={['urgent', 'high', 'medium', 'low'].map((p) => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))}
+          />
+          {isAdminOrOp && (
+            <FilterSelect
+              label="Assigned to"
+              value={assigneeFilter}
+              onChange={setAssigneeFilter}
+              allLabel="Anyone"
+              options={(salesPersons || []).map((p) => ({ value: p.user_id, label: p.full_name }))}
+            />
+          )}
+          <FilterSelect
+            label="Due date"
+            value={dueFilter}
+            onChange={setDueFilter}
+            allLabel="Any"
+            options={[
+              { value: 'overdue', label: 'Overdue' },
+              { value: 'has_due', label: 'Has a due date' },
+              { value: 'no_due', label: 'No due date' },
+            ]}
+          />
+        </FiltersPopover>
+      </div>
+
+      {!tasks.length ? (
+        <div className="bento p-8 text-center text-muted-foreground">
+          {allTasks?.length ? 'No tasks match these filters.' : 'No tasks yet.'}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
           {/* Pending Column */}
