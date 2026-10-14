@@ -15,8 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { compressImage } from '@/lib/capture';
 import { uploadFile } from '@/lib/fileStore';
 import DocumentPreviewDialog from '@/components/common/DocumentPreviewDialog';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
-import FilterSelect from '@/components/common/FilterSelect';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 import { Plus, Camera, CheckCircle2, Loader2 } from 'lucide-react';
 import { format, isBefore, startOfDay } from 'date-fns';
 
@@ -53,9 +53,7 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     },
   });
 
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [assigneeFilter, setAssigneeFilter] = useState('all');
-  const [dueFilter, setDueFilter] = useState('all');
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
 
   const { data: allTasks } = useQuery({
     queryKey: ['tasks', role, staff?.user_id],
@@ -133,22 +131,38 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const isOverdue = (task: { due_date?: string | null; status: string }) =>
     Boolean(task.due_date) && task.status !== 'completed' && isBefore(new Date(task.due_date), startOfDay(new Date()));
 
-  const tasks = (allTasks || []).filter((task) =>
-    (priorityFilter === 'all' || task.priority === priorityFilter) &&
-    (assigneeFilter === 'all' || task.assigned_to_user_id === assigneeFilter) &&
-    (dueFilter === 'all' ||
-      (dueFilter === 'overdue' && isOverdue(task)) ||
-      (dueFilter === 'has_due' && Boolean(task.due_date)) ||
-      (dueFilter === 'no_due' && !task.due_date))
-  );
+  type TaskRow = NonNullable<typeof allTasks>[number];
+  const filterFields: FilterField<TaskRow>[] = [
+    { key: 'title', label: 'Title', type: 'text' },
+    { key: 'description', label: 'Description', type: 'text' },
+    {
+      key: 'priority',
+      label: 'Priority',
+      type: 'option',
+      options: ['urgent', 'high', 'medium', 'low'].map((p) => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) })),
+    },
+    // Only admins and operators see other people's tasks, so only they can
+    // usefully filter by assignee.
+    ...(isAdminOrOp
+      ? [{
+          key: 'assigned_to_user_id',
+          label: 'Assigned to',
+          type: 'option' as const,
+          options: (salesPersons || []).map((p) => ({ value: p.user_id, label: p.full_name })),
+        }]
+      : []),
+    { key: 'due_date', label: 'Due date', type: 'date', dateKind: 'day' },
+    {
+      key: 'overdue',
+      label: 'Overdue',
+      type: 'option',
+      options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }],
+      get: (task) => String(isOverdue(task)),
+    },
+    { key: 'created_at', label: 'Assigned on', type: 'date', dateKind: 'timestamp' },
+  ];
 
-  const activeFilterCount =
-    (priorityFilter !== 'all' ? 1 : 0) + (assigneeFilter !== 'all' ? 1 : 0) + (dueFilter !== 'all' ? 1 : 0);
-  const clearFilters = () => {
-    setPriorityFilter('all');
-    setAssigneeFilter('all');
-    setDueFilter('all');
-  };
+  const tasks = (allTasks || []).filter(rowMatcher(conditions, filterFields));
 
   const pendingCount = (tasks || []).filter((x: any) => x.status === 'pending').length;
   const inProgressCount = (tasks || []).filter((x: any) => x.status === 'in_progress').length;
@@ -229,35 +243,7 @@ const Tasks = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       </div>
 
       <div className="flex justify-end">
-        <FiltersPopover activeCount={activeFilterCount} onClear={clearFilters}>
-          <FilterSelect
-            label="Priority"
-            value={priorityFilter}
-            onChange={setPriorityFilter}
-            allLabel="Any priority"
-            options={['urgent', 'high', 'medium', 'low'].map((p) => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))}
-          />
-          {isAdminOrOp && (
-            <FilterSelect
-              label="Assigned to"
-              value={assigneeFilter}
-              onChange={setAssigneeFilter}
-              allLabel="Anyone"
-              options={(salesPersons || []).map((p) => ({ value: p.user_id, label: p.full_name }))}
-            />
-          )}
-          <FilterSelect
-            label="Due date"
-            value={dueFilter}
-            onChange={setDueFilter}
-            allLabel="Any"
-            options={[
-              { value: 'overdue', label: 'Overdue' },
-              { value: 'has_due', label: 'Has a due date' },
-              { value: 'no_due', label: 'No due date' },
-            ]}
-          />
-        </FiltersPopover>
+        <FilterBuilder fields={filterFields} value={conditions} onApply={setConditions} />
       </div>
 
       {!tasks.length ? (

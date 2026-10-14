@@ -2,14 +2,6 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClipboardList, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
 import TablePagination from '@/components/common/TablePagination';
@@ -21,6 +13,7 @@ import { downloadCsv } from '@/lib/exportCsv';
 import { workKindMeta, workStatusMeta, type WorkKind } from '@/lib/performance';
 import { workItemsPageFetcher, type WorkBucket, type WorkItem } from '@/lib/performanceData';
 import { Download } from 'lucide-react';
+import { countApplied, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 
 interface WorkItemsPanelProps {
   from: string;
@@ -94,19 +87,46 @@ const WorkItemsPanel = ({
   dense = false,
 }: WorkItemsPanelProps) => {
   const navigate = useNavigate();
-  const [kind, setKind] = useState<string>('all');
-  const [status, setStatus] = useState<string>('all');
-  const [priority, setPriority] = useState<string>('all');
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
   const [view, setView] = useStickyState<TableView>('performance-work:view', defaultTableView());
 
-  const filters = useMemo(
-    () => ({
-      kind: kind === 'all' ? null : kind,
-      status: status === 'all' ? null : status,
-      priority: priority === 'all' ? null : priority,
-    }),
-    [kind, status, priority]
+  // `performance_work_items` pages and counts in Postgres with the same
+  // predicate the tiles use, and takes these three as fixed parameters — so the
+  // fields offer "is" only, which is all the function can express.
+  const filterFields = useMemo<FilterField<never>[]>(
+    () => [
+      {
+        key: 'kind',
+        label: 'Type',
+        type: 'option',
+        operators: ['is'],
+        options: (Object.keys(workKindMeta) as WorkKind[]).map((k) => ({ value: k, label: workKindMeta[k].label })),
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        type: 'option',
+        operators: ['is'],
+        options: (Object.keys(workStatusMeta) as (keyof typeof workStatusMeta)[]).map((k) => ({
+          value: k,
+          label: workStatusMeta[k].label,
+        })),
+      },
+      {
+        key: 'priority',
+        label: 'Priority',
+        type: 'option',
+        operators: ['is'],
+        options: Object.entries(priorityMeta).map(([value, meta]) => ({ value, label: meta.label })),
+      },
+    ],
+    []
   );
+
+  const filters = useMemo(() => {
+    const valueOf = (field: string) => conditions.find((c) => c.field === field && c.value)?.value ?? null;
+    return { kind: valueOf('kind'), status: valueOf('status'), priority: valueOf('priority') };
+  }, [conditions]);
 
   const table = useServerTable<WorkItem>({
     queryKey: ['performance-work-items', from, to, role ?? 'all', staff ?? 'all', bucket],
@@ -117,7 +137,6 @@ const WorkItemsPanel = ({
     filters,
   });
 
-  const activeFilterCount = [kind, status, priority].filter((v) => v !== 'all').length;
 
   const columns: DataTableColumn<WorkItem>[] = [
     {
@@ -255,52 +274,9 @@ const WorkItemsPanel = ({
         viewsLabel="Work subset"
         layout={dense ? undefined : view}
         onLayoutChange={dense ? undefined : setView}
-        activeFilterCount={activeFilterCount}
-        onClearFilters={() => {
-          setKind('all');
-          setStatus('all');
-          setPriority('all');
-        }}
-        filters={
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Type</Label>
-              <Select value={kind} onValueChange={setKind}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Every type</SelectItem>
-                  {(Object.keys(workKindMeta) as WorkKind[]).map((k) => (
-                    <SelectItem key={k} value={k}>{workKindMeta[k].plural}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Every status</SelectItem>
-                  {(Object.keys(workStatusMeta) as (keyof typeof workStatusMeta)[]).map((s) => (
-                    <SelectItem key={s} value={s}>{workStatusMeta[s].label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Priority</Label>
-              <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Any priority</SelectItem>
-                  {Object.entries(priorityMeta).map(([value, meta]) => (
-                    <SelectItem key={value} value={value}>{meta.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        }
+        filterFields={filterFields}
+        conditions={conditions}
+        onConditionsChange={setConditions}
         actions={
           <Button
             type="button"
@@ -319,6 +295,7 @@ const WorkItemsPanel = ({
 
       <DataTable
         table={table}
+        filtered={countApplied(conditions, filterFields) > 0}
         columns={columns}
         rowKey={(row) => `${row.kind}:${row.item_id}:${row.owner_id}`}
         onRowClick={open}

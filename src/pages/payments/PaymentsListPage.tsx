@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -13,14 +13,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
@@ -36,12 +28,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { defaultSort } from '@/lib/tableQuery';
 import { canAddPayment } from '@/lib/capabilities';
 import { downloadCsv } from '@/lib/exportCsv';
-import { formatMoney, paymentModeLabels } from '@/lib/payments';
+import { formatMoney, paymentModeLabels, paymentTypeLabels } from '@/lib/payments';
+import { countApplied, newConditionId, type FilterCondition, type FilterField } from '@/lib/filterConditions';
+import { allProjectStageMeta } from '@/lib/projectStages';
+import { useStaffNames } from '@/hooks/useStaffNames';
 import {
   fetchDuesPage,
   fetchPaymentKpis,
   fetchPaymentsPage,
   isPaymentTab,
+  DUE_FILTER_FIELDS,
+  PAYMENT_FILTER_FIELDS,
   PAYMENT_MODES,
   type DueRow,
   type PaymentMode,
@@ -69,27 +66,61 @@ const PaymentsListPage = () => {
   // page. project_payments takes inserts from admin, operator and sales only.
   const canAdd = canAddPayment(role);
 
-  // Tab and filters live in the URL so a KPI tile can point at a filtered list
-  // and the back button steps between them. Validated on read: an unvalidated
-  // ?mode=foo reaches .eq('payment_mode','foo') and PostgREST 400s.
+  // The tab lives in the URL so a KPI tile can point at a subset and the back
+  // button steps between them.
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
   const tab: PaymentTab = isPaymentTab(rawTab) ? rawTab : 'all';
-  const rawMode = searchParams.get('mode');
-  const mode = PAYMENT_MODES.includes(rawMode as PaymentMode) ? (rawMode as PaymentMode) : '';
-
-  const setParams = (next: { tab?: PaymentTab; mode?: string }) => {
+  const setTab = (value: PaymentTab) => {
     const params = new URLSearchParams(searchParams);
-    const nextTab = next.tab ?? tab;
-    const nextMode = next.mode ?? mode;
-    if (nextTab === 'all') params.delete('tab');
-    else params.set('tab', nextTab);
-    if (!nextMode) params.delete('mode');
-    else params.set('mode', nextMode);
+    if (value === 'all') params.delete('tab');
+    else params.set('tab', value);
     setSearchParams(params, { replace: true });
   };
-  const setTab = (value: PaymentTab) => setParams({ tab: value });
-  const setMode = (value: string) => setParams({ mode: value });
+
+  // Condition filters, one set per table: the payments ledger and the dues
+  // view have different columns.
+  const [conditions, setConditions] = useStickyState<FilterCondition[]>('payments-list:conditions', []);
+  const [dueConditions, setDueConditions] = useStickyState<FilterCondition[]>('payments-dues:conditions', []);
+
+  // ?mode= predates the condition filters; a link carrying it still works, as
+  // a "Mode is …" condition the reader can see and remove. Validated first: an
+  // unknown mode would reach PostgREST and 400 on the check constraint.
+  const rawMode = searchParams.get('mode');
+  useEffect(() => {
+    if (rawMode === null) return;
+    if (PAYMENT_MODES.includes(rawMode as PaymentMode)) {
+      setConditions((prev) => [
+        ...prev.filter((c) => c.field !== 'payment_mode'),
+        { id: newConditionId(), field: 'payment_mode', op: 'is', value: rawMode },
+      ]);
+    }
+    const params = new URLSearchParams(searchParams);
+    params.delete('mode');
+    setSearchParams(params, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawMode]);
+
+  const { staff } = useStaffNames();
+  const [paymentFields, dueFields] = useMemo(() => {
+    const people = Array.from(staff?.values() ?? [])
+      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+      .map((p) => ({ value: p.user_id, label: p.full_name }));
+    const labelled = (labels: Record<string, string>) =>
+      Object.entries(labels).map(([value, label]) => ({ value, label }));
+    const options: Record<string, FilterField<never>['options']> = {
+      payment_mode: labelled(paymentModeLabels),
+      status: labelled({ pending: 'Pending', completed: 'Completed', rejected: 'Rejected' }),
+      source: labelled({ customer: 'Customer', bank: 'Bank' }),
+      payment_type: labelled(paymentTypeLabels),
+      project_status: Object.entries(allProjectStageMeta).map(([value, m]) => ({ value, label: m.label })),
+      assigned_sales_person_id: people,
+      is_overdue: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }],
+    };
+    const fill = (fields: FilterField<never>[]) =>
+      fields.map((f) => (options[f.key] ? { ...f, options: options[f.key] } : f));
+    return [fill(PAYMENT_FILTER_FIELDS), fill(DUE_FILTER_FIELDS)];
+  }, [staff]);
 
   // The list only ever creates; editing, assigning and deleting live on the
   // payment's own page, so there is one place that owns them.
@@ -112,7 +143,7 @@ const PaymentsListPage = () => {
 
   const showDues = tab === 'dues';
 
-  const filters = useMemo(() => ({ tab, mode: mode || undefined }), [tab, mode]);
+  const filters = useMemo(() => ({ tab, conditions }), [tab, conditions]);
 
   const payments = useServerTable<PaymentRow>({
     queryKey: ['payments', 'list'],
@@ -127,7 +158,7 @@ const PaymentsListPage = () => {
     queryKey: ['payments', 'dues'],
     fetchPage: fetchDuesPage,
     initialSort: defaultSort('net_meter_installed_at', 'asc'),
-    filters: useMemo(() => ({}), []),
+    filters: useMemo(() => ({ conditions: dueConditions }), [dueConditions]),
     persistKey: 'payments-dues',
     enabled: showDues,
   });
@@ -418,10 +449,14 @@ const PaymentsListPage = () => {
             viewsLabel="Filter payments"
             layout={view}
             onLayoutChange={setView}
+            filterFields={dueFields}
+            conditions={dueConditions}
+            onConditionsChange={setDueConditions}
           />
           <DataTable
             layout={layout}
             table={dues}
+            filtered={countApplied(dueConditions, dueFields) > 0}
             columns={dueColumns}
             rowKey={(d) => d.project_id}
             onRowClick={(d) => navigate(`/projects/${d.project_id}?tab=payments`)}
@@ -436,36 +471,20 @@ const PaymentsListPage = () => {
           <TableToolbar
             table={payments}
             searchPlaceholder="Search by K-Number, name, mobile or reference…"
-            activeFilterCount={mode ? 1 : 0}
-            onClearFilters={() => setMode('')}
             views={tabs}
             activeView={tab}
             onViewChange={(v) => setTab(v as PaymentTab)}
             viewsLabel="Filter payments"
             layout={view}
             onLayoutChange={setView}
-            filters={
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Mode</Label>
-                <Select value={mode || 'all'} onValueChange={(v) => setMode(v === 'all' ? '' : v)}>
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="Any mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Any mode</SelectItem>
-                    {PAYMENT_MODES.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {paymentModeLabels[m]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            }
+            filterFields={paymentFields}
+            conditions={conditions}
+            onConditionsChange={setConditions}
           />
           <DataTable
             layout={layout}
             table={payments}
+            filtered={countApplied(conditions, paymentFields) > 0}
             columns={paymentColumns}
             rowKey={(p) => p.id}
             onRowClick={(p) => navigate(`/payments/${p.id}`)}

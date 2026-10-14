@@ -85,6 +85,12 @@ interface DataTableProps<T> {
    * silently ignore "Table" on a narrow window.
    */
   layout?: 'auto' | 'cards' | 'table';
+  /**
+   * Whether filters narrow the list. An empty filtered list then says "no
+   * matches" rather than the "nothing here yet" copy, which would read as
+   * though the records did not exist.
+   */
+  filtered?: boolean;
   className?: string;
 }
 
@@ -130,6 +136,7 @@ function DataTable<T>({
   emptyIcon,
   emptyAction,
   layout = 'auto',
+  filtered = false,
   className,
 }: DataTableProps<T>) {
   const { rows, isLoading, isFetching, error, refetch, sort, toggleSort, isSearching } = table;
@@ -143,16 +150,19 @@ function DataTable<T>({
   }
 
   if (rows.length === 0) {
+    const narrowed = isSearching || filtered;
     return (
       <EmptyState
-        title={isSearching ? 'No matches' : emptyTitle}
+        title={narrowed ? 'No matches' : emptyTitle}
         description={
           isSearching
             ? 'No records match your search. Try a different term or clear the filters.'
-            : emptyDescription
+            : filtered
+              ? 'No records match these filters. Change or clear them under Filters.'
+              : emptyDescription
         }
         icon={emptyIcon}
-        action={isSearching ? undefined : emptyAction}
+        action={narrowed ? undefined : emptyAction}
       />
     );
   }

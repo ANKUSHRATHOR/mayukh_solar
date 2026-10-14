@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Search, Users } from 'lucide-react';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
-import FilterSelect from '@/components/common/FilterSelect';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 
 interface StaffContact {
   user_id: string;
@@ -29,7 +29,7 @@ const StaffContacts = () => {
   const [contacts, setContacts] = useState<StaffContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -42,12 +42,23 @@ const StaffContacts = () => {
 
   const roles = useMemo(() => Array.from(new Set(contacts.map(c => c.role))), [contacts]);
 
+  const filterFields: FilterField<StaffContact>[] = [
+    {
+      key: 'role',
+      label: 'Role',
+      type: 'option',
+      options: roles.map(r => ({ value: r, label: `${roleLabel(r)} (${contacts.filter(c => c.role === r).length})` })),
+    },
+    { key: 'full_name', label: 'Name', type: 'text' },
+    { key: 'mobile', label: 'Mobile', type: 'text' },
+  ];
+  const matchesConditions = rowMatcher(conditions, filterFields);
+
   const filtered = contacts.filter(c => {
     const matchSearch = !search ||
       c.full_name.toLowerCase().includes(search.toLowerCase()) ||
       c.mobile.includes(search);
-    const matchRole = roleFilter === 'all' || c.role === roleFilter;
-    return matchSearch && matchRole;
+    return matchSearch && matchesConditions(c);
   });
 
   return (
@@ -68,18 +79,7 @@ const StaffContacts = () => {
             className="pl-10 h-11"
           />
         </div>
-        <FiltersPopover activeCount={roleFilter !== 'all' ? 1 : 0} onClear={() => setRoleFilter('all')}>
-          <FilterSelect
-            label="Role"
-            value={roleFilter}
-            onChange={setRoleFilter}
-            allLabel={`All roles (${contacts.length})`}
-            options={roles.map(r => ({
-              value: r,
-              label: `${roleLabel(r)} (${contacts.filter(c => c.role === r).length})`,
-            }))}
-          />
-        </FiltersPopover>
+        <FilterBuilder fields={filterFields} value={conditions} onApply={setConditions} />
       </div>
 
       <Card className="shadow-card">

@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button';
 import { CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -18,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar as CalIcon, Download, Filter, PhoneCall, Search, Upload, Phone, RefreshCw, Trash2, Pencil, MoreVertical } from 'lucide-react';
+import { Download, PhoneCall, Search, Upload, Phone, RefreshCw, Trash2, Pencil, MoreVertical } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -39,7 +37,14 @@ import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import StatusBadge from '@/components/common/StatusBadge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { ServerTable, SortState } from '@/hooks/useServerTable';
-import { leadStatusMeta, type StatusTone } from '@/lib/statusMeta';
+import { leadSourceMeta, leadStatusMeta, projectStatusMeta, type StatusTone } from '@/lib/statusMeta';
+import {
+  applyClause,
+  countApplied,
+  resolveConditions,
+  type FilterCondition,
+  type FilterField,
+} from '@/lib/filterConditions';
 import { retryQuery } from '@/lib/retry';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -88,7 +93,6 @@ type LeadRow = {
 
 
 type StatusFilter = 'all' | LeadStatus | 'documents_pending' | 'quotation_sent' | 'site_visit';
-type DateFilter = 'all' | 'today' | 'this_week' | 'this_month' | 'custom';
 
 const statusLabel = (s: string) => s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -99,27 +103,6 @@ const formatDate = (value: string | null) => value
 const formatDateTime = (value: string | null) => value
   ? new Date(value).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '—';
-
-const startOfToday = () => {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
-};
-
-const startOfWeek = () => {
-  const date = startOfToday();
-  const day = date.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  date.setDate(date.getDate() - diff);
-  return date;
-};
-
-const startOfMonth = () => {
-  const date = startOfToday();
-  date.setDate(1);
-  return date;
-};
-
 
 /**
  * Whether a lead matches a stage filter. Shared by the table filter and the
@@ -219,15 +202,63 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   // and the realtime subscription.
   const debouncedSearch = useDebouncedValue(search, 300);
   const [filterStatus, setFilterStatus] = useStickyState<StatusFilter>('admin-leads:status', 'all');
-  const [filterCreator, setFilterCreator] = useStickyState<string>('admin-leads:creator', 'all');
-  const [filterAssigned, setFilterAssigned] = useStickyState<string>('admin-leads:assigned', 'all');
-  const [filterOperator, setFilterOperator] = useStickyState<string>('admin-leads:operator', 'all');
-  const [filterProjectType, setFilterProjectType] = useStickyState<'all' | PaymentType>('admin-leads:projectType', 'all');
-  const [filterCampaign, setFilterCampaign] = useStickyState<string>('admin-leads:campaign', 'all');
+  // Field · condition · value rows from the Filters popover, ANDed, applied in
+  // Postgres. These replace the fixed creator/assignee/operator/campaign/date
+  // filters, two of which were persisted and applied with no control left.
+  const [conditions, setConditions] = useStickyState<FilterCondition[]>('admin-leads:conditions', []);
   const [campaignOptions, setCampaignOptions] = useState<string[]>([]);
-  const [filterDate, setFilterDate] = useStickyState<DateFilter>('admin-leads:date', 'all');
-  const [customFrom, setCustomFrom] = useStickyState<string>('admin-leads:customFrom', '');
-  const [customTo, setCustomTo] = useStickyState<string>('admin-leads:customTo', '');
+
+  const leadFields = useMemo<FilterField<never>[]>(() => {
+    const people = Object.values(staffDirectory)
+      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+      .map((m) => ({ value: m.user_id, label: m.full_name }));
+    const fromMeta = (meta: Record<string, { label: string }>) =>
+      Object.entries(meta).map(([value, m]) => ({ value, label: m.label }));
+    return [
+      { key: 'k_number', label: 'K-Number', type: 'text' },
+      { key: 'customer_name', label: 'Customer name', type: 'text' },
+      { key: 'mobile', label: 'Mobile', type: 'text' },
+      { key: 'village_city', label: 'City / village', type: 'text' },
+      { key: 'district', label: 'District', type: 'text' },
+      { key: 'status', label: 'Lead status', type: 'option', options: fromMeta(leadStatusMeta) },
+      { key: 'source', label: 'Source', type: 'option', options: fromMeta(leadSourceMeta) },
+      { key: 'campaign', label: 'Campaign', type: 'option', options: campaignOptions.map((c) => ({ value: c, label: c })) },
+      { key: 'created_by_user_id', label: 'Created by', type: 'option', options: people },
+      {
+        key: 'assigned_either',
+        label: 'Assigned to (either role)',
+        type: 'option',
+        columns: ['assigned_to_user_id', 'assigned_telecaller_id'],
+        options: people,
+      },
+      { key: 'assigned_telecaller_id', label: 'Telecaller', type: 'option', options: people },
+      { key: 'assigned_to_user_id', label: 'Sales rep', type: 'option', options: people },
+      { key: 'assigned_operator_id', label: 'Operator', type: 'option', options: operatorStaff.map((m) => ({ value: m.user_id, label: m.full_name })) },
+      {
+        key: 'project_type',
+        label: 'Payment type',
+        type: 'option',
+        options: [
+          { value: 'cash', label: 'Cash' },
+          { value: 'loan', label: 'Loan' },
+          { value: 'loan_cash', label: 'Loan + cash' },
+        ],
+      },
+      { key: 'project_status', label: 'Project stage', type: 'option', options: fromMeta(projectStatusMeta) },
+      { key: 'has_quotation', label: 'Quotation sent', type: 'option', options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }] },
+      { key: 'kw_interest', label: 'kW interest', type: 'number' },
+      { key: 'created_at', label: 'Created on', type: 'date', dateKind: 'timestamp' },
+      { key: 'last_activity_at', label: 'Last updated', type: 'date', dateKind: 'timestamp' },
+      { key: 'follow_up_date', label: 'Follow-up date', type: 'date', dateKind: 'timestamp' },
+      { key: 'last_visit_at', label: 'Last visit', type: 'date', dateKind: 'timestamp' },
+    ];
+  }, [campaignOptions, operatorStaff, staffDirectory]);
+  const conditionsApplied = countApplied(conditions, leadFields) > 0;
+  // The query reads the fields through a ref: their option lists fill in as the
+  // staff directory and campaigns load, which changes nothing about how a
+  // condition resolves but would otherwise refetch the list each time.
+  const leadFieldsRef = useRef(leadFields);
+  leadFieldsRef.current = leadFields;
   // A column + direction rather than a named enum, so the shared table's
   // sortable headers drive it directly. Every value is a real leads_list column.
   const [sort, setSort] = useStickyState<SortState>('admin-leads:sort2', {
@@ -286,25 +317,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     else if (filterStatusValue === 'site_visit') query = query.eq('status', 'visited');
     else if (filterStatusValue !== 'all') query = query.eq('status', filterStatusValue);
 
-    if (filterCreator !== 'all') query = query.eq('created_by_user_id', filterCreator);
-    // A lead now sits with a telecaller *and* a sales rep, so "assigned to"
-    // matches either slot, and "not assigned" means neither is filled.
-    if (filterAssigned === 'unassigned') {
-      query = query.is('assigned_to_user_id', null).is('assigned_telecaller_id', null);
-    } else if (filterAssigned !== 'all') {
-      query = query.or(`assigned_to_user_id.eq.${filterAssigned},assigned_telecaller_id.eq.${filterAssigned}`);
-    }
-    if (filterOperator !== 'all') query = query.eq('assigned_operator_id', filterOperator);
-    if (filterProjectType !== 'all') query = query.eq('project_type', filterProjectType);
-    if (filterCampaign !== 'all') query = query.eq('campaign', filterCampaign);
-
-    if (filterDate === 'today') query = query.gte('last_activity_at', startOfToday().toISOString());
-    else if (filterDate === 'this_week') query = query.gte('last_activity_at', startOfWeek().toISOString());
-    else if (filterDate === 'this_month') query = query.gte('last_activity_at', startOfMonth().toISOString());
-    else if (filterDate === 'custom') {
-      if (customFrom) query = query.gte('last_activity_at', new Date(`${customFrom}T00:00:00`).toISOString());
-      if (customTo) query = query.lte('last_activity_at', new Date(`${customTo}T23:59:59`).toISOString());
-    }
+    query = applyClause(query, resolveConditions(conditions, leadFieldsRef.current));
 
     // The sales rep queues were client-side filters over the full list; as
     // server filters they now page correctly.
@@ -317,7 +330,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     }
 
     return query.order(sort.column, { ascending: sort.direction === 'asc', nullsFirst: false });
-  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCampaign, filterCreator, filterDate, filterOperator, filterProjectType, filterStatus, role, salesTab, sort, user]);
+  }, [conditions, debouncedSearch, filterStatus, role, salesTab, sort, user]);
 
   // Campaign names for the filter. Reloaded after an import, which is where new
   // campaigns come from; a failure only empties the dropdown.
@@ -383,39 +396,19 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
    * `leads_list` per render was enough to push queries past the 8s
    * statement_timeout and starve unrelated endpoints.
    *
-   * These must stay in step with buildLeadsQuery above — every filter there
-   * except the stage itself belongs here, or a count will disagree with the
-   * list clicking it produces.
+   * It knows the search and the sales rep's queue, not the condition filters:
+   * those are arbitrary, and the function takes fixed parameters. So while any
+   * condition is applied the per-stage tallies are not fetched at all — a count
+   * that ignores the filters would disagree with the list it opens.
    */
   const buildStageCountArgs = useCallback(() => {
     const term = debouncedSearch.trim().replace(/[,()*]/g, ' ').trim();
-
-    let from: string | null = null;
-    let to: string | null = null;
-    if (filterDate === 'today') from = startOfToday().toISOString();
-    else if (filterDate === 'this_week') from = startOfWeek().toISOString();
-    else if (filterDate === 'this_month') from = startOfMonth().toISOString();
-    else if (filterDate === 'custom') {
-      if (customFrom) from = new Date(`${customFrom}T00:00:00`).toISOString();
-      if (customTo) to = new Date(`${customTo}T23:59:59`).toISOString();
-    }
-
     return {
       _search: term || null,
-      _creator: filterCreator !== 'all' ? filterCreator : null,
-      _assigned: filterAssigned !== 'all' && filterAssigned !== 'unassigned' ? filterAssigned : null,
-      _unassigned: filterAssigned === 'unassigned',
-      _operator: filterOperator !== 'all' ? filterOperator : null,
-      _project_type: filterProjectType !== 'all' ? filterProjectType : null,
-      _from: from,
-      _to: to,
       _scope: role === 'sales_person' && user ? salesTab : 'all',
       _scope_user: role === 'sales_person' && user ? user.id : null,
-      // Sent only when set, so the counts keep working against a database that
-      // predates the parameter — PostgREST rejects an argument it does not know.
-      ...(filterCampaign !== 'all' ? { _campaign: filterCampaign } : {}),
     };
-  }, [customFrom, customTo, debouncedSearch, filterAssigned, filterCampaign, filterCreator, filterDate, filterOperator, filterProjectType, role, salesTab, user]);
+  }, [debouncedSearch, role, salesTab, user]);
 
   const fetchData = useCallback(async (background = false) => {
     const requestId = ++requestIdRef.current;
@@ -429,7 +422,9 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       // executes once, so `retryQuery` needs a factory to retry from.
       const [leadsRes, stageRes] = await Promise.all([
         retryQuery(() => buildLeadsQuery().range(page * pageSize, page * pageSize + pageSize - 1)),
-        retryQuery(() => supabase.rpc('leads_stage_counts' as any, buildStageCountArgs())),
+        conditionsApplied
+          ? Promise.resolve({ data: null, error: null })
+          : retryQuery(() => supabase.rpc('leads_stage_counts' as any, buildStageCountArgs())),
       ]);
 
       if (leadsRes.error) throw leadsRes.error;
@@ -441,7 +436,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
       // The stage bar is decoration around the list; if only its count fails,
       // show the list rather than failing the whole page.
-      if (stageRes.error) setStageCounts({});
+      if (stageRes.error || conditionsApplied) setStageCounts({});
       else setStageCounts((stageRes.data as Record<string, number>) || {});
     } catch (error: any) {
       if (requestId !== requestIdRef.current) return;
@@ -465,7 +460,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [buildLeadsQuery, buildStageCountArgs, page, pageSize, toast]);
+  }, [buildLeadsQuery, buildStageCountArgs, conditionsApplied, page, pageSize, toast]);
 
   // Any filter change re-queries from the first page; staying on page 7 of a
   // result set that just shrank to two pages would show an empty table.
@@ -653,17 +648,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     })).sort((a, b) => (b.created + b.assigned) - (a.created + a.assigned)).slice(0, 8);
   }, [filteredRows]);
 
-  // Stage is deliberately absent: it has its own dropdown in the toolbar row, so
-  // counting it here would badge the popover for a filter it does not contain —
-  // the mirror of the "applied with no visible control" trap the popover guards.
-  const activeFilterCount = [
-    filterCreator !== 'all',
-    filterAssigned !== 'all',
-    filterOperator !== 'all',
-    filterProjectType !== 'all',
-    filterCampaign !== 'all',
-    filterDate !== 'all',
-  ].filter(Boolean).length;
+
 
 
   const bulkAssign = async () => {
@@ -729,18 +714,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     }
   };
 
-  const resetFilters = () => {
-    // Not the stage — Clear empties the popover, and the stage lives outside it.
-    setFilterCreator('all');
-    setFilterAssigned('all');
-    setFilterOperator('all');
-    setFilterProjectType('all');
-    setFilterCampaign('all');
-    setFilterDate('all');
-    setCustomFrom('');
-    setCustomTo('');
-    setSort({ column: 'last_activity_at', direction: 'desc' });
-  };
+
 
   const exportRows = () => {
     downloadCsv('leads-crm-export.csv', [
@@ -777,10 +751,11 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       ...STAGE_BAR_STAGES.map((stage) => ({
         value: stage.value,
         label: stage.label,
-        count: stageCounts[stage.value] ?? 0,
+        // No tally while condition filters are applied; see buildStageCountArgs.
+        count: conditionsApplied ? undefined : stageCounts[stage.value] ?? 0,
       })),
     ],
-    [total, stageCounts]
+    [conditionsApplied, total, stageCounts]
   );
 
   const leadsTable: ServerTable<LeadRow> = useMemo(
@@ -996,60 +971,6 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   ) : null;
 
   /** Filter controls, now inside the shared FiltersPopover instead of a bespoke one. */
-  const filterControls = (
-    <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">Created By</Label>
-                  <Select value={filterCreator} onValueChange={setFilterCreator}>
-                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Staff</SelectItem>
-                      {allStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">Assigned To (either role)</Label>
-                  <Select value={filterAssigned} onValueChange={setFilterAssigned}>
-                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Anyone</SelectItem>
-                      <SelectItem value="unassigned">Not assigned</SelectItem>
-                      {assignableStaff.map((member) => (
-                        <SelectItem key={member.user_id} value={member.user_id}>
-                          {member.full_name}{member.role === 'telecaller' ? ' (Telecaller)' : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">Campaign</Label>
-                  <Select value={filterCampaign} onValueChange={setFilterCampaign}>
-                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Campaigns</SelectItem>
-                      {/* A stale sticky value keeps its option, or the trigger would render blank. */}
-                      {filterCampaign !== 'all' && !campaignOptions.includes(filterCampaign) && (
-                        <SelectItem value={filterCampaign}>{filterCampaign}</SelectItem>
-                      )}
-                      {campaignOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">Operator</Label>
-                  <Select value={filterOperator} onValueChange={setFilterOperator}>
-                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Operators</SelectItem>
-                      {operatorStaff.map((member) => <SelectItem key={member.user_id} value={member.user_id}>{member.full_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-    </div>
-  );
-
   const Shell = isEmbedded
     ? ({ children }: { children: React.ReactNode }) => <div className="space-y-5">{children}</div>
     : PageContainer;
@@ -1118,14 +1039,15 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         viewsLabel="Filter by stage"
         layout={view}
         onLayoutChange={setView}
-        activeFilterCount={activeFilterCount}
-        onClearFilters={resetFilters}
-        filters={filterControls}
+        filterFields={leadFields}
+        conditions={conditions}
+        onConditionsChange={(next) => { setConditions(next); setPage(0); }}
       />
 
       <DataTable
         layout={view}
         table={leadsTable}
+        filtered={conditionsApplied}
         columns={columns}
         rowKey={(lead) => lead.id}
         selectable={canManageLeads}

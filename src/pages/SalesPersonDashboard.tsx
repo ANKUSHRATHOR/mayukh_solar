@@ -9,7 +9,6 @@ import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
 import TableToolbar from '@/components/common/TableToolbar';
 import TablePagination from '@/components/common/TablePagination';
-import FilterSelect from '@/components/common/FilterSelect';
 import StatusBadge from '@/components/common/StatusBadge';
 import StatCard from '@/components/dashboard/StatCard';
 import LeadCallLink from '@/components/leads/LeadCallLink';
@@ -22,19 +21,14 @@ import {
   fetchMyVisitCounts,
   fetchMyVisitsPage,
   outcomeLabel,
-  SCHEDULED_WINDOWS,
+  VISIT_FILTER_FIELDS,
+  visitFieldOptions,
   type MyVisitScope,
-  type ScheduledWindow,
   type VisitWithLead,
 } from '@/lib/visits';
-
-type VisitStatusFilter = 'all' | 'scheduled' | 'completed' | 'cancelled';
-
-const STATUS_OPTIONS = [
-  { value: 'scheduled', label: 'Pending' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
+import { countApplied, type FilterCondition, type FilterField } from '@/lib/filterConditions';
+import { leadStatusMeta } from '@/lib/statusMeta';
+import { useStaffNames } from '@/hooks/useStaffNames';
 
 const overdueMap = { overdue: { label: 'Overdue', tone: 'danger' as const } };
 
@@ -55,33 +49,39 @@ const SalesPersonDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [scope, setScopeState] = useState<MyVisitScope>('today');
-  const [status, setStatusState] = useState<VisitStatusFilter>('all');
-  const [when, setWhenState] = useState<ScheduledWindow>('all');
+  const [conditions, setConditionsState] = useState<FilterCondition[]>([]);
   const [view, setView] = useStickyState<TableView>('sales-dashboard:view', defaultTableView());
 
-  // The tiles are presets and the popover refines the full list. Picking a
+  const { staff } = useStaffNames();
+  const filterFields = useMemo<FilterField<never>[]>(() => {
+    const people = Array.from(staff?.values() ?? [])
+      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+      .map((p) => ({ value: p.user_id, label: p.full_name }));
+    const options = visitFieldOptions(
+      people,
+      Object.entries(leadStatusMeta).map(([value, m]) => ({ value, label: m.label }))
+    );
+    // Every visit here is already this rep's, so "Assigned to" would be noise.
+    return VISIT_FILTER_FIELDS.filter((f) => f.key !== 'assigned_to_user_id').map((f) =>
+      options[f.key] ? { ...f, options: options[f.key] } : f
+    );
+  }, [staff]);
+
+  // The tiles are presets and the popover refines the full list. Applying a
   // filter therefore moves to "All assigned", and picking Today or Due clears
   // the filters — so a refinement never silently narrows a tile's count.
   const setScope = (next: MyVisitScope) => {
     setScopeState(next);
-    if (next !== 'all') {
-      setStatusState('all');
-      setWhenState('all');
-    }
+    if (next !== 'all') setConditionsState([]);
   };
-  const setStatus = (next: VisitStatusFilter) => {
-    setStatusState(next);
-    if (next !== 'all') setScopeState('all');
+  const setConditions = (next: FilterCondition[]) => {
+    setConditionsState(next);
+    if (countApplied(next, filterFields) > 0) setScopeState('all');
   };
-  const setWhen = (next: ScheduledWindow) => {
-    setWhenState(next);
-    if (next !== 'all') setScopeState('all');
-  };
-  const activeFilterCount = (status !== 'all' ? 1 : 0) + (when !== 'all' ? 1 : 0);
 
   const filters = useMemo(
-    () => ({ assignee: user?.id ?? '', scope, status, when }),
-    [user?.id, scope, status, when]
+    () => ({ assignee: user?.id ?? '', scope, conditions }),
+    [user?.id, scope, conditions]
   );
 
   const table = useServerTable<VisitWithLead>({
@@ -226,34 +226,15 @@ const SalesPersonDashboard = () => {
         viewsLabel="Filter visits"
         layout={view}
         onLayoutChange={setView}
-        activeFilterCount={activeFilterCount}
-        onClearFilters={() => {
-          setStatusState('all');
-          setWhenState('all');
-        }}
-        filters={
-          <>
-            <FilterSelect
-              label="Status"
-              value={status}
-              onChange={(v) => setStatus(v as VisitStatusFilter)}
-              allLabel="Any status"
-              options={STATUS_OPTIONS}
-            />
-            <FilterSelect
-              label="Scheduled"
-              value={when}
-              onChange={(v) => setWhen(v as ScheduledWindow)}
-              allLabel="Any date"
-              options={SCHEDULED_WINDOWS}
-            />
-          </>
-        }
+        filterFields={filterFields}
+        conditions={conditions}
+        onConditionsChange={setConditions}
       />
 
       <DataTable
         layout={view}
         table={table}
+        filtered={countApplied(conditions, filterFields) > 0}
         columns={columns}
         rowKey={(v) => v.id}
         onRowClick={(v) => navigate(`/visits/${v.id}`)}

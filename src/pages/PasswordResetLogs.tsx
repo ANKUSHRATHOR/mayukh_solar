@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, KeyRound, ShieldAlert } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
-import FilterSelect from '@/components/common/FilterSelect';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 
 interface LogRow {
   id: string;
@@ -21,8 +21,7 @@ interface LogRow {
 const PasswordResetLogs = () => {
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [staffFilter, setStaffFilter] = useState('all');
-  const [resetByFilter, setResetByFilter] = useState('all');
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -74,11 +73,12 @@ const PasswordResetLogs = () => {
   const staffOptions = useMemo(() => peopleIn('staff'), [logs]); // eslint-disable-line react-hooks/exhaustive-deps
   const resetByOptions = useMemo(() => peopleIn('reset_by'), [logs]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const visible = logs.filter(
-    (l) =>
-      (staffFilter === 'all' || l.staff_user_id === staffFilter) &&
-      (resetByFilter === 'all' || l.reset_by_user_id === resetByFilter)
-  );
+  const filterFields: FilterField<LogRow>[] = [
+    { key: 'staff_user_id', label: 'Staff member', type: 'option', options: staffOptions },
+    { key: 'reset_by_user_id', label: 'Reset by', type: 'option', options: resetByOptions },
+    { key: 'created_at', label: 'When', type: 'date', dateKind: 'timestamp' },
+  ];
+  const visible = logs.filter(rowMatcher(conditions, filterFields));
 
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6 animate-in-up">
@@ -92,13 +92,7 @@ const PasswordResetLogs = () => {
             Audit trail of admin-issued password resets.
           </p>
         </div>
-        <FiltersPopover
-          activeCount={(staffFilter !== 'all' ? 1 : 0) + (resetByFilter !== 'all' ? 1 : 0)}
-          onClear={() => { setStaffFilter('all'); setResetByFilter('all'); }}
-        >
-          <FilterSelect label="Staff member" value={staffFilter} onChange={setStaffFilter} allLabel="Everyone" options={staffOptions} />
-          <FilterSelect label="Reset by" value={resetByFilter} onChange={setResetByFilter} allLabel="Any admin" options={resetByOptions} />
-        </FiltersPopover>
+        <FilterBuilder fields={filterFields} value={conditions} onApply={setConditions} />
       </div>
 
       {loading ? (

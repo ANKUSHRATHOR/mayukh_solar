@@ -3,6 +3,7 @@ import { documentLabels, type DocumentType } from '@/lib/documents';
 import { uploadFile } from '@/lib/fileStore';
 import { applyPaging, toTablePage } from '@/lib/tableQuery';
 import type { TableQueryParams, TablePage } from '@/hooks/useServerTable';
+import { applyClause, resolveConditions, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 
 /**
  * Site visits.
@@ -161,6 +162,43 @@ const VISIT_SELECT = `
 export type VisitTab = 'open' | 'completed' | 'cancelled';
 
 /**
+ * Filterable visit columns. Customer columns come from the inner-joined lead.
+ * Option lists are the page's to fill in. `visit_status` is offered only where
+ * the list spans states (the sales dashboard's "All assigned"); the Visits page
+ * splits by state in its own dropdown.
+ */
+export const VISIT_FILTER_FIELDS: FilterField<never>[] = [
+  { key: 'k_number', label: 'K-Number', type: 'text', columns: ['leads.k_number'] },
+  { key: 'customer_name', label: 'Customer name', type: 'text', columns: ['leads.customer_name'] },
+  { key: 'mobile', label: 'Mobile', type: 'text', columns: ['leads.mobile'] },
+  { key: 'village_city', label: 'City / village', type: 'text', columns: ['leads.village_city'] },
+  { key: 'district', label: 'District', type: 'text', columns: ['leads.district'] },
+  { key: 'lead_status', label: 'Lead status', type: 'option', columns: ['leads.status'] },
+  { key: 'visit_status', label: 'Visit status', type: 'option' },
+  { key: 'assigned_to_user_id', label: 'Assigned to', type: 'option' },
+  { key: 'staff_id', label: 'Booked by', type: 'option' },
+  { key: 'scheduled_for', label: 'Scheduled for', type: 'date', dateKind: 'timestamp' },
+  { key: 'completed_at', label: 'Completed on', type: 'date', dateKind: 'timestamp' },
+  { key: 'outcome', label: 'Outcome', type: 'option' },
+];
+
+/** Options for the visit fields; `people` comes from the staff directory. */
+export const visitFieldOptions = (
+  people: { value: string; label: string }[],
+  leadStatuses: { value: string; label: string }[]
+): Record<string, { value: string; label: string }[]> => ({
+  lead_status: leadStatuses,
+  visit_status: [
+    { value: 'scheduled', label: 'Pending' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' },
+  ],
+  assigned_to_user_id: people,
+  staff_id: people,
+  outcome: VISIT_OUTCOMES.map((o) => ({ value: o.value, label: o.label })),
+});
+
+/**
  * Roles that book, edit and cancel visits. The server (`can_manage_site_visit`)
  * is the real gate and also narrows by lead ownership; this only decides
  * whether to offer the controls.
@@ -183,12 +221,7 @@ export const canDeleteVisits = (role: string | null | undefined): boolean => rol
 export const fetchVisitsPage = async (
   params: TableQueryParams
 ): Promise<TablePage<VisitWithLead>> => {
-  const { tab, assignee = 'all', when = 'all' } = params.filters as {
-    tab?: VisitTab;
-    /** A user id, `unassigned`, or `all`. */
-    assignee?: string;
-    when?: ScheduledWindow;
-  };
+  const { tab, conditions = [] } = params.filters as { tab?: VisitTab; conditions?: FilterCondition[] };
   const term = params.search.trim().replace(/[,()*]/g, ' ').trim();
 
   let query = supabase.from('site_visits').select(VISIT_SELECT, { count: 'exact' });
@@ -198,12 +231,7 @@ export const fetchVisitsPage = async (
     tab === 'completed' ? 'completed' : tab === 'cancelled' ? 'cancelled' : 'scheduled'
   );
 
-  if (assignee === 'unassigned') query = query.is('assigned_to_user_id', null);
-  else if (assignee !== 'all') query = query.eq('assigned_to_user_id', assignee);
-
-  const { from, before } = windowBounds(when);
-  if (from) query = query.gte('scheduled_for', from);
-  if (before) query = query.lt('scheduled_for', before);
+  query = applyClause(query, resolveConditions(conditions, VISIT_FILTER_FIELDS));
 
   if (term) query = query.in('lead_id', await leadIdsMatching(term));
 
@@ -255,37 +283,6 @@ const todayBounds = () => {
   return { start: start.toISOString(), end: end.toISOString() };
 };
 
-/**
- * A filter on when a visit is booked for. Calendar periods in local time: the
- * week starts on Monday, and `past` is anything before today.
- */
-export type ScheduledWindow = 'all' | 'past' | 'today' | 'week' | 'month';
-
-export const SCHEDULED_WINDOWS: { value: Exclude<ScheduledWindow, 'all'>; label: string }[] = [
-  { value: 'past', label: 'Before today' },
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This week' },
-  { value: 'month', label: 'This month' },
-];
-
-const windowBounds = (when: ScheduledWindow): { from?: string; before?: string } => {
-  if (when === 'all') return {};
-  const { start, end } = todayBounds();
-  if (when === 'past') return { before: start };
-  if (when === 'today') return { from: start, before: end };
-  const now = new Date();
-  if (when === 'week') {
-    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
-    const next = new Date(monday);
-    next.setDate(next.getDate() + 7);
-    return { from: monday.toISOString(), before: next.toISOString() };
-  }
-  return {
-    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
-    before: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString(),
-  };
-};
-
 /** The statuses and scheduled window a scope covers; open-ended where unset. */
 const scopeRange = (scope: MyVisitScope) => {
   if (scope === 'all') return { statuses: ['scheduled', 'completed', 'cancelled'] };
@@ -297,17 +294,16 @@ const scopeRange = (scope: MyVisitScope) => {
 
 /**
  * One page of the visits assigned to `filters.assignee`, narrowed by
- * `filters.scope`, then by the optional `status` and `when` refinements. Both
- * stack on the scope as further conditions, so they can only narrow it.
+ * `filters.scope`, then by any condition filters. Those stack on the scope as
+ * further conditions, so they can only narrow it.
  */
 export const fetchMyVisitsPage = async (
   params: TableQueryParams
 ): Promise<TablePage<VisitWithLead>> => {
-  const { assignee, scope, status = 'all', when = 'all' } = params.filters as {
+  const { assignee, scope, conditions = [] } = params.filters as {
     assignee: string;
     scope: MyVisitScope;
-    status?: 'all' | 'scheduled' | 'completed' | 'cancelled';
-    when?: ScheduledWindow;
+    conditions?: FilterCondition[];
   };
   const term = params.search.trim().replace(/[,()*]/g, ' ').trim();
 
@@ -319,10 +315,7 @@ export const fetchMyVisitsPage = async (
     .in('visit_status', statuses);
   if (from) query = query.gte('scheduled_for', from);
   if (before) query = query.lt('scheduled_for', before);
-  if (status !== 'all') query = query.eq('visit_status', status);
-  const window = windowBounds(when);
-  if (window.from) query = query.gte('scheduled_for', window.from);
-  if (window.before) query = query.lt('scheduled_for', window.before);
+  query = applyClause(query, resolveConditions(conditions, VISIT_FILTER_FIELDS));
   if (term) query = query.in('lead_id', await leadIdsMatching(term));
 
   const result = await applyPaging(query, params);

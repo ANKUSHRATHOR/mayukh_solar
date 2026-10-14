@@ -4,8 +4,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
-import FilterSelect from '@/components/common/FilterSelect';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 import { Search, ShieldCheck, Trash2, XCircle, Activity, User, Monitor, Smartphone, Download } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
@@ -41,8 +41,7 @@ const ActivityLogs = () => {
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [actionFilter, setActionFilter] = useState<string>('all');
-  const [userFilter, setUserFilter] = useState<string>('all');
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -67,9 +66,25 @@ const ActivityLogs = () => {
 
   const allActions = useMemo(() => Array.from(new Set(logs.map((l) => l.action))).sort(), [logs]);
 
+  const distinct = (values: string[]) => Array.from(new Set(values.filter(Boolean))).sort();
+  const filterFields: FilterField<(typeof logs)[number]>[] = [
+    { key: 'action', label: 'Action', type: 'option', options: allActions.map((a) => ({ value: a, label: actionLabel(a) })) },
+    {
+      key: 'user_id',
+      label: 'User',
+      type: 'option',
+      options: staff.map((s) => ({ value: s.user_id, label: s.full_name })).sort((a, b) => a.label.localeCompare(b.label)),
+    },
+    { key: 'entity_type', label: 'Record type', type: 'option', options: distinct(logs.map((l) => l.entity_type)).map((e) => ({ value: e, label: actionLabel(e) })) },
+    { key: 'entity_id', label: 'Record ID', type: 'text' },
+    { key: 'reason', label: 'Reason / detail', type: 'text', get: (l) => { const r = reasonText(l); return r === '—' ? null : r; } },
+    { key: 'device', label: 'Device', type: 'text', get: (l) => { const d = detectDevice(l.new_value?.user_agent).label; return d === '—' ? null : d; } },
+    { key: 'created_at', label: 'When', type: 'date', dateKind: 'timestamp' },
+  ];
+  const matches = rowMatcher(conditions, filterFields);
+
   const filtered = logs.filter((log) => {
-    if (actionFilter !== 'all' && log.action !== actionFilter) return false;
-    if (userFilter !== 'all' && log.user_id !== userFilter) return false;
+    if (!matches(log)) return false;
     const text = `${log.action} ${log.entity_type} ${log.entity_id} ${staffName(log.user_id)} ${reasonText(log)}`.toLowerCase();
     return !search || text.includes(search.toLowerCase());
   });
@@ -101,27 +116,7 @@ const ActivityLogs = () => {
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="pl-10" />
           </div>
           <div className="flex gap-2">
-            <FiltersPopover
-              activeCount={(actionFilter !== 'all' ? 1 : 0) + (userFilter !== 'all' ? 1 : 0)}
-              onClear={() => { setActionFilter('all'); setUserFilter('all'); }}
-            >
-              <FilterSelect
-                label="Action"
-                value={actionFilter}
-                onChange={setActionFilter}
-                allLabel="All actions"
-                options={allActions.map((a) => ({ value: a, label: actionLabel(a) }))}
-              />
-              <FilterSelect
-                label="User"
-                value={userFilter}
-                onChange={setUserFilter}
-                allLabel="Everyone"
-                options={staff
-                  .map((s) => ({ value: s.user_id, label: s.full_name }))
-                  .sort((a, b) => a.label.localeCompare(b.label))}
-              />
-            </FiltersPopover>
+            <FilterBuilder fields={filterFields} value={conditions} onApply={setConditions} />
             <Button variant="outline" className="flex-1 sm:flex-none" onClick={exportLogs}><Download className="h-4 w-4 mr-1" /> Export</Button>
           </div>
         </div>

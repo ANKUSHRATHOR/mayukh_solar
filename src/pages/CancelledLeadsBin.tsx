@@ -9,8 +9,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
 import { Search, Trash2, RotateCcw, MapPin, AlertTriangle } from 'lucide-react';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
-import FilterSelect from '@/components/common/FilterSelect';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 
 const reasonLabel = (r: string | null) => r ? r.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'N/A';
 
@@ -21,9 +21,7 @@ const CancelledLeadsBin = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
-  const [reasonFilter, setReasonFilter] = useState('all');
-  const [creatorFilter, setCreatorFilter] = useState('all');
-  const [districtFilter, setDistrictFilter] = useState('all');
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -86,26 +84,23 @@ const CancelledLeadsBin = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [leads, staff]
   );
-  const districtOptions = useMemo(
-    () => distinct(leads.map(l => l.district)).map(d => ({ value: d, label: d })),
-    [leads]
-  );
-
-  const activeFilterCount =
-    (reasonFilter !== 'all' ? 1 : 0) + (creatorFilter !== 'all' ? 1 : 0) + (districtFilter !== 'all' ? 1 : 0);
-  const clearFilters = () => {
-    setReasonFilter('all');
-    setCreatorFilter('all');
-    setDistrictFilter('all');
-  };
+  const filterFields = useMemo<FilterField<(typeof leads)[number]>[]>(() => [
+    { key: 'cancelled_reason', label: 'Reason', type: 'option', options: reasonOptions },
+    { key: 'cancelled_reason_other', label: 'Reason note', type: 'text' },
+    { key: 'created_by_user_id', label: 'Created by', type: 'option', options: creatorOptions },
+    { key: 'district', label: 'District', type: 'text' },
+    { key: 'village_city', label: 'City / village', type: 'text' },
+    { key: 'k_number', label: 'K-Number', type: 'text' },
+    { key: 'created_at', label: 'Created on', type: 'date', dateKind: 'timestamp' },
+    { key: 'updated_at', label: 'Last updated', type: 'date', dateKind: 'timestamp' },
+  ], [reasonOptions, creatorOptions]);
+  const matches = rowMatcher(conditions, filterFields);
 
   const filtered = leads.filter(l =>
     (!search ||
       l.customer_name.toLowerCase().includes(search.toLowerCase()) ||
       l.mobile.includes(search)) &&
-    (reasonFilter === 'all' || l.cancelled_reason === reasonFilter) &&
-    (creatorFilter === 'all' || l.created_by_user_id === creatorFilter) &&
-    (districtFilter === 'all' || (l.district ?? '').trim() === districtFilter)
+    matches(l)
   );
 
   return (
@@ -122,11 +117,7 @@ const CancelledLeadsBin = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search name or mobile..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
         </div>
-        <FiltersPopover activeCount={activeFilterCount} onClear={clearFilters}>
-          <FilterSelect label="Reason" value={reasonFilter} onChange={setReasonFilter} allLabel="Any reason" options={reasonOptions} />
-          <FilterSelect label="Created by" value={creatorFilter} onChange={setCreatorFilter} allLabel="Anyone" options={creatorOptions} />
-          <FilterSelect label="District" value={districtFilter} onChange={setDistrictFilter} allLabel="All districts" options={districtOptions} />
-        </FiltersPopover>
+        <FilterBuilder fields={filterFields} value={conditions} onApply={setConditions} />
       </div>
 
       <Card className="shadow-card border-border">

@@ -9,8 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { UserPlus, MoreVertical, Search, Shield, Power, Pencil, Trash2, KeyRound, History, Users, Phone, Briefcase, Wrench, Settings2, UserCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
-import FilterSelect from '@/components/common/FilterSelect';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,7 +67,7 @@ const UsersPanel = () => {
   const [staffList, setStaffList] = useState<StaffWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
   const [editStaff, setEditStaff] = useState<StaffWithRole | null>(null);
   const [editName, setEditName] = useState('');
   const [editMobile, setEditMobile] = useState('');
@@ -231,15 +231,33 @@ const UsersPanel = () => {
     return s.role ? cat.roles.includes(s.role) : false;
   };
 
-  const matchesStatus = (s: StaffWithRole) =>
-    statusFilter === 'all' ||
-    (statusFilter === 'active' && s.is_active) ||
-    (statusFilter === 'inactive' && !s.is_active) ||
-    (statusFilter === 'must_change_password' && Boolean(s.must_change_password));
+  // Role is the tab strip below, so it is not offered here as well.
+  const filterFields: FilterField<StaffWithRole>[] = [
+    {
+      key: 'account',
+      label: 'Account',
+      type: 'option',
+      options: [{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Deactivated' }],
+      get: (s) => (s.is_active ? 'active' : 'inactive'),
+    },
+    {
+      key: 'must_change_password',
+      label: 'Must set password',
+      type: 'option',
+      options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }],
+      get: (s) => String(Boolean(s.must_change_password)),
+    },
+    { key: 'full_name', label: 'Name', type: 'text' },
+    { key: 'mobile', label: 'Mobile', type: 'text' },
+    { key: 'email', label: 'Email', type: 'text' },
+    { key: 'last_login', label: 'Last login', type: 'date', dateKind: 'timestamp' },
+    { key: 'created_at', label: 'Joined', type: 'date', dateKind: 'timestamp' },
+  ];
+  const matchesConditions = rowMatcher(conditions, filterFields);
 
-  const visible = staffList.filter((s) => matchesSearch(s) && matchesStatus(s) && inCategory(s, tab));
+  const visible = staffList.filter((s) => matchesSearch(s) && matchesConditions(s) && inCategory(s, tab));
 
-  const countFor = (key: string) => staffList.filter((s) => matchesStatus(s) && inCategory(s, key)).length;
+  const countFor = (key: string) => staffList.filter((s) => matchesConditions(s) && inCategory(s, key)).length;
 
   const pendingUsers = staffList.filter((s) => !s.role);
 
@@ -382,19 +400,7 @@ const UsersPanel = () => {
             className="pl-10"
           />
         </div>
-        <FiltersPopover activeCount={statusFilter !== 'all' ? 1 : 0} onClear={() => setStatusFilter('all')}>
-          <FilterSelect
-            label="Status"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            allLabel="Any status"
-            options={[
-              { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Deactivated' },
-              { value: 'must_change_password', label: 'Must set password' },
-            ]}
-          />
-        </FiltersPopover>
+        <FilterBuilder fields={filterFields} value={conditions} onApply={setConditions} />
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">

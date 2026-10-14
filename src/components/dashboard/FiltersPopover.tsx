@@ -2,17 +2,34 @@ import { ReactNode } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { SlidersHorizontal, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface FiltersPopoverProps {
   activeCount: number;
   onClear: () => void;
   children: ReactNode;
   align?: 'start' | 'center' | 'end';
+  /** Controlled open state, for content that closes itself (an Apply button). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Overrides the panel's width, for content wider than a column of fields. */
+  contentClassName?: string;
+  /** Overrides the spacing between the panel's children. */
+  bodyClassName?: string;
 }
 
-const FiltersPopover = ({ activeCount, onClear, children, align = 'end' }: FiltersPopoverProps) => {
+const FiltersPopover = ({
+  activeCount,
+  onClear,
+  children,
+  align = 'end',
+  open,
+  onOpenChange,
+  contentClassName,
+  bodyClassName,
+}: FiltersPopoverProps) => {
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -38,7 +55,10 @@ const FiltersPopover = ({ activeCount, onClear, children, align = 'end' }: Filte
       <PopoverContent
         align={align}
         sideOffset={8}
-        className="w-[min(92vw,360px)] max-h-[70vh] overflow-y-auto p-4 space-y-4 bg-popover border-border shadow-elevated"
+        className={cn(
+          'w-[min(92vw,360px)] max-h-[70vh] overflow-y-auto p-4 space-y-4 bg-popover border-border shadow-elevated',
+          contentClassName
+        )}
       >
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-foreground">Filters</p>
@@ -52,7 +72,7 @@ const FiltersPopover = ({ activeCount, onClear, children, align = 'end' }: Filte
             </button>
           )}
         </div>
-        <div className="space-y-4">{children}</div>
+        <div className={cn('space-y-4', bodyClassName)}>{children}</div>
       </PopoverContent>
     </Popover>
   );

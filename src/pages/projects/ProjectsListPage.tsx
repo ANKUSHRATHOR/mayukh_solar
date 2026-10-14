@@ -1,16 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Briefcase, CheckCircle2, Download, FileText, IndianRupee, Landmark, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import PageContainer from '@/components/common/PageContainer';
 import PageHeader from '@/components/common/PageHeader';
 import DataTable, { type DataTableColumn } from '@/components/common/DataTable';
@@ -28,10 +20,13 @@ import {
   fetchProjectTabCounts,
   fetchProjectsPage,
   projectIdentity,
+  PROJECT_FILTER_FIELDS,
   type ProjectRow,
   type ProjectTab,
 } from '@/lib/projects';
-import { formatMoney, involvesLoan, paymentTypeLabel } from '@/lib/payments';
+import { formatMoney, involvesLoan, paymentTypeLabel, paymentTypeLabels } from '@/lib/payments';
+import { countApplied, newConditionId, type FilterCondition, type FilterField } from '@/lib/filterConditions';
+import { useStaffNames } from '@/hooks/useStaffNames';
 import { useAuth } from '@/contexts/AuthContext';
 import StatStrip, { type StatItem } from '@/components/common/StatStrip';
 
@@ -47,32 +42,60 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
   const navigate = useNavigate();
   const { role } = useAuth();
 
-  // Tab and stage live in the URL so a KPI tile, a dashboard card or a bookmark
-  // can point at a filtered list, and the back button steps between them.
-  // Both are validated on read: an unvalidated ?stage=foo reaches
-  // .eq('status', 'foo') and PostgREST rejects the enum cast with a 400.
+  // The payment-type tab lives in the URL so a link or bookmark can point at
+  // it, and the back button steps between them. ?stage= is still accepted as a
+  // link target and converted to a condition below.
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useStickyState<TableView>('projects-list:view', defaultTableView());
   const rawTab = searchParams.get('tab');
   const tab: ProjectTab =
     rawTab === 'cash' || rawTab === 'loan' ? rawTab : 'all';
-  const rawStage = searchParams.get('stage') ?? '';
-  const stage = PROJECT_STAGES.some((s) => s.stage === rawStage) ? rawStage : '';
-
-  const setFilters = (next: { tab?: ProjectTab; stage?: string }) => {
+  const setTab = (value: ProjectTab) => {
     const params = new URLSearchParams(searchParams);
-    const nextTab = next.tab ?? tab;
-    const nextStage = next.stage ?? stage;
-    if (nextTab === 'all') params.delete('tab');
-    else params.set('tab', nextTab);
-    if (!nextStage) params.delete('stage');
-    else params.set('stage', nextStage);
+    if (value === 'all') params.delete('tab');
+    else params.set('tab', value);
     setSearchParams(params, { replace: true });
   };
-  const setTab = (value: ProjectTab) => setFilters({ tab: value });
-  const setStage = (value: string) => setFilters({ stage: value });
 
-  const filters = useMemo(() => ({ tab, stage: stage || undefined }), [tab, stage]);
+  const [conditions, setConditions] = useStickyState<FilterCondition[]>('projects-list:conditions', []);
+
+  // A stage shortcut — a strip figure here, or a dashboard tile linking to
+  // ?stage= — becomes a "Stage is …" condition, so it shows in the Filters
+  // popover and can be edited or removed there like any other.
+  const setStage = (value: string) =>
+    setConditions((prev) => [
+      ...prev.filter((c) => c.field !== 'status'),
+      ...(value ? [{ id: newConditionId(), field: 'status', op: 'is' as const, value }] : []),
+    ]);
+
+  const rawStage = searchParams.get('stage');
+  useEffect(() => {
+    if (rawStage === null) return;
+    // Validated: an unknown stage would reach PostgREST as a bad enum cast.
+    if (PROJECT_STAGES.some((s) => s.stage === rawStage)) setStage(rawStage);
+    const params = new URLSearchParams(searchParams);
+    params.delete('stage');
+    setSearchParams(params, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawStage]);
+
+  const { staff } = useStaffNames();
+  const filterFields = useMemo<FilterField<never>[]>(() => {
+    const people = Array.from(staff?.values() ?? [])
+      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+      .map((p) => ({ value: p.user_id, label: p.full_name }));
+    const options: Record<string, FilterField<never>['options']> = {
+      status: PROJECT_STAGES.map((s) => ({ value: s.stage, label: s.label })),
+      payment_type: Object.entries(paymentTypeLabels).map(([value, label]) => ({ value, label })),
+      assigned_sales_person_id: people,
+      assigned_operator_id: people,
+      assigned_welder_id: people,
+      assigned_electrician_id: people,
+    };
+    return PROJECT_FILTER_FIELDS.map((f) => (options[f.key] ? { ...f, options: options[f.key] } : f));
+  }, [staff]);
+
+  const filters = useMemo(() => ({ tab, conditions }), [tab, conditions]);
 
   const table = useServerTable<ProjectRow>({
     queryKey: ['projects', 'list'],
@@ -257,7 +280,10 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
                   value: kpis.blocked,
                   tone: 'danger',
                   hint: kpis.blocked > 0 ? 'awaiting first instalment' : 'none waiting',
-                  onClick: () => setFilters({ tab: 'loan', stage: '' }),
+                  onClick: () => {
+                    setTab('loan');
+                    setStage('');
+                  },
                 }] as StatItem[])
               : []),
             { label: 'Total value', value: formatMoney(kpis.total_value) },
@@ -277,33 +303,15 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
         viewsLabel="Filter by payment type"
         layout={view}
         onLayoutChange={setView}
-        activeFilterCount={stage ? 1 : 0}
-        onClearFilters={() => setStage('')}
-        filters={
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Stage</Label>
-            <Select value={stage || 'all'} onValueChange={(v) => setStage(v === 'all' ? '' : v)}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Any stage" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any stage</SelectItem>
-                {PROJECT_STAGES.filter((s) =>
-                  tab === 'cash' ? s.appliesTo !== 'loan' : true
-                ).map((s) => (
-                  <SelectItem key={s.stage} value={s.stage}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        }
+        filterFields={filterFields}
+        conditions={conditions}
+        onConditionsChange={setConditions}
       />
 
       <DataTable
         layout={view}
         table={table}
+        filtered={countApplied(conditions, filterFields) > 0}
         columns={columns}
         rowKey={(p) => p.id}
         onRowClick={(p) => navigate(`/projects/${p.id}`)}

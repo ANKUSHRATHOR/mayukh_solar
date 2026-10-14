@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
-import FilterSelect from '@/components/common/FilterSelect';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Eye, XCircle, Download, Check, X as XIcon, MapPin } from 'lucide-react';
@@ -23,13 +23,22 @@ const statusColor: Record<string, string> = {
   absent: 'bg-destructive text-destructive-foreground',
 };
 
+interface AttendanceRow {
+  staff_user_id: string;
+  date: string;
+  status: string;
+  worked_minutes: number | null;
+  overtime_minutes: number | null;
+  check_in_at: string | null;
+  check_out_at: string | null;
+}
+
 const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const now = new Date();
   const [month, setMonth] = useStickyState<string>('admin-attendance:month', format(now, 'yyyy-MM'));
-  const [staffId, setStaffId] = useStickyState<string>('admin-attendance:staffId', 'all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [conditions, setConditions] = useStickyState<FilterCondition[]>('admin-attendance:conditions', []);
   const [activeMapCoords, setActiveMapCoords] = useState<{ lat: number; lng: number; title: string } | null>(null);
 
   const { data: staff } = useQuery({
@@ -50,23 +59,19 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   }, [month]);
 
   const { data: rows } = useQuery({
-    queryKey: ['admin-attendance', month, staffId],
+    queryKey: ['admin-attendance', month],
     queryFn: async () => {
-      let q = supabase.from('attendance' as any).select('*').gte('date', range.start).lte('date', range.end).order('date', { ascending: false });
-      if (staffId !== 'all') q = q.eq('staff_user_id', staffId);
-      const { data } = await q;
+      const { data } = await supabase.from('attendance' as any).select('*').gte('date', range.start).lte('date', range.end).order('date', { ascending: false });
       return (data as any[]) || [];
     },
   });
 
   const { data: events } = useQuery({
-    queryKey: ['admin-events', month, staffId],
+    queryKey: ['admin-events', month],
     queryFn: async () => {
       const startISO = new Date(range.start + 'T00:00:00').toISOString();
       const endISO = new Date(range.end + 'T23:59:59').toISOString();
-      let q = supabase.from('attendance_events' as any).select('*').gte('captured_at', startISO).lte('captured_at', endISO).order('captured_at', { ascending: false });
-      if (staffId !== 'all') q = q.eq('staff_user_id', staffId);
-      const { data } = await q;
+      const { data } = await supabase.from('attendance_events' as any).select('*').gte('captured_at', startISO).lte('captured_at', endISO).order('captured_at', { ascending: false });
       return (data as any[]) || [];
     },
   });
@@ -106,22 +111,50 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     qc.invalidateQueries({ queryKey: ['punch-out-requests'] });
   };
 
+  const filterFields = useMemo<FilterField<AttendanceRow>[]>(() => [
+    { key: 'staff_user_id', label: 'Staff', type: 'option', options: (staff ?? []).map((s) => ({ value: s.user_id, label: `${s.full_name} — ${s.mobile}` })) },
+    {
+      key: 'status',
+      label: 'Daily status',
+      type: 'option',
+      options: [
+        { value: 'present', label: 'Present' },
+        { value: 'late', label: 'Late' },
+        { value: 'half_day', label: 'Half day' },
+        { value: 'absent', label: 'Absent' },
+      ],
+    },
+    { key: 'date', label: 'Date', type: 'date', dateKind: 'day' },
+    { key: 'worked_hours', label: 'Hours worked', type: 'number', get: (r) => (r.worked_minutes == null ? null : r.worked_minutes / 60) },
+    { key: 'overtime_hours', label: 'Overtime hours', type: 'number', get: (r) => (r.overtime_minutes == null ? null : r.overtime_minutes / 60) },
+    { key: 'check_in_at', label: 'Checked in', type: 'date', dateKind: 'timestamp' },
+    { key: 'check_out_at', label: 'Checked out', type: 'date', dateKind: 'timestamp' },
+  ], [staff]);
+
+  // The month is fetched whole and every condition applies here, so the tiles,
+  // the daily list and the export all describe the same filtered rows. A staff
+  // condition also narrows the punch events, which share the column.
+  const visibleRows = useMemo(
+    () => (rows ?? []).filter(rowMatcher(conditions, filterFields)),
+    [rows, conditions, filterFields]
+  );
+  const visibleEvents = useMemo(
+    () => (events ?? []).filter(rowMatcher(conditions.filter((c) => c.field === 'staff_user_id'), filterFields)),
+    [events, conditions, filterFields]
+  );
+
   const summary = useMemo(() => {
     const s = { present: 0, late: 0, half_day: 0, absent: 0, hours: 0, overtime: 0 };
-    rows?.forEach((r: any) => {
+    visibleRows.forEach((r: any) => {
       (s as any)[r.status] = ((s as any)[r.status] || 0) + 1;
       s.hours += (r.worked_minutes || 0) / 60;
       s.overtime += (r.overtime_minutes || 0) / 60;
     });
     return s;
-  }, [rows]);
-
-  // The status filter narrows the daily list only; the tiles above it are the
-  // month's totals by status, which a status filter would just zero out.
-  const dailyRows = (rows ?? []).filter((r) => statusFilter === 'all' || r.status === statusFilter);
+  }, [visibleRows]);
 
   const exportRows = () => {
-    if (!rows?.length) return;
+    if (!visibleRows.length) return;
     downloadCsv(`attendance-${month}.csv`, [
       { header: 'Date', value: (r: any) => format(new Date(r.date), 'yyyy-MM-dd') },
       { header: 'Staff', value: (r: any) => staffName(r.staff_user_id) },
@@ -130,7 +163,7 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       { header: 'Check Out', value: (r: any) => r.check_out_at ? format(new Date(r.check_out_at), 'HH:mm') : '' },
       { header: 'Worked (min)', value: (r: any) => r.worked_minutes || 0 },
       { header: 'Overtime (min)', value: (r: any) => r.overtime_minutes || 0 },
-    ], rows);
+    ], visibleRows);
   };
 
   return (
@@ -141,7 +174,7 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
             <h1 className="text-2xl font-bold text-foreground">Attendance Reports</h1>
             <p className="text-sm text-muted-foreground mt-1">Daily logs, GPS, bike-meter images and rejections</p>
           </div>
-          <Button variant="outline" size="sm" onClick={exportRows} disabled={!rows?.length}><Download className="h-4 w-4 mr-1" /> Export CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportRows} disabled={!visibleRows.length}><Download className="h-4 w-4 mr-1" /> Export CSV</Button>
         </div>
       )}
 
@@ -151,28 +184,7 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
           <Label>Month</Label>
           <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
         </div>
-        <FiltersPopover
-          activeCount={(staffId !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0)}
-          onClear={() => { setStaffId('all'); setStatusFilter('all'); }}
-        >
-          <FilterSelect
-            label="Staff"
-            value={staffId}
-            onChange={setStaffId}
-            allLabel="All staff"
-            options={(staff ?? []).map((s) => ({ value: s.user_id, label: `${s.full_name} — ${s.mobile}` }))}
-          />
-          <FilterSelect
-            label="Daily status"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            allLabel="Any status"
-            options={(['present', 'late', 'half_day', 'absent'] as const).map((k) => ({
-              value: k,
-              label: k.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-            }))}
-          />
-        </FiltersPopover>
+        <FilterBuilder fields={filterFields} value={conditions} onApply={setConditions} />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
@@ -195,9 +207,9 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       <Card className="border-border shadow-card">
         <CardHeader className="pb-3"><CardTitle className="text-base">Daily attendance</CardTitle></CardHeader>
         <CardContent>
-          {!dailyRows.length ? <p className="text-sm text-muted-foreground">No data.</p> : (
+          {!visibleRows.length ? <p className="text-sm text-muted-foreground">No data.</p> : (
             <div className="space-y-2">
-              {dailyRows.map((r: any) => (
+              {visibleRows.map((r: any) => (
                 <div key={r.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-2 text-sm">
                   <div className="min-w-0">
                     <p className="font-medium truncate">{staffName(r.staff_user_id)}</p>
@@ -218,9 +230,9 @@ const AdminAttendance = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       <Card className="border-border shadow-card">
         <CardHeader className="pb-3"><CardTitle className="text-base">Punch events (bike meter + GPS)</CardTitle></CardHeader>
         <CardContent>
-          {!events?.length ? <p className="text-sm text-muted-foreground">No events.</p> : (
+          {!visibleEvents.length ? <p className="text-sm text-muted-foreground">No events.</p> : (
             <div className="space-y-2">
-              {events.map((e: any) => (
+              {visibleEvents.map((e: any) => (
                 <div key={e.id} className={`rounded-md border p-3 text-sm ${e.is_rejected ? 'border-destructive/50 bg-destructive/5' : 'border-border'}`}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>

@@ -10,6 +10,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { countApplied, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 import ViewToggle, { type TableView } from '@/components/common/ViewToggle';
 import { cn } from '@/lib/utils';
 import type { ServerTable } from '@/hooks/useServerTable';
@@ -42,6 +44,13 @@ interface TableToolbarProps<T> {
   /** Number of filters currently applied — drives the badge on the button. */
   activeFilterCount?: number;
   onClearFilters?: () => void;
+  /**
+   * Condition filters: field · condition · value rows. When given, the Filters
+   * button opens the builder and `filters` is ignored.
+   */
+  filterFields?: FilterField<never>[];
+  conditions?: FilterCondition[];
+  onConditionsChange?: (conditions: FilterCondition[]) => void;
   /** Export buttons, "New" button, bulk actions. */
   actions?: ReactNode;
 }
@@ -78,6 +87,9 @@ function TableToolbar<T>({
   filters,
   activeFilterCount = 0,
   onClearFilters,
+  filterFields,
+  conditions,
+  onConditionsChange,
   actions,
 }: TableToolbarProps<T>) {
   const { search, setSearch, isFetching, isSearching } = table;
@@ -102,6 +114,10 @@ function TableToolbar<T>({
   };
 
   const showViews = Boolean(views?.length && onViewChange);
+  // A subset's tally is counted without the condition filters, so while any
+  // are applied it would disagree with the list that choosing it produces.
+  // Omitted, not shown wrong.
+  const conditionsApplied = Boolean(filterFields && conditions && countApplied(conditions, filterFields) > 0);
 
   return (
     <div className="flex items-center gap-2 sm:gap-2.5">
@@ -121,7 +137,7 @@ function TableToolbar<T>({
               <SelectItem key={v.value} value={v.value}>
                 <span className="flex items-center gap-2">
                   {v.label}
-                  {typeof v.count === 'number' && (
+                  {typeof v.count === 'number' && !conditionsApplied && (
                     // The tally is half of what this control says — "which subset"
                     // and "how many are in it". As muted-on-muted at 10px it
                     // measured 4.34:1, under this design system's floor and the
@@ -182,7 +198,9 @@ function TableToolbar<T>({
           <Search className="h-4 w-4" />
         </Button>
 
-        {filters && (
+        {filterFields && conditions && onConditionsChange ? (
+          <FilterBuilder fields={filterFields} value={conditions} onApply={onConditionsChange} />
+        ) : filters && (
           <FiltersPopover activeCount={activeFilterCount} onClear={onClearFilters ?? (() => {})}>
             {filters}
           </FiltersPopover>

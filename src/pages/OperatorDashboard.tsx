@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { involvesLoan, paymentTypeLabel } from '@/lib/payments';
+import { involvesLoan, paymentTypeLabel, paymentTypeLabels } from '@/lib/payments';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import StatCard from '@/components/dashboard/StatCard';
-import FiltersPopover from '@/components/dashboard/FiltersPopover';
+import FilterBuilder from '@/components/common/FilterBuilder';
+import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 import {
   ClipboardCheck, FileSearch, AlertTriangle, Package,
   CheckCircle2, Clock, Search, ChevronRight, Truck, Wrench
@@ -16,7 +17,7 @@ import {
 
 import type { Database } from '@/integrations/supabase/types';
 import { allProjectStageMeta } from '@/lib/projectStages';
-import { humanizeStatus, LEAD_SOURCES } from '@/lib/statusMeta';
+import { humanizeStatus, leadSourceMeta } from '@/lib/statusMeta';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
 
@@ -42,21 +43,6 @@ interface ProjectRow {
   lead_source: string | null;
   sales_person_name: string | null;
 }
-
-const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-      active
-        ? 'bg-primary text-primary-foreground border-primary'
-        : 'bg-card text-foreground border-border hover:border-primary/40 hover:bg-accent/40'
-    }`}
-  >
-    {children}
-  </button>
-);
-
 
 const statusColors: Record<string, string> = {
   pending_operator_review: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
@@ -125,10 +111,7 @@ const OperatorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabFilter>('review');
-  const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'this_month'>('all');
-  const [salesFilter, setSalesFilter] = useState<string>('all');
-  const [progressFilter, setProgressFilter] = useState<'all' | 'in_progress' | 'finalized'>('all');
+  const [conditions, setConditions] = useState<FilterCondition[]>([]);
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -153,7 +136,7 @@ const OperatorDashboard = () => {
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
-  // Sales persons that appear in current project list (for chip filter)
+  // Sales persons that appear in the current project list, for the filter.
   const salesInData = useMemo(() => {
     const ids = new Set<string>();
     projects.forEach(p => { if (p.assigned_sales_person_id) ids.add(p.assigned_sales_person_id); });
@@ -162,21 +145,32 @@ const OperatorDashboard = () => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [projects, staffMap]);
 
+  const filterFields = useMemo<FilterField<ProjectRow>[]>(() => [
+    { key: 'k_number', label: 'K-Number', type: 'text' },
+    { key: 'consumer_name', label: 'Consumer name', type: 'text' },
+    { key: 'status', label: 'Stage', type: 'option', options: Object.entries(allProjectStageMeta).map(([value, m]) => ({ value, label: m.label })) },
+    {
+      key: 'progress',
+      label: 'Progress',
+      type: 'option',
+      options: [{ value: 'in_progress', label: 'In progress' }, { value: 'finalized', label: 'Finalized' }],
+      get: (p) => (p.status === 'project_completed' ? 'finalized' : 'in_progress'),
+    },
+    { key: 'payment_type', label: 'Payment type', type: 'option', options: Object.entries(paymentTypeLabels).map(([value, label]) => ({ value, label })) },
+    { key: 'lead_source', label: 'Lead source', type: 'option', options: Object.entries(leadSourceMeta).map(([value, m]) => ({ value, label: m.label })) },
+    { key: 'assigned_sales_person_id', label: 'Sales person', type: 'option', options: salesInData.map((s) => ({ value: s.id, label: s.name })) },
+    { key: 'loan_bank', label: 'Loan bank', type: 'text' },
+    { key: 'capacity_kw', label: 'Capacity (kW)', type: 'number' },
+    { key: 'final_amount', label: 'Final amount', type: 'number' },
+    { key: 'updated_at', label: 'Last updated', type: 'date', dateKind: 'timestamp' },
+    { key: 'created_at', label: 'Created on', type: 'date', dateKind: 'timestamp' },
+  ], [salesInData]);
+  const matchesConditions = rowMatcher(conditions, filterFields);
+
   const filtered = projects.filter(p => {
     const statuses = tabFilters[activeTab];
     if (statuses.length > 0 && !statuses.includes(p.status)) return false;
-    if (sourceFilter !== 'all' && p.lead_source !== sourceFilter) return false;
-    if (salesFilter !== 'all' && p.assigned_sales_person_id !== salesFilter) return false;
-    if (progressFilter === 'finalized' && p.status !== 'project_completed') return false;
-    if (progressFilter === 'in_progress' && p.status === 'project_completed') return false;
-    if (dateFilter !== 'all') {
-      const now = new Date();
-      const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      const ts = new Date(p.updated_at).getTime();
-      if (dateFilter === 'today' && ts < startToday) return false;
-      if (dateFilter === 'this_month' && ts < startMonth) return false;
-    }
+    if (!matchesConditions(p)) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -188,20 +182,6 @@ const OperatorDashboard = () => {
     return true;
   });
 
-  const activeFilterCount =
-    (sourceFilter !== 'all' ? 1 : 0) +
-    (dateFilter !== 'all' ? 1 : 0) +
-    (salesFilter !== 'all' ? 1 : 0) +
-    (progressFilter !== 'all' ? 1 : 0);
-
-  const clearFilters = () => {
-    setSourceFilter('all');
-    setDateFilter('all');
-    setSalesFilter('all');
-    setProgressFilter('all');
-  };
-
-  const labelize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 
   const reviewCount = projects.filter(p => p.status === 'pending_operator_review').length;
@@ -237,56 +217,7 @@ const OperatorDashboard = () => {
             className="pl-9 h-10"
           />
         </div>
-        <FiltersPopover activeCount={activeFilterCount} onClear={clearFilters}>
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Progress</p>
-            <div className="flex flex-wrap gap-1.5">
-              {([
-                { v: 'all', l: 'All' },
-                { v: 'in_progress', l: 'In Progress' },
-                { v: 'finalized', l: 'Finalized' },
-              ] as const).map(c => (
-                <Chip key={c.v} active={progressFilter === c.v} onClick={() => setProgressFilter(c.v)}>{c.l}</Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Date Range</p>
-            <div className="flex flex-wrap gap-1.5">
-              {([
-                { v: 'all', l: 'All Time' },
-                { v: 'today', l: 'Today' },
-                { v: 'this_month', l: 'This Month' },
-              ] as const).map(c => (
-                <Chip key={c.v} active={dateFilter === c.v} onClick={() => setDateFilter(c.v)}>{c.l}</Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Lead Source</p>
-            <div className="flex flex-wrap gap-1.5">
-              {(['all', ...LEAD_SOURCES] as const).map(s => (
-                <Chip key={s} active={sourceFilter === s} onClick={() => setSourceFilter(s)}>
-                  {s === 'all' ? 'All' : labelize(s)}
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          {salesInData.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Sales Person</p>
-              <div className="flex flex-wrap gap-1.5">
-                <Chip active={salesFilter === 'all'} onClick={() => setSalesFilter('all')}>All</Chip>
-                {salesInData.map(s => (
-                  <Chip key={s.id} active={salesFilter === s.id} onClick={() => setSalesFilter(s.id)}>{s.name}</Chip>
-                ))}
-              </div>
-            </div>
-          )}
-        </FiltersPopover>
+        <FilterBuilder fields={filterFields} value={conditions} onApply={setConditions} />
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabFilter)}>

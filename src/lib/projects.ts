@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { applyPaging, toTablePage } from '@/lib/tableQuery';
 import type { TableQueryParams, TablePage } from '@/hooks/useServerTable';
+import { applyClause, resolveConditions, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 
 /**
  * Data access for projects.
@@ -79,6 +80,35 @@ const SELECT_COLUMNS = `
 export type ProjectTab = 'all' | 'cash' | 'loan';
 
 /**
+ * What the Filters popover can filter projects on. Option lists are the page's
+ * to fill in — they change nothing about how a condition resolves. Customer
+ * columns come from the inner-joined lead.
+ */
+export const PROJECT_FILTER_FIELDS: FilterField<never>[] = [
+  { key: 'k_number', label: 'K-Number', type: 'text' },
+  { key: 'customer_name', label: 'Customer name', type: 'text', columns: ['leads.customer_name'] },
+  { key: 'mobile', label: 'Mobile', type: 'text', columns: ['leads.mobile'] },
+  { key: 'village_city', label: 'City / village', type: 'text', columns: ['leads.village_city'] },
+  { key: 'district', label: 'District', type: 'text', columns: ['leads.district'] },
+  { key: 'status', label: 'Stage', type: 'option' },
+  { key: 'payment_type', label: 'Payment type', type: 'option' },
+  { key: 'loan_bank', label: 'Loan bank', type: 'text' },
+  { key: 'capacity_kw', label: 'Capacity (kW)', type: 'number' },
+  { key: 'final_amount', label: 'Final amount', type: 'number' },
+  { key: 'subsidy_amount', label: 'Subsidy amount', type: 'number' },
+  { key: 'panel_brand', label: 'Panel brand', type: 'text' },
+  { key: 'inverter_brand', label: 'Inverter brand', type: 'text' },
+  { key: 'assigned_sales_person_id', label: 'Sales rep', type: 'option' },
+  { key: 'assigned_operator_id', label: 'Operator', type: 'option' },
+  { key: 'assigned_welder_id', label: 'Welder', type: 'option' },
+  { key: 'assigned_electrician_id', label: 'Electrician', type: 'option' },
+  { key: 'created_at', label: 'Created on', type: 'date', dateKind: 'timestamp' },
+  { key: 'updated_at', label: 'Last updated', type: 'date', dateKind: 'timestamp' },
+  { key: 'net_meter_installed_at', label: 'Net meter installed', type: 'date', dateKind: 'timestamp' },
+  { key: 'completed_at', label: 'Completed on', type: 'date', dateKind: 'timestamp' },
+];
+
+/**
  * One page of projects.
  *
  * Search spans the project's own K-Number and the lead's K-Number, name and
@@ -89,7 +119,7 @@ export type ProjectTab = 'all' | 'cash' | 'loan';
 export const fetchProjectsPage = async (
   params: TableQueryParams
 ): Promise<TablePage<ProjectRow>> => {
-  const { tab, stage } = params.filters as { tab?: ProjectTab; stage?: string };
+  const { tab, conditions = [] } = params.filters as { tab?: ProjectTab; conditions?: FilterCondition[] };
   const term = params.search.trim().replace(/[,()*]/g, ' ').trim();
 
   let query = supabase.from('projects').select(SELECT_COLUMNS, { count: 'exact' });
@@ -98,7 +128,7 @@ export const fetchProjectsPage = async (
   // "Loan" is any project the bank part-finances, so a loan_cash project is not
   // stranded outside both tabs.
   if (tab === 'loan') query = query.in('payment_type', ['loan', 'loan_cash']);
-  if (stage) query = query.eq('status', stage as any);
+  query = applyClause(query, resolveConditions(conditions, PROJECT_FILTER_FIELDS));
 
   if (term) {
     const { data: matchingLeads } = await supabase

@@ -3,6 +3,7 @@ import { applyPaging, buildSearchFilter, toTablePage } from '@/lib/tableQuery';
 import type { TableQueryParams, TablePage } from '@/hooks/useServerTable';
 import type { Allocation } from '@/lib/payments';
 import type { Database, Json } from '@/integrations/supabase/types';
+import { applyClause, resolveConditions, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 
 /**
  * Data access for inward payments.
@@ -95,15 +96,48 @@ const SEARCH_COLUMNS = [
 
 export interface PaymentFilters {
   tab?: PaymentTab;
-  mode?: PaymentMode;
-  status?: PaymentStatus;
+  conditions?: FilterCondition[];
 }
+
+/** Filterable columns of `payments_list`. Option lists are the page's to fill in. */
+export const PAYMENT_FILTER_FIELDS: FilterField<never>[] = [
+  { key: 'k_number', label: 'K-Number', type: 'text' },
+  { key: 'customer_name', label: 'Customer name', type: 'text' },
+  { key: 'mobile', label: 'Mobile', type: 'text' },
+  { key: 'payer_name', label: 'Payer name', type: 'text' },
+  { key: 'reference_number', label: 'Reference no.', type: 'text' },
+  { key: 'amount', label: 'Amount', type: 'number' },
+  { key: 'payment_date', label: 'Payment date', type: 'date', dateKind: 'day' },
+  { key: 'payment_mode', label: 'Mode', type: 'option' },
+  { key: 'status', label: 'Status', type: 'option' },
+  { key: 'source', label: 'Paid by', type: 'option' },
+  { key: 'payment_type', label: 'Payment type', type: 'option' },
+  { key: 'project_status', label: 'Project stage', type: 'option' },
+  { key: 'assigned_sales_person_id', label: 'Sales rep', type: 'option' },
+  { key: 'created_at', label: 'Logged on', type: 'date', dateKind: 'timestamp' },
+];
+
+/** Filterable columns of `project_dues`. */
+export const DUE_FILTER_FIELDS: FilterField<never>[] = [
+  { key: 'k_number', label: 'K-Number', type: 'text' },
+  { key: 'customer_name', label: 'Customer name', type: 'text' },
+  { key: 'mobile', label: 'Mobile', type: 'text' },
+  { key: 'balance', label: 'Balance', type: 'number' },
+  { key: 'final_amount', label: 'Final amount', type: 'number' },
+  { key: 'received', label: 'Received', type: 'number' },
+  { key: 'days_overdue', label: 'Days overdue', type: 'number' },
+  { key: 'is_overdue', label: 'Overdue', type: 'option' },
+  { key: 'payment_type', label: 'Payment type', type: 'option' },
+  { key: 'project_status', label: 'Project stage', type: 'option' },
+  { key: 'assigned_sales_person_id', label: 'Sales rep', type: 'option' },
+  { key: 'net_meter_installed_at', label: 'Net meter installed', type: 'date', dateKind: 'timestamp' },
+];
 
 /** One page of payments. */
 export const fetchPaymentsPage = async (
   params: TableQueryParams
 ): Promise<TablePage<PaymentRow>> => {
-  const { tab, mode, status } = params.filters as PaymentFilters;
+  const { tab, conditions = [] } = params.filters as PaymentFilters;
 
   let query = supabase.from('payments_list').select('*', { count: 'exact' });
 
@@ -113,11 +147,7 @@ export const fetchPaymentsPage = async (
     query = query.eq('no_project_needed', true);
   }
 
-  // Both are validated by the caller before they reach here — an unvalidated
-  // ?mode=foo becomes .eq('payment_mode','foo') and PostgREST 400s on the
-  // check constraint's domain.
-  if (mode) query = query.eq('payment_mode', mode);
-  if (status) query = query.eq('status', status);
+  query = applyClause(query, resolveConditions(conditions, PAYMENT_FILTER_FIELDS));
 
   const filter = buildSearchFilter(params.search, SEARCH_COLUMNS);
   if (filter) query = query.or(filter);
@@ -130,7 +160,9 @@ export const fetchPaymentsPage = async (
 export const fetchDuesPage = async (
   params: TableQueryParams
 ): Promise<TablePage<DueRow>> => {
+  const { conditions = [] } = params.filters as { conditions?: FilterCondition[] };
   let query = supabase.from('project_dues').select('*', { count: 'exact' });
+  query = applyClause(query, resolveConditions(conditions, DUE_FILTER_FIELDS));
 
   const filter = buildSearchFilter(params.search, ['k_number', 'customer_name', 'mobile']);
   if (filter) query = query.or(filter);
