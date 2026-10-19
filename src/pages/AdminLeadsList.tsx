@@ -172,6 +172,8 @@ const mapLeadRow = (lead: any, staffMap: Record<string, StaffMember>): LeadRow =
 });
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
+// PostgREST's per-request row cap; the export reads in chunks of this size.
+const EXPORT_CHUNK = 1000;
 
 const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
   const navigate = useNavigate();
@@ -716,7 +718,37 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
 
 
 
-  const exportRows = () => {
+  const [exporting, setExporting] = useState(false);
+
+  /**
+   * Exports every lead matching the current subset, search and filters — not
+   * just the page on screen. PostgREST returns at most 1000 rows per request,
+   * so the same query is read in chunks; `id` breaks ties in the sort so a
+   * chunk boundary can neither repeat nor skip a lead.
+   */
+  const exportRows = async () => {
+    if (exporting) return;
+    setExporting(true);
+    const rows: LeadRow[] = [];
+    try {
+      for (let from = 0; ; from += EXPORT_CHUNK) {
+        const { data, error } = await retryQuery(() =>
+          buildLeadsQuery().order('id', { ascending: true }).range(from, from + EXPORT_CHUNK - 1));
+        if (error) throw error;
+        const chunk = (data as unknown as Record<string, unknown>[]) || [];
+        rows.push(...chunk.map((lead) => mapLeadRow(lead, staffDirectory)));
+        if (chunk.length < EXPORT_CHUNK) break;
+      }
+    } catch (err: unknown) {
+      toast({
+        title: 'Export failed',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+      setExporting(false);
+      return;
+    }
+    setExporting(false);
     downloadCsv('leads-crm-export.csv', [
       { header: 'K Number', value: (row: LeadRow) => row.kNumber ?? '' },
       { header: 'Consumer Name', value: (row: LeadRow) => row.consumerName },
@@ -733,7 +765,8 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       { header: 'Updated By', value: (row: LeadRow) => row.latestUpdatedBy },
       { header: 'Next Follow-up Date', value: (row: LeadRow) => formatDate(row.nextFollowUpDate) },
       { header: 'Project Type', value: (row: LeadRow) => row.projectType ? statusLabel(row.projectType) : '—' },
-    ], filteredRows);
+    ], rows);
+    toast({ title: `Exported ${rows.length.toLocaleString('en-IN')} leads` });
   };
 
   /**
@@ -1004,8 +1037,9 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
                       <Upload className="mr-2 h-4 w-4" /> Import Leads
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={exportRows} disabled={!leadRows.length}>
-                    <Download className="mr-2 h-4 w-4" /> Export CSV
+                  <DropdownMenuItem onClick={() => void exportRows()} disabled={!total || exporting}>
+                    <Download className="mr-2 h-4 w-4" />
+                    {exporting ? 'Exporting…' : `Export CSV (${total.toLocaleString('en-IN')})`}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
