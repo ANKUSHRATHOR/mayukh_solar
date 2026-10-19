@@ -224,6 +224,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       { key: 'mobile', label: 'Mobile', type: 'text' },
       { key: 'village_city', label: 'City / village', type: 'text' },
       { key: 'district', label: 'District', type: 'text' },
+      { key: 'feeder_name', label: 'Feeder name', type: 'text' },
       { key: 'status', label: 'Lead status', type: 'option', options: fromMeta(leadStatusMeta) },
       { key: 'source', label: 'Source', type: 'option', options: fromMeta(leadSourceMeta) },
       { key: 'campaign', label: 'Campaign', type: 'option', options: campaignOptions.map((c) => ({ value: c, label: c })) },
@@ -885,6 +886,19 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       cell: (lead) =>
         lead.campaign ? (
           <span className="block max-w-[180px] truncate" title={lead.campaign}>{lead.campaign}</span>
+        ) : (
+          <span className="text-muted-foreground/60">—</span>
+        ),
+    },
+    {
+      id: 'feeder_name',
+      header: 'Feeder',
+      sortKey: 'feeder_name',
+      mobile: 'meta',
+      hideBelow: 'lg',
+      cell: (lead) =>
+        lead.feederName ? (
+          <span className="block max-w-[160px] truncate" title={lead.feederName}>{lead.feederName}</span>
         ) : (
           <span className="text-muted-foreground/60">—</span>
         ),
