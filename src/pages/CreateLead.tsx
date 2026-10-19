@@ -91,6 +91,7 @@ const CreateLead = () => {
   const [villageCity, setVillageCity] = useStickyState(`cl:city:${user?.id}`, '');
   const [district, setDistrict] = useStickyState(`cl:dist:${user?.id}`, '');
   const [state, setState] = useStickyState(`cl:state:${user?.id}`, 'Rajasthan');
+  const [feederName, setFeederName] = useStickyState(`cl:feeder:${user?.id}`, '');
 
   // ------------- Source & Extras -------------
   const [source, setSource] = useStickyState<LeadSource | ''>(`cl:src:${user?.id}`, '');
@@ -274,6 +275,7 @@ const CreateLead = () => {
       // Conditionally add new columns only if they have a value
       if (email.trim()) insertPayload['email'] = email.trim();
       if (campaign.trim()) insertPayload['campaign'] = campaign.trim();
+      if (feederName.trim()) insertPayload['feeder_name'] = feederName.trim();
       if (kNumber) insertPayload['k_number'] = kNumber;
       if (knoData) insertPayload['kno_details'] = knoData;
       if (knoData?.latitude) insertPayload['latitude'] = parseNum(knoData.latitude);
@@ -296,6 +298,7 @@ const CreateLead = () => {
       setVillageCity('');
       setDistrict('');
       setState('Rajasthan');
+      setFeederName('');
       setSource('');
       setReferenceName('');
       setKwInterest('');
@@ -631,6 +634,16 @@ const CreateLead = () => {
                   className="h-10 text-xs"
                 />
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="create-lead-feeder" className="text-xs font-semibold">Feeder Name <span className="font-normal text-muted-foreground">(Optional)</span></Label>
+              <Input
+                id="create-lead-feeder"
+                value={feederName}
+                onChange={e => setFeederName(e.target.value)}
+                className="h-10"
+              />
             </div>
 
             {/* Navigation */}

@@ -89,6 +89,7 @@ type LeadRow = {
   kNumber: string | null;
   email: string | null;
   campaign: string | null;
+  feederName: string | null;
 };
 
 
@@ -169,6 +170,7 @@ const mapLeadRow = (lead: any, staffMap: Record<string, StaffMember>): LeadRow =
   kNumber: lead.k_number,
   email: lead.email,
   campaign: lead.campaign?.trim() || null,
+  feederName: lead.feeder_name?.trim() || null,
 });
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -754,6 +756,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       { header: 'Consumer Name', value: (row: LeadRow) => row.consumerName },
       { header: 'Mobile Number', value: (row: LeadRow) => row.mobile },
       { header: 'Campaign', value: (row: LeadRow) => row.campaign ?? '' },
+      { header: 'Feeder Name', value: (row: LeadRow) => row.feederName ?? '' },
       { header: 'Created By', value: (row: LeadRow) => row.createdByName },
       { header: 'Telecaller', value: (row: LeadRow) => row.telecallerName },
       { header: 'Sales Rep', value: (row: LeadRow) => row.assignedToName },

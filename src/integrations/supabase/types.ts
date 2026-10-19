@@ -484,6 +484,7 @@ export type Database = {
           customer_name: string
           district: string
           email: string | null
+          feeder_name: string | null
           follow_up_date: string | null
           id: string
           is_in_bin: boolean
@@ -520,6 +521,7 @@ export type Database = {
           customer_name: string
           district: string
           email?: string | null
+          feeder_name?: string | null
           follow_up_date?: string | null
           id?: string
           is_in_bin?: boolean
@@ -556,6 +558,7 @@ export type Database = {
           customer_name?: string
           district?: string
           email?: string | null
+          feeder_name?: string | null
           follow_up_date?: string | null
           id?: string
           is_in_bin?: boolean
@@ -1842,6 +1845,7 @@ export type Database = {
           customer_name: string | null
           district: string | null
           email: string | null
+          feeder_name: string | null
           follow_up_date: string | null
           has_quotation: boolean | null
           id: string | null
@@ -2005,6 +2009,7 @@ export type Database = {
           customer_name: string
           district: string
           email: string | null
+          feeder_name: string | null
           follow_up_date: string | null
           id: string
           is_in_bin: boolean

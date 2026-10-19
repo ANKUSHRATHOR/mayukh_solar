@@ -65,7 +65,7 @@ export function buildUpdatePatch(
 
   const patch: Record<string, unknown> = {};
 
-  for (const field of ['customer_name', 'email', 'address', 'village_city', 'district', 'state', 'notes']) {
+  for (const field of ['customer_name', 'email', 'address', 'village_city', 'district', 'state', 'feeder_name', 'notes']) {
     const v = cell(field);
     if (v) patch[field] = v;
   }

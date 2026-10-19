@@ -176,6 +176,7 @@ const LeadDetail = () => {
   const [editVillageCity, setEditVillageCity] = useState('');
   const [editDistrict, setEditDistrict] = useState('');
   const [editState, setEditState] = useState('');
+  const [editFeederName, setEditFeederName] = useState('');
 
   // WhatsApp phone prompt state
   const [isPhonePromptOpen, setIsPhonePromptOpen] = useState(false);
@@ -594,6 +595,7 @@ const LeadDetail = () => {
     setEditVillageCity(lead.village_city || '');
     setEditDistrict(lead.district || '');
     setEditState(lead.state || '');
+    setEditFeederName(lead.feeder_name || '');
     setIsEditContactOpen(true);
   };
 
@@ -614,7 +616,8 @@ const LeadDetail = () => {
           address: editAddress.trim() || null,
           village_city: editVillageCity.trim() || null,
           district: editDistrict.trim() || null,
-          state: editState.trim() || null
+          state: editState.trim() || null,
+          feeder_name: editFeederName.trim() || null,
         })
         .eq('id', lead.id)
         .select();
@@ -984,10 +987,11 @@ const LeadDetail = () => {
                 </div>
                 <Separator />
                 <InfoRow label="Contact Address" value={lead.address} />
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <InfoRow label="Village / City" value={lead.village_city} />
                   <InfoRow label="District" value={lead.district} />
                   <InfoRow label="State" value={lead.state} />
+                  <InfoRow label="Feeder Name" value={lead.feeder_name} />
                 </div>
                 {lead.latitude && lead.longitude && (
                   <a
@@ -1692,9 +1696,13 @@ const LeadDetail = () => {
               <Label className="text-xs font-semibold">District</Label>
               <Input value={editDistrict} onChange={e => setEditDistrict(e.target.value)} className="h-10 text-sm" />
             </div>
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-1.5">
               <Label className="text-xs font-semibold">State</Label>
               <Input value={editState} onChange={e => setEditState(e.target.value)} className="h-10 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lead-edit-feeder" className="text-xs font-semibold">Feeder Name</Label>
+              <Input id="lead-edit-feeder" value={editFeederName} onChange={e => setEditFeederName(e.target.value)} className="h-10 text-sm" />
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0 mt-4">

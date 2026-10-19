@@ -57,6 +57,7 @@ const DB_LEAD_FIELDS = [
   { key: 'village_city', label: 'Village / City', required: false },
   { key: 'district', label: 'District', required: false },
   { key: 'state', label: 'State', required: false },
+  { key: 'feeder_name', label: 'Feeder Name', required: false },
   { key: 'kw_interest', label: 'kW Interest', required: false },
   { key: 'campaign', label: 'Campaign', required: false },
   { key: 'notes', label: 'Notes', required: false },
@@ -140,8 +141,8 @@ export default function LeadImportWizard({
   const handleDownloadSample = () => {
     const csvHeaders = DB_LEAD_FIELDS.map((f) => f.label.replace(' *', ''));
     const sampleRows = [
-      ['LAL CHAND RATHORE', '9876543210', '9876543211', 'lalchand@example.com', '210721033383', 'H.NO-457 VINOBA BHAWEY NAGAR', 'Kota', 'Kota', 'Rajasthan', '3', 'Facebook Sept 2026', 'Domestic load connection details.'],
-      ['RAMESH KUMAR', '8765432109', '', 'ramesh@example.com', '', '12-B NEW COLONY', 'Jaipur', 'Jaipur', 'Rajasthan', '5', '', 'Interested in cash option.'],
+      ['LAL CHAND RATHORE', '9876543210', '9876543211', 'lalchand@example.com', '210721033383', 'H.NO-457 VINOBA BHAWEY NAGAR', 'Kota', 'Kota', 'Rajasthan', 'KOTA 11KV FEEDER-2', '3', 'Facebook Sept 2026', 'Domestic load connection details.'],
+      ['RAMESH KUMAR', '8765432109', '', 'ramesh@example.com', '', '12-B NEW COLONY', 'Jaipur', 'Jaipur', 'Rajasthan', '', '5', '', 'Interested in cash option.'],
     ];
 
     const csvContent = [
@@ -296,6 +297,7 @@ export default function LeadImportWizard({
       const villageCity = row[mappings['village_city']] || '';
       const district = row[mappings['district']] || '';
       const state = row[mappings['state']] || '';
+      const feederName = (mappings['feeder_name'] ? row[mappings['feeder_name']]?.trim() : '') || '';
       const kwInterestRaw = row[mappings['kw_interest']];
       const kwInterest = kwInterestRaw ? parseFloat(kwInterestRaw) : null;
       const notes = row[mappings['notes']] || null;
@@ -332,6 +334,7 @@ export default function LeadImportWizard({
         if (email) rowPayload['email'] = email;
         if (kNumber) rowPayload['k_number'] = kNumber;
         if (campaign) rowPayload['campaign'] = campaign;
+        if (feederName) rowPayload['feeder_name'] = feederName;
 
         const { error } = await supabase.from('leads').insert(rowPayload);
 
