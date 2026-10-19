@@ -29,6 +29,7 @@ import { countApplied, newConditionId, type FilterCondition, type FilterField } 
 import { useStaffNames } from '@/hooks/useStaffNames';
 import { useAuth } from '@/contexts/AuthContext';
 import StatStrip, { type StatItem } from '@/components/common/StatStrip';
+import { useFieldSuggestions } from '@/hooks/useFieldSuggestions';
 
 interface Props {
   /**
@@ -94,6 +95,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
     };
     return PROJECT_FILTER_FIELDS.map((f) => (options[f.key] ? { ...f, options: options[f.key] } : f));
   }, [staff]);
+  const pickerFields = useFieldSuggestions(filterFields);
 
   const filters = useMemo(() => ({ tab, conditions }), [tab, conditions]);
 
@@ -303,7 +305,7 @@ const ProjectsListPage = ({ isEmbedded = false }: Props) => {
         viewsLabel="Filter by payment type"
         layout={view}
         onLayoutChange={setView}
-        filterFields={filterFields}
+        filterFields={pickerFields}
         conditions={conditions}
         onConditionsChange={setConditions}
       />

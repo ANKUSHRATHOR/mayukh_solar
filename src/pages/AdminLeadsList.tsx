@@ -46,6 +46,7 @@ import {
   type FilterField,
 } from '@/lib/filterConditions';
 import { retryQuery } from '@/lib/retry';
+import { useFieldSuggestions } from '@/hooks/useFieldSuggestions';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 type PaymentType = Database['public']['Enums']['payment_type'];
@@ -222,9 +223,9 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
       { key: 'k_number', label: 'K-Number', type: 'text' },
       { key: 'customer_name', label: 'Customer name', type: 'text' },
       { key: 'mobile', label: 'Mobile', type: 'text' },
-      { key: 'village_city', label: 'City / village', type: 'text' },
-      { key: 'district', label: 'District', type: 'text' },
-      { key: 'feeder_name', label: 'Feeder name', type: 'text' },
+      { key: 'village_city', label: 'City / village', type: 'text', suggest: 'lead_village_city' },
+      { key: 'district', label: 'District', type: 'text', suggest: 'lead_district' },
+      { key: 'feeder_name', label: 'Feeder name', type: 'text', suggest: 'lead_feeder_name' },
       { key: 'status', label: 'Lead status', type: 'option', options: fromMeta(leadStatusMeta) },
       { key: 'source', label: 'Source', type: 'option', options: fromMeta(leadSourceMeta) },
       { key: 'campaign', label: 'Campaign', type: 'option', options: campaignOptions.map((c) => ({ value: c, label: c })) },
@@ -259,6 +260,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
     ];
   }, [campaignOptions, operatorStaff, staffDirectory]);
   const conditionsApplied = countApplied(conditions, leadFields) > 0;
+  const pickerFields = useFieldSuggestions(leadFields);
   // The query reads the fields through a ref: their option lists fill in as the
   // staff directory and campaigns load, which changes nothing about how a
   // condition resolves but would otherwise refetch the list each time.
@@ -1090,7 +1092,7 @@ const AdminLeadsList = ({ isEmbedded = false }: { isEmbedded?: boolean }) => {
         viewsLabel="Filter by stage"
         layout={view}
         onLayoutChange={setView}
-        filterFields={leadFields}
+        filterFields={pickerFields}
         conditions={conditions}
         onConditionsChange={(next) => { setConditions(next); setPage(0); }}
       />

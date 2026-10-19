@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  distinctValues,
   applyClause,
   countApplied,
   dateWindow,
@@ -173,5 +174,16 @@ describe('operator limits', () => {
     expect(operatorsFor(limited[0]).map((o) => o.op)).toEqual(['is']);
     expect(isComplete(c({ field: 'status', op: 'is', value: 'new' }), limited)).toBe(true);
     expect(isComplete(c({ field: 'status', op: 'is_not', value: 'new' }), limited)).toBe(false);
+  });
+});
+
+describe('distinctValues', () => {
+  it('returns sorted, unique, non-blank raw values', () => {
+    const rows = [{ d: 'Kota' }, { d: 'Bundi' }, { d: 'Kota' }, { d: '  ' }, { d: null }, { d: 'Kota ' }];
+    expect(distinctValues(rows, (r) => r.d)).toEqual(['Bundi', 'Kota', 'Kota ']);
+  });
+
+  it('collapses case variants, since "is" ignores case', () => {
+    expect(distinctValues([{ d: 'kota' }, { d: 'Kota' }], (r) => r.d)).toHaveLength(1);
   });
 });

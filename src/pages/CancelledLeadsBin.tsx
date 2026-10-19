@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Search, Trash2, RotateCcw, MapPin, AlertTriangle } from 'lucide-react';
 import FilterBuilder from '@/components/common/FilterBuilder';
-import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
+import { distinctValues, rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 
 const reasonLabel = (r: string | null) => r ? r.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'N/A';
 
@@ -88,12 +88,12 @@ const CancelledLeadsBin = () => {
     { key: 'cancelled_reason', label: 'Reason', type: 'option', options: reasonOptions },
     { key: 'cancelled_reason_other', label: 'Reason note', type: 'text' },
     { key: 'created_by_user_id', label: 'Created by', type: 'option', options: creatorOptions },
-    { key: 'district', label: 'District', type: 'text' },
-    { key: 'village_city', label: 'City / village', type: 'text' },
+    { key: 'district', label: 'District', type: 'text', suggestions: distinctValues(leads, (l) => l.district) },
+    { key: 'village_city', label: 'City / village', type: 'text', suggestions: distinctValues(leads, (l) => l.village_city) },
     { key: 'k_number', label: 'K-Number', type: 'text' },
     { key: 'created_at', label: 'Created on', type: 'date', dateKind: 'timestamp' },
     { key: 'updated_at', label: 'Last updated', type: 'date', dateKind: 'timestamp' },
-  ], [reasonOptions, creatorOptions]);
+  ], [leads, reasonOptions, creatorOptions]);
   const matches = rowMatcher(conditions, filterFields);
 
   const filtered = leads.filter(l =>

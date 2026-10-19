@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import StatCard from '@/components/dashboard/StatCard';
 import FilterBuilder from '@/components/common/FilterBuilder';
-import { rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
+import { distinctValues, rowMatcher, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 import {
   ClipboardCheck, FileSearch, AlertTriangle, Package,
   CheckCircle2, Clock, Search, ChevronRight, Truck, Wrench
@@ -159,12 +159,12 @@ const OperatorDashboard = () => {
     { key: 'payment_type', label: 'Payment type', type: 'option', options: Object.entries(paymentTypeLabels).map(([value, label]) => ({ value, label })) },
     { key: 'lead_source', label: 'Lead source', type: 'option', options: Object.entries(leadSourceMeta).map(([value, m]) => ({ value, label: m.label })) },
     { key: 'assigned_sales_person_id', label: 'Sales person', type: 'option', options: salesInData.map((s) => ({ value: s.id, label: s.name })) },
-    { key: 'loan_bank', label: 'Loan bank', type: 'text' },
+    { key: 'loan_bank', label: 'Loan bank', type: 'text', suggestions: distinctValues(projects, (p) => p.loan_bank) },
     { key: 'capacity_kw', label: 'Capacity (kW)', type: 'number' },
     { key: 'final_amount', label: 'Final amount', type: 'number' },
     { key: 'updated_at', label: 'Last updated', type: 'date', dateKind: 'timestamp' },
     { key: 'created_at', label: 'Created on', type: 'date', dateKind: 'timestamp' },
-  ], [salesInData]);
+  ], [projects, salesInData]);
   const matchesConditions = rowMatcher(conditions, filterFields);
 
   const filtered = projects.filter(p => {

@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -223,6 +225,11 @@ const ValueInput = ({ input, field, row, onChange }: ValueInputProps) => {
     case 'none':
       return null;
     case 'text':
+      // "is" / "is not" against a column of repeated values: pick one of the
+      // values it holds rather than guess how it was spelt.
+      if ((row.op === 'is' || row.op === 'is_not') && field.suggestions?.length) {
+        return <ValuePicker values={field.suggestions} value={row.value} onChange={(value) => onChange({ value })} />;
+      }
       return (
         <Input className={control} value={row.value ?? ''} placeholder="Value" onChange={(e) => onChange({ value: e.target.value })} />
       );
@@ -305,6 +312,49 @@ const ValueInput = ({ input, field, row, onChange }: ValueInputProps) => {
       );
     }
   }
+};
+
+/** A searchable single-choice list; village and feeder lists run to hundreds. */
+const ValuePicker = ({ values, value, onChange }: { values: string[]; value?: string; onChange: (v: string) => void }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-label="Value"
+          className={cn(control, 'w-full justify-between bg-background font-normal', !value && 'text-muted-foreground')}
+        >
+          <span className="truncate">{value || 'Choose…'}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(90vw,260px)] p-0">
+        <Command>
+          <CommandInput placeholder="Search…" className="h-9" />
+          <CommandList className="max-h-64">
+            <CommandEmpty>No matching values.</CommandEmpty>
+            {values.map((v) => (
+              <CommandItem
+                key={v}
+                value={v}
+                onSelect={() => {
+                  onChange(v);
+                  setOpen(false);
+                }}
+              >
+                <Check className={cn('mr-2 h-4 w-4 shrink-0', value === v ? 'opacity-100' : 'opacity-0')} />
+                <span className="truncate">{v}</span>
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 };
 
 export default FilterBuilder;

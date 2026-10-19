@@ -34,6 +34,17 @@ export interface FilterField<Row = unknown> {
   /** Option fields: the choices. */
   options?: FilterOption[];
   /**
+   * Text fields: the values the column actually holds. With "is" / "is not"
+   * the value is picked from these instead of typed; the other text conditions
+   * keep the free-text box.
+   */
+  suggestions?: string[];
+  /**
+   * Text fields on server lists: the `filter_value_options` key that loads
+   * `suggestions` (see `useFieldSuggestions`).
+   */
+  suggest?: string;
+  /**
    * Restricts the conditions offered, for a list whose query can only express
    * some of them (an RPC with fixed parameters). Defaults to every condition
    * of the field's type.
@@ -496,3 +507,18 @@ export const countApplied = (conditions: FilterCondition[], fields: FilterField<
 
 let seq = 0;
 export const newConditionId = () => `c${Date.now().toString(36)}${(seq++).toString(36)}`;
+
+/**
+ * In-memory lists: the distinct non-blank values of one column, sorted, for a
+ * text field's `suggestions`. Raw values, as "is" matches them exactly — but
+ * case-insensitively, so case variants collapse to one choice (as in
+ * `filter_value_options`).
+ */
+export function distinctValues<Row>(rows: Row[], read: (row: Row) => unknown): string[] {
+  const seen = new Map<string, string>();
+  for (const row of rows) {
+    const v = read(row);
+    if (typeof v === 'string' && v.trim() && !seen.has(v.toLowerCase())) seen.set(v.toLowerCase(), v);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}

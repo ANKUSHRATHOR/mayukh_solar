@@ -27,6 +27,7 @@ import {
 } from '@/lib/visits';
 import { countApplied, type FilterCondition, type FilterField } from '@/lib/filterConditions';
 import { leadStatusMeta } from '@/lib/statusMeta';
+import { useFieldSuggestions } from '@/hooks/useFieldSuggestions';
 
 /**
  * All site visits across every lead.
@@ -57,6 +58,7 @@ const VisitsListPage = () => {
       options[f.key] ? { ...f, options: options[f.key] } : f
     );
   }, [staff]);
+  const pickerFields = useFieldSuggestions(filterFields);
 
   const table = useServerTable<VisitWithLead>({
     queryKey: ['visits', 'list'],
@@ -203,7 +205,7 @@ const VisitsListPage = () => {
         viewsLabel="Filter by visit state"
         layout={view}
         onLayoutChange={setView}
-        filterFields={filterFields}
+        filterFields={pickerFields}
         conditions={conditions}
         onConditionsChange={setConditions}
       />
