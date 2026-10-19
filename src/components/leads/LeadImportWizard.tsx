@@ -40,28 +40,13 @@ import {
 import {
   LEAD_MATCH_KEYS,
   buildUpdatePatch,
+  guessMappings,
+  LEAD_IMPORT_FIELDS as DB_LEAD_FIELDS,
   normalizeMatchValue,
   resolveMatch,
   type LeadMatchKey,
   type MatchCandidate,
 } from '@/lib/leadImport';
-
-// The fields in our leads database table
-const DB_LEAD_FIELDS = [
-  { key: 'customer_name', label: 'Customer Name *', required: true },
-  { key: 'mobile', label: 'Mobile Number *', required: true },
-  { key: 'alt_mobile', label: 'Alternate Mobile', required: false },
-  { key: 'email', label: 'Email Address', required: false },
-  { key: 'k_number', label: 'K Number', required: false },
-  { key: 'address', label: 'Full Address', required: false },
-  { key: 'village_city', label: 'Village / City', required: false },
-  { key: 'district', label: 'District', required: false },
-  { key: 'state', label: 'State', required: false },
-  { key: 'feeder_name', label: 'Feeder Name', required: false },
-  { key: 'kw_interest', label: 'kW Interest', required: false },
-  { key: 'campaign', label: 'Campaign', required: false },
-  { key: 'notes', label: 'Notes', required: false },
-];
 
 interface LeadImportWizardProps {
   open: boolean;
@@ -221,24 +206,7 @@ export default function LeadImportWizard({
         setHeaders(validHeaders);
         setParsedRows(rows);
 
-        // Attempt smart mapping of columns
-        const initialMappings: Record<string, string> = {};
-        validHeaders.forEach((header) => {
-          const lowerHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
-          const matchedField = DB_LEAD_FIELDS.find((field) => {
-            const cleanFieldKey = field.key.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const cleanFieldLabel = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
-            return (
-              lowerHeader === cleanFieldKey ||
-              lowerHeader.includes(cleanFieldKey) ||
-              cleanFieldLabel.includes(lowerHeader) ||
-              lowerHeader.includes(cleanFieldLabel)
-            );
-          });
-          if (matchedField) {
-            initialMappings[matchedField.key] = header;
-          }
-        });
+        const initialMappings = guessMappings(validHeaders, DB_LEAD_FIELDS);
         setMappings(initialMappings);
         setMatchHeader(initialMappings[matchBy] || '');
 

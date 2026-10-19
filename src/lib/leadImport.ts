@@ -9,6 +9,23 @@ export const LEAD_MATCH_KEYS: { key: LeadMatchKey; label: string }[] = [
   { key: 'k_number', label: 'K Number' },
 ];
 
+/** The lead columns a spreadsheet can be mapped to. `*` marks fields an Add import requires. */
+export const LEAD_IMPORT_FIELDS = [
+  { key: 'customer_name', label: 'Customer Name *', required: true },
+  { key: 'mobile', label: 'Mobile Number *', required: true },
+  { key: 'alt_mobile', label: 'Alternate Mobile', required: false },
+  { key: 'email', label: 'Email Address', required: false },
+  { key: 'k_number', label: 'K Number', required: false },
+  { key: 'address', label: 'Full Address', required: false },
+  { key: 'village_city', label: 'Village / City', required: false },
+  { key: 'district', label: 'District', required: false },
+  { key: 'state', label: 'State', required: false },
+  { key: 'feeder_name', label: 'Feeder Name', required: false },
+  { key: 'kw_interest', label: 'kW Interest', required: false },
+  { key: 'campaign', label: 'Campaign', required: false },
+  { key: 'notes', label: 'Notes', required: false },
+];
+
 /** Digits only, with a leading +91 / 91 / 0 dropped so "+91 98765 43210" matches. */
 export function normalizeMobile(raw: string | null | undefined): string {
   let digits = String(raw ?? '').replace(/\D/g, '');
@@ -137,4 +154,48 @@ export function resolveMatch(
   if (live.length > 1) return { ok: false, error: `${live.length} leads share this K Number — update them individually` };
   if (hits.length > 0) return { ok: false, error: 'Lead is in the bin' };
   return { ok: false, error: 'No matching lead found' };
+}
+
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * How well a file header names a lead field: 3 = it is the field's key or label,
+ * 2 = it contains one ("Customer Name (as per bill)"), 1 = it is a fragment of
+ * the label ("Mobile" in "Mobile Number"), 0 = no match. Fragments shorter than
+ * four characters are ignored, or "Na" would claim Customer Name.
+ */
+function matchScore(header: string, field: { key: string; label: string }): number {
+  const h = squash(header);
+  const key = squash(field.key);
+  const label = squash(field.label);
+  if (!h) return 0;
+  if (h === key || h === label) return 3;
+  if (h.includes(key) || h.includes(label)) return 2;
+  if (h.length >= 4 && label.includes(h)) return 1;
+  return 0;
+}
+
+/**
+ * Proposes field → header mappings for an uploaded file. Each header goes to the
+ * field it matches best rather than the first field it matches at all — "Address"
+ * is a fragment of "Email Address" but exactly the `address` key. Ties go to the
+ * earlier field, so "Name" means Customer Name before Feeder Name. A field
+ * claimed by several headers keeps the best match, then the first.
+ */
+export function guessMappings(
+  headers: string[],
+  fields: { key: string; label: string }[],
+): Record<string, string> {
+  const best: Record<string, { header: string; score: number }> = {};
+  for (const header of headers) {
+    let pick: { key: string; score: number } | null = null;
+    for (const field of fields) {
+      const score = matchScore(header, field);
+      if (score && (!pick || score > pick.score)) pick = { key: field.key, score };
+    }
+    if (pick && (!best[pick.key] || pick.score > best[pick.key].score)) {
+      best[pick.key] = { header, score: pick.score };
+    }
+  }
+  return Object.fromEntries(Object.entries(best).map(([key, v]) => [key, v.header]));
 }

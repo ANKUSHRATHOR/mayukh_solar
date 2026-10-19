@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildUpdatePatch, normalizeMobile, resolveMatch } from '@/lib/leadImport';
+import { LEAD_IMPORT_FIELDS, buildUpdatePatch, guessMappings, normalizeMobile, resolveMatch } from '@/lib/leadImport';
 
 describe('normalizeMobile', () => {
   it('strips formatting and the country / trunk prefix', () => {
@@ -59,5 +59,36 @@ describe('resolveMatch', () => {
     expect(resolveMatch('k_number', '210721033383', [lead('a', '210721033383'), lead('b', '210721033383')]).ok).toBe(false);
     expect(resolveMatch('k_number', '210721033383', [lead('a', '210721033383', true)])).toEqual({ ok: false, error: 'Lead is in the bin' });
     expect(resolveMatch('k_number', '210721033383', []).ok).toBe(false);
+  });
+});
+
+describe('guessMappings', () => {
+  const guess = (headers: string[]) => guessMappings(headers, LEAD_IMPORT_FIELDS);
+
+  it('maps an Address column to Full Address, not Email Address', () => {
+    expect(guess(['Address'])).toEqual({ address: 'Address' });
+    expect(guess(['Address', 'Email'])).toEqual({ address: 'Address', email: 'Email' });
+  });
+
+  it('maps every header of the sample CSV back to its own field', () => {
+    const headers = LEAD_IMPORT_FIELDS.map((f) => f.label.replace(' *', ''));
+    expect(guess(headers)).toEqual(Object.fromEntries(LEAD_IMPORT_FIELDS.map((f, i) => [f.key, headers[i]])));
+  });
+
+  it('breaks ties on a fragment by field order', () => {
+    expect(guess(['Mobile'])).toEqual({ mobile: 'Mobile' });
+    expect(guess(['Name'])).toEqual({ customer_name: 'Name' });
+  });
+
+  it('does not let a name column claim Feeder Name', () => {
+    expect(guess(['Name', 'Consumer Name', 'Feeder'])).toEqual({ customer_name: 'Name', feeder_name: 'Feeder' });
+  });
+
+  it('keeps the better header when two compete for one field', () => {
+    expect(guess(['Home Address', 'Address'])).toEqual({ address: 'Address' });
+  });
+
+  it('ignores tiny fragments', () => {
+    expect(guess(['Na', 'e'])).toEqual({});
   });
 });
