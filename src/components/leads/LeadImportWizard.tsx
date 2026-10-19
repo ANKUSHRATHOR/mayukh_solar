@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
@@ -33,7 +34,17 @@ import {
   Database,
   RefreshCw,
   XCircle,
+  UserPlus,
+  PencilLine,
 } from 'lucide-react';
+import {
+  LEAD_MATCH_KEYS,
+  buildUpdatePatch,
+  normalizeMatchValue,
+  resolveMatch,
+  type LeadMatchKey,
+  type MatchCandidate,
+} from '@/lib/leadImport';
 
 // The fields in our leads database table
 const DB_LEAD_FIELDS = [
@@ -58,6 +69,13 @@ interface LeadImportWizardProps {
 }
 
 type FileRow = Record<string, string>;
+type ImportMode = 'add' | 'update';
+
+// Rows per `.in()` lookup — keeps the PostgREST URL well under its length limit.
+const LOOKUP_CHUNK = 200;
+// Updates in flight at once; each row carries its own values, so they cannot be
+// one statement.
+const UPDATE_CONCURRENCY = 5;
 
 export default function LeadImportWizard({
   open,
@@ -69,6 +87,11 @@ export default function LeadImportWizard({
 
   // Wizard state
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // 'update' matches each row to an existing lead and overwrites only the mapped
+  // columns; 'add' is the original insert-only import.
+  const [mode, setMode] = useState<ImportMode>('add');
+  const [matchBy, setMatchBy] = useState<LeadMatchKey>('mobile');
+  const [matchHeader, setMatchHeader] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [parsedRows, setParsedRows] = useState<FileRow[]>([]);
@@ -100,6 +123,7 @@ export default function LeadImportWizard({
   // Reset all states
   const handleReset = () => {
     setStep(1);
+    setMatchHeader('');
     setFile(null);
     setHeaders([]);
     setParsedRows([]);
@@ -215,6 +239,7 @@ export default function LeadImportWizard({
           }
         });
         setMappings(initialMappings);
+        setMatchHeader(initialMappings[matchBy] || '');
 
         // Go to preview and mapping step
         setStep(2);
@@ -334,21 +359,148 @@ export default function LeadImportWizard({
     onImportComplete();
   };
 
+  const failRow = (rowNum: number, data: FileRow, error: string) => ({ rowNum, data, error });
+
+  // Update existing leads: match each row on mobile or K Number, then write only
+  // the mapped, non-empty cells.
+  const handleStartUpdate = async () => {
+    if (!matchHeader) {
+      toast.error(`Choose the file column that holds the ${matchBy === 'mobile' ? 'mobile number' : 'K Number'}.`);
+      return;
+    }
+    const mappedFields = Object.entries(mappings).filter(([k, v]) => v && k !== matchBy);
+    if (mappedFields.length === 0 && !defaultCampaign.trim()) {
+      toast.error('Map at least one field to update.');
+      return;
+    }
+
+    setStep(3);
+    setImporting(true);
+    setProgress(0);
+
+    const failures: typeof failedRows = [];
+    const planned: { rowNum: number; data: FileRow; matchValue: string; patch: Record<string, unknown> }[] = [];
+    parsedRows.forEach((row, index) => {
+      const rowNum = index + 2;
+      const r = buildUpdatePatch(row, mappings, matchBy, matchHeader, defaultCampaign);
+      if ('error' in r) failures.push(failRow(rowNum, row, r.error));
+      else planned.push({ rowNum, data: row, matchValue: r.matchValue, patch: r.patch });
+    });
+
+    // Look the leads up in chunks rather than once per row. RLS scopes this, so a
+    // lead the importer cannot see reports as not found.
+    const values = [...new Set(planned.map((p) => p.matchValue))];
+    const candidates: MatchCandidate[] = [];
+    try {
+      for (let i = 0; i < values.length; i += LOOKUP_CHUNK) {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('id, mobile, k_number, is_in_bin')
+          .in(matchBy, values.slice(i, i + LOOKUP_CHUNK));
+        if (error) throw error;
+        candidates.push(...((data as MatchCandidate[]) || []));
+      }
+    } catch (err) {
+      toast.error('Could not look up leads: ' + (err instanceof Error ? err.message : String(err)));
+      setImporting(false);
+      setStep(2);
+      return;
+    }
+    const byValue = new Map<string, MatchCandidate[]>();
+    for (const c of candidates) {
+      const key = normalizeMatchValue(matchBy, c[matchBy]);
+      byValue.set(key, [...(byValue.get(key) || []), c]);
+    }
+
+    let succeeded = 0;
+    let done = 0;
+    const total = planned.length;
+    const updateOne = async (p: (typeof planned)[number]) => {
+      const match = resolveMatch(matchBy, p.matchValue, byValue.get(p.matchValue) || []);
+      if ('error' in match) {
+        failures.push(failRow(p.rowNum, p.data, match.error));
+        return;
+      }
+      const { data, error } = await supabase
+        .from('leads')
+        .update(p.patch as TablesUpdate<'leads'>)
+        .eq('id', match.id)
+        .select('id');
+      if (error) {
+        failures.push(failRow(p.rowNum, p.data,
+          error.code === '23505' ? 'Another lead already has this mobile number' : error.message));
+      } else if (!data || data.length === 0) {
+        // RLS lets the row be read but not written.
+        failures.push(failRow(p.rowNum, p.data, 'You do not have permission to update this lead'));
+      } else {
+        succeeded++;
+      }
+    };
+
+    for (let i = 0; i < total; i += UPDATE_CONCURRENCY) {
+      await Promise.all(planned.slice(i, i + UPDATE_CONCURRENCY).map((p) =>
+        updateOne(p).catch((err: unknown) => {
+          failures.push(failRow(p.rowNum, p.data, err instanceof Error ? err.message : String(err)));
+        })));
+      done = Math.min(total, i + UPDATE_CONCURRENCY);
+      setProgress(Math.round((done / total) * 100));
+    }
+
+    failures.sort((a, b) => a.rowNum - b.rowNum);
+    setSuccessCount(succeeded);
+    setFailedRows(failures);
+    setImporting(false);
+    setStep(4);
+    onImportComplete();
+  };
+
+  const isUpdate = mode === 'update';
+  const matchLabel = LEAD_MATCH_KEYS.find((k) => k.key === matchBy)?.label ?? '';
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!importing) onOpenChange(v); }}>
       <DialogContent className="max-w-3xl sm:rounded-2xl max-h-[90vh] flex flex-col p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-            <FileSpreadsheet className="h-5 w-5 text-primary" /> Import Leads Wizard
+            <FileSpreadsheet className="h-5 w-5 text-primary" /> {isUpdate ? 'Update Leads from File' : 'Import Leads Wizard'}
           </DialogTitle>
           <DialogDescription>
-            Import multiple leads in bulk using CSV, Excel (.xlsx) or XLS spreadsheet templates.
+            {isUpdate
+              ? 'Update existing leads in bulk from a CSV, Excel (.xlsx) or XLS file, matched on mobile number or K Number.'
+              : 'Import multiple leads in bulk using CSV, Excel (.xlsx) or XLS spreadsheet templates.'}
           </DialogDescription>
         </DialogHeader>
 
         {/* Step 1: Upload File */}
         {step === 1 && (
           <div className="space-y-6 py-4 flex-1 flex flex-col justify-center">
+            <div role="radiogroup" aria-label="Import mode" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {([
+                { value: 'add', icon: UserPlus, title: 'Add new leads', body: 'Create a lead for every row. Rows whose mobile already exists are skipped.' },
+                { value: 'update', icon: PencilLine, title: 'Update existing leads', body: 'Match rows to leads by mobile or K Number and overwrite the columns you map.' },
+              ] as const).map((opt) => {
+                const active = mode === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setMode(opt.value)}
+                    className={`flex min-h-11 items-start gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      active ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
+                    }`}
+                  >
+                    <opt.icon className={`mt-0.5 h-5 w-5 shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <span className="space-y-0.5">
+                      <span className="block text-sm font-semibold text-foreground">{opt.title}</span>
+                      <span className="block text-xs text-muted-foreground">{opt.body}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-8 bg-muted/20 hover:bg-muted/40 transition-colors">
               <Upload className="h-10 w-10 text-muted-foreground mb-4" />
               <p className="font-medium text-foreground mb-1 text-center">Drag and drop your spreadsheet here</p>
@@ -382,13 +534,60 @@ export default function LeadImportWizard({
         {/* Step 2: Mapping & Preview */}
         {step === 2 && (
           <div className="flex min-h-0 flex-1 flex-col gap-4 py-2">
-            <Alert className="shrink-0 bg-primary/5 border-primary/20">
+{!isUpdate && (
+                          <Alert className="shrink-0 bg-primary/5 border-primary/20">
               <Database className="h-4 w-4 text-primary" />
               <AlertTitle className="text-sm font-semibold">Map File Headers to Lead Fields</AlertTitle>
               <AlertDescription className="text-xs">
                 Link the columns in your uploaded file <span className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{file?.name}</span> to the correct Leads database fields. Required fields are marked with (*).
               </AlertDescription>
             </Alert>
+            )}
+
+            {isUpdate && (
+              <div className="shrink-0 rounded-xl border border-primary/20 bg-card p-4">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Match leads by</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-foreground">Lead field</Label>
+                    <Select
+                      value={matchBy}
+                      onValueChange={(val) => {
+                        const key = val as LeadMatchKey;
+                        setMatchBy(key);
+                        setMatchHeader(mappings[key] || '');
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LEAD_MATCH_KEYS.map((k) => (
+                          <SelectItem key={k.key} value={k.key}>{k.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-foreground">{matchLabel} column in file *</Label>
+                    <Select value={matchHeader || undefined} onValueChange={setMatchHeader}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="-- Choose column --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {headers.map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                  Only the fields you map below are changed. Empty cells keep the lead's current value.
+                  {matchBy === 'k_number' && ' A K Number shared by several leads is skipped rather than guessed at.'}
+                </p>
+              </div>
+            )}
 
             {/* Campaign sits above the mapping list rather than inside it: it is the
                 one field usually absent from the file, and at the bottom of a long
@@ -435,7 +634,9 @@ export default function LeadImportWizard({
               <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
                 {mappings['campaign']
                   ? `Rows with an empty "${mappings['campaign']}" cell get the custom value.`
-                  : 'The custom value is applied to every imported lead.'}
+                  : isUpdate
+                    ? 'If set, the custom value is applied to every matched lead.'
+                    : 'The custom value is applied to every imported lead.'}
               </p>
             </div>
 
@@ -447,9 +648,11 @@ export default function LeadImportWizard({
               <div className="border rounded-xl p-4 bg-muted/20">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Field Mapping</p>
                   <div className="space-y-3">
-                    {DB_LEAD_FIELDS.filter((field) => field.key !== 'campaign').map((field) => (
+                    {DB_LEAD_FIELDS.filter((field) => field.key !== 'campaign' && !(isUpdate && field.key === matchBy)).map((field) => (
                       <div key={field.key} className="grid grid-cols-[130px_1fr] items-center gap-2">
-                        <Label className="text-xs font-medium text-foreground">{field.label}</Label>
+                        <Label className="text-xs font-medium text-foreground">
+                          {isUpdate ? field.label.replace(' *', '') : field.label}
+                        </Label>
                         <Select
                           value={mappings[field.key] || 'skip'}
                           onValueChange={(val) =>
@@ -505,8 +708,8 @@ export default function LeadImportWizard({
 
             <DialogFooter className="pt-2">
               <Button variant="ghost" onClick={handleReset}>Back / Reset</Button>
-              <Button onClick={handleStartImport} className="gap-1.5">
-                Start Import <ArrowRight className="h-4 w-4" />
+              <Button onClick={isUpdate ? handleStartUpdate : handleStartImport} className="gap-1.5">
+                {isUpdate ? 'Start Update' : 'Start Import'} <ArrowRight className="h-4 w-4" />
               </Button>
             </DialogFooter>
           </div>
@@ -516,7 +719,7 @@ export default function LeadImportWizard({
         {step === 3 && (
           <div className="space-y-6 py-12 flex-1 flex flex-col justify-center items-center text-center">
             <RefreshCw className="h-10 w-10 text-primary animate-spin mb-4" />
-            <p className="font-semibold text-lg">Importing Leads in Bulk...</p>
+            <p className="font-semibold text-lg">{isUpdate ? 'Updating Leads in Bulk...' : 'Importing Leads in Bulk...'}</p>
             <p className="text-sm text-muted-foreground max-w-sm mb-4">
               Writing records to the CRM database. Please do not close this window.
             </p>
@@ -534,7 +737,7 @@ export default function LeadImportWizard({
               <div className="border rounded-xl p-4 bg-emerald-500/5 border-emerald-500/20 text-center space-y-1">
                 <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
                 <p className="text-2xl font-bold text-emerald-600">{successCount}</p>
-                <p className="text-xs font-semibold text-muted-foreground uppercase">Leads Imported</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase">{isUpdate ? 'Leads Updated' : 'Leads Imported'}</p>
               </div>
               <div className={`border rounded-xl p-4 text-center space-y-1 ${failedRows.length > 0 ? 'bg-destructive/5 border-destructive/20' : 'bg-muted/30 border-border'}`}>
                 {failedRows.length > 0 ? (
@@ -563,7 +766,9 @@ export default function LeadImportWizard({
                           </Badge>
                         </div>
                         <p className="text-muted-foreground truncate">
-                          Customer: {fail.data[mappings['customer_name']] || '—'} • Mobile: {fail.data[mappings['mobile']] || '—'}
+                          {isUpdate
+                            ? `${matchLabel}: ${fail.data[matchHeader] || '—'}`
+                            : `Customer: ${fail.data[mappings['customer_name']] || '—'} • Mobile: ${fail.data[mappings['mobile']] || '—'}`}
                         </p>
                       </div>
                     ))}
@@ -573,7 +778,7 @@ export default function LeadImportWizard({
             )}
 
             <DialogFooter className="pt-2">
-              <Button onClick={handleReset} variant="outline">Import Another File</Button>
+              <Button onClick={handleReset} variant="outline">{isUpdate ? 'Update Another File' : 'Import Another File'}</Button>
               <Button onClick={() => onOpenChange(false)}>Done & Close</Button>
             </DialogFooter>
           </div>
